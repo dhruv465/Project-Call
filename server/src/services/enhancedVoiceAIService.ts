@@ -1,6 +1,7 @@
 // Enhanced Voice AI Service with Perfect Training and Advanced Capabilities
 import axios from 'axios';
 import { logger } from '../index';
+import ProductionEmotionService from './productionEmotionService';
 
 export interface VoicePersonality {
   id: string;
@@ -72,10 +73,12 @@ export class EnhancedVoiceAIService {
   private openAIApiKey: string;
   private isModelTrained: boolean = false;
   private trainingMetrics: ConversationMetrics;
+  private productionEmotionService: ProductionEmotionService;
 
   constructor(elevenLabsApiKey: string, openAIApiKey: string) {
     this.elevenLabsApiKey = elevenLabsApiKey;
     this.openAIApiKey = openAIApiKey;
+    this.productionEmotionService = new ProductionEmotionService();
     this.trainingMetrics = {
       emotionalEngagement: 0.95,
       personalityConsistency: 0.92,
@@ -199,8 +202,45 @@ export class EnhancedVoiceAIService {
     ];
   }
 
-  // Advanced Emotion Detection with Cultural Context
+  // Advanced Emotion Detection with Cultural Context using Production Models
   async detectEmotionWithCulturalContext(
+    audioText: string,
+    language: Language = 'English',
+    culturalContext?: string
+  ): Promise<EmotionAnalysis> {
+    try {
+      // Use production emotion detection models for primary analysis
+      const productionResult = await this.productionEmotionService.detectEmotionFromText(audioText);
+      
+      // Map production model result to our EmotionAnalysis interface
+      const emotionAnalysis: EmotionAnalysis = {
+        primary: productionResult.emotion,
+        confidence: productionResult.confidence,
+        secondary: this.getSecondaryEmotion(productionResult.all_scores, productionResult.emotion),
+        intensity: this.calculateIntensity(productionResult.confidence, audioText),
+        context: this.generateContextDescription(audioText, productionResult.emotion),
+        culturalContext: this.generateCulturalContext(productionResult.emotion, language, culturalContext),
+        adaptationNeeded: this.determineAdaptationNeeded(productionResult.emotion, productionResult.confidence, language)
+      };
+
+      logger.info('Production emotion detection result:', {
+        text: audioText.substring(0, 50) + '...',
+        emotion: emotionAnalysis.primary,
+        confidence: emotionAnalysis.confidence,
+        model: productionResult.model_used
+      });
+
+      return emotionAnalysis;
+    } catch (error) {
+      logger.error('Error in production emotion detection, falling back to OpenAI:', error);
+      
+      // Fallback to OpenAI-based detection if production models fail
+      return this.detectEmotionWithOpenAI(audioText, language, culturalContext);
+    }
+  }
+
+  // Fallback OpenAI-based emotion detection
+  private async detectEmotionWithOpenAI(
     audioText: string,
     language: Language = 'English',
     culturalContext?: string
@@ -252,7 +292,7 @@ export class EnhancedVoiceAIService {
 
       const result = JSON.parse(response.data.choices[0].message.content);
       
-      logger.info('Enhanced emotion detected:', result);
+      logger.info('Fallback OpenAI emotion detected:', result);
       return {
         primary: result.primary,
         confidence: result.confidence,
@@ -263,7 +303,7 @@ export class EnhancedVoiceAIService {
         adaptationNeeded: result.adaptationNeeded
       };
     } catch (error) {
-      logger.error('Error detecting emotion with cultural context:', error);
+      logger.error('Error in fallback emotion detection:', error);
       return {
         primary: 'neutral',
         confidence: 0.5,
@@ -272,6 +312,80 @@ export class EnhancedVoiceAIService {
         adaptationNeeded: false
       };
     }
+  }
+
+  // Helper methods for production emotion result processing
+  private getSecondaryEmotion(allScores: { [key: string]: number }, primaryEmotion: string): string | undefined {
+    const sortedEmotions = Object.entries(allScores)
+      .filter(([emotion]) => emotion !== primaryEmotion)
+      .sort(([, scoreA], [, scoreB]) => scoreB - scoreA);
+    
+    return sortedEmotions.length > 0 && sortedEmotions[0][1] > 0.3 ? sortedEmotions[0][0] : undefined;
+  }
+
+  private calculateIntensity(confidence: number, text: string): number {
+    // Base intensity on confidence and text characteristics
+    let intensity = confidence;
+    
+    // Boost intensity for certain indicators
+    const intensifiers = ['!', '!!', '!!!', 'very', 'extremely', 'really', 'so', 'totally'];
+    const hasIntensifiers = intensifiers.some(word => text.toLowerCase().includes(word));
+    
+    if (hasIntensifiers) {
+      intensity = Math.min(1.0, intensity + 0.2);
+    }
+    
+    // Boost for all caps
+    if (text.toUpperCase() === text && text.length > 3) {
+      intensity = Math.min(1.0, intensity + 0.3);
+    }
+    
+    return intensity;
+  }
+
+  private generateContextDescription(_text: string, emotion: string): string {
+    const emotionContexts: { [key: string]: string } = {
+      happy: 'Customer expressing positive sentiment',
+      excited: 'Customer showing enthusiasm and energy',
+      interested: 'Customer displaying curiosity and engagement',
+      neutral: 'Customer maintaining balanced emotional state',
+      confused: 'Customer seeking clarification or understanding',
+      frustrated: 'Customer experiencing difficulty or dissatisfaction',
+      angry: 'Customer expressing strong negative emotion',
+      sad: 'Customer showing disappointment or low mood',
+      worried: 'Customer expressing concern or anxiety',
+      skeptical: 'Customer showing doubt or suspicion'
+    };
+    
+    return emotionContexts[emotion] || `Customer showing ${emotion} emotion`;
+  }
+
+  private generateCulturalContext(emotion: string, language: Language, culturalContext?: string): string {
+    if (language === 'Hindi') {
+      const hindiContexts: { [key: string]: string } = {
+        frustrated: 'May prefer indirect expression of frustration, family-oriented solutions',
+        angry: 'Direct anger expression may be moderated, relationship preservation important',
+        happy: 'Positive emotions often shared with family context in mind',
+        interested: 'Interest often tied to family benefits and long-term relationships'
+      };
+      return hindiContexts[emotion] || 'Indian cultural communication patterns apply';
+    }
+    
+    return culturalContext || 'Western direct communication patterns';
+  }
+
+  private determineAdaptationNeeded(emotion: string, confidence: number, language: Language): boolean {
+    // High confidence negative emotions need adaptation
+    if (confidence > 0.7 && ['angry', 'frustrated', 'confused', 'worried'].includes(emotion)) {
+      return true;
+    }
+    
+    // Cross-cultural situations need adaptation
+    if (language === 'Hindi' && ['angry', 'frustrated'].includes(emotion)) {
+      return true;
+    }
+    
+    return false;
   }
 
   // Generate Culturally-Adapted Response
@@ -292,8 +406,8 @@ export class EnhancedVoiceAIService {
       Language: ${language}
       
       Cultural guidelines for ${language}:
-      - Communication pattern: ${culturalAdaptation.communicationPattern}
-      - Persuasion style: ${culturalAdaptation.persuasionStyle}
+      - Communication pattern: ${culturalAdaptation?.communicationPattern}
+      - Persuasion style: ${culturalAdaptation?.persuasionStyle}
       
       Conversation context: ${conversationContext}
       
@@ -547,7 +661,7 @@ export class EnhancedVoiceAIService {
     return false;
   }
 
-  private getAdaptedPersonality(emotion: EmotionAnalysis, currentPersonality: VoicePersonality, language: Language): VoicePersonality {
+  private getAdaptedPersonality(emotion: EmotionAnalysis, currentPersonality: VoicePersonality, _language: Language): VoicePersonality {
     const personalities = EnhancedVoiceAIService.getEnhancedVoicePersonalities();
     
     // Choose best personality for the emotion
@@ -566,7 +680,7 @@ export class EnhancedVoiceAIService {
     return currentPersonality;
   }
 
-  private getCulturalFallbackResponse(emotion: EmotionType, personality: VoicePersonality, language: Language): AdaptiveResponse {
+  private getCulturalFallbackResponse(emotion: EmotionType, _personality: VoicePersonality, language: Language): AdaptiveResponse {
     const fallbacks: Record<Language, Record<string, AdaptiveResponse>> = {
       'English': {
         'frustrated': {
@@ -632,7 +746,6 @@ export class EnhancedVoiceAIService {
     emotionalContext?: string
   ): string {
     let adaptedText = text;
-    const culturalAdaptation = personality.culturalAdaptations[language];
 
     // Apply personality-specific patterns
     if (personality.id === 'friendly') {

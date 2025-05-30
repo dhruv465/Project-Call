@@ -1,4 +1,5 @@
 import VoiceAIService, { VoicePersonality, EmotionAnalysis, AdaptiveResponse } from './voiceAIService';
+import EnhancedVoiceAIService from './enhancedVoiceAIService';
 import SpeechAnalysisService, { SpeechAnalysis, ConversationContext } from './speechAnalysisService';
 import { logger } from '../index';
 
@@ -37,12 +38,12 @@ export interface CallSession {
 }
 
 export class ConversationEngineService {
-  private voiceAI: VoiceAIService;
+  private voiceAI: EnhancedVoiceAIService;
   private speechAnalysis: SpeechAnalysisService;
   private activeSessions: Map<string, CallSession> = new Map();
 
   constructor(elevenLabsApiKey: string, openAIApiKey: string, googleSpeechKey?: string) {
-    this.voiceAI = new VoiceAIService(elevenLabsApiKey, openAIApiKey);
+    this.voiceAI = new EnhancedVoiceAIService(elevenLabsApiKey, openAIApiKey);
     this.speechAnalysis = new SpeechAnalysisService(openAIApiKey, googleSpeechKey);
   }
 
@@ -55,7 +56,7 @@ export class ConversationEngineService {
     language: 'English' | 'Hindi' = 'English'
   ): Promise<CallSession> {
     try {
-      const personalities = VoiceAIService.getVoicePersonalities();
+      const personalities = EnhancedVoiceAIService.getEnhancedVoicePersonalities();
       const selectedPersonality = personalities.find(p => p.id === initialPersonality) || personalities[0];
 
       const session: CallSession = {
@@ -137,8 +138,11 @@ export class ConversationEngineService {
       // Analyze speech comprehensively
       const speechAnalysis = await this.speechAnalysis.analyzeSpeech(transcript);
       
-      // Detect emotions
-      const emotions = await this.voiceAI.detectEmotion(transcript);
+      // Detect emotions using production models
+      const emotions = await this.voiceAI.detectEmotionWithCulturalContext(
+        transcript, 
+        session.language
+      );
       
       // Update emotion history
       session.emotionHistory.push({
@@ -162,23 +166,23 @@ export class ConversationEngineService {
         session.metrics.personalityChanges++;
       }
 
-      // Generate adaptive response
-      const conversationFlow = await this.voiceAI.manageConversationFlow(
+      // Generate adaptive response using enhanced conversation flow
+      const conversationFlow = await this.voiceAI.manageAdvancedConversationFlow(
         session.conversationHistory,
         emotions,
         session.currentPersonality,
         session.language
       );
 
-      const adaptiveResponse = await this.voiceAI.generateAdaptiveResponse(
+      const adaptiveResponse = await this.voiceAI.generateCulturallyAdaptedResponse(
         emotions,
         conversationFlow.contextAwareness,
         session.currentPersonality,
         session.language
       );
 
-      // Synthesize speech response
-      const audioResponse = await this.voiceAI.synthesizeSpeech(
+      // Synthesize speech response using multilingual synthesis
+      const audioResponse = await this.voiceAI.synthesizeMultilingualSpeech(
         adaptiveResponse.script,
         session.currentPersonality,
         adaptiveResponse.voiceSettings,
@@ -263,9 +267,9 @@ export class ConversationEngineService {
         }
       };
 
-      const script = openingPrompts[session.language][session.currentPersonality.id];
+      const script = openingPrompts[session.language][session.currentPersonality.id as keyof typeof openingPrompts[typeof session.language]];
       
-      const audioResponse = await this.voiceAI.synthesizeSpeech(
+      const audioResponse = await this.voiceAI.synthesizeMultilingualSpeech(
         script,
         session.currentPersonality,
         undefined,
@@ -329,7 +333,7 @@ export class ConversationEngineService {
 
       return {
         summary,
-        metrics: session.metrics,
+        metrics: finalMetrics,
         finalContext: session.context
       };
     } catch (error) {
@@ -374,7 +378,7 @@ export class ConversationEngineService {
 
   private async selectOptimalPersonality(
     emotions: EmotionAnalysis,
-    context: ConversationContext
+    _context: ConversationContext
   ): Promise<VoicePersonality> {
     const personalities = VoiceAIService.getVoicePersonalities();
 
@@ -398,7 +402,7 @@ export class ConversationEngineService {
     };
 
     const totalScore = emotionHistory.reduce((sum, emotion) => {
-      return sum + (emotionScores[emotion.emotion] || 0.5) * emotion.intensity;
+      return sum + (emotionScores[emotion.emotion as keyof typeof emotionScores] || 0.5) * emotion.intensity;
     }, 0);
 
     return totalScore / emotionHistory.length;
@@ -413,7 +417,7 @@ export class ConversationEngineService {
         'angry': 0.1, 'frustrated': 0.2, 'sad': 0.3,
         'neutral': 0.5, 'interested': 0.7, 'happy': 0.8, 'excited': 0.9
       };
-      return (emotionScores[e.emotion] || 0.5) * e.intensity;
+      return (emotionScores[e.emotion as keyof typeof emotionScores] || 0.5) * e.intensity;
     });
 
     const trend = scores[2] - scores[0];
@@ -431,10 +435,6 @@ export class ConversationEngineService {
 
   private async generateConversationSummary(session: CallSession): Promise<string> {
     try {
-      const conversationText = session.conversationHistory
-        .map(turn => `${turn.speaker}: ${turn.content}`)
-        .join('\n');
-
       // This would typically use an AI service to generate a summary
       return `Conversation with ${session.leadId} lasted ${session.conversationHistory.length} turns. ` +
              `Customer emotion trend: ${this.calculateEmotionTrend(session.emotionHistory)}. ` +

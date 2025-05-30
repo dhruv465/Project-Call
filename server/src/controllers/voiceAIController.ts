@@ -183,8 +183,7 @@ export class VoiceAIController {
         text, 
         personalityId = 'professional',
         language = 'English',
-        emotionalContext,
-        adaptiveSettings 
+        emotionalContext
       } = req.body;
 
       if (!text) {
@@ -202,7 +201,7 @@ export class VoiceAIController {
       const audioBuffer = await this.voiceAIService.synthesizeMultilingualSpeech(
         text,
         personality,
-        adaptiveSettings,
+        undefined, // adaptiveSettings not available
         language,
         emotionalContext
       );

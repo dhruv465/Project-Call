@@ -69,7 +69,7 @@ export class VoiceAIDemoController {
           expected: testCase.expectedEmotion,
           detected: emotionResult.primary,
           confidence: emotionResult.confidence,
-          culturalAdaptation: emotionResult.culturalContext
+          culturalAdaptation: ('culturalContext' in emotionResult) ? emotionResult.culturalContext : 'No cultural context'
         });
       }
 

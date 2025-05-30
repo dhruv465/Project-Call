@@ -15,6 +15,41 @@ export interface IConfiguration extends mongoose.Document {
         }[];
         isEnabled: boolean;
     };
+    voiceAIConfig: {
+        personalities: {
+            id: string;
+            name: string;
+            description: string;
+            voiceId: string;
+            personality: string;
+            style: string;
+            emotionalRange: string[];
+            languageSupport: string[];
+            settings: {
+                stability: number;
+                similarityBoost: number;
+                style: number;
+                useSpeakerBoost: boolean;
+            };
+        }[];
+        emotionDetection: {
+            enabled: boolean;
+            sensitivity: number;
+            adaptiveResponseThreshold: number;
+        };
+        bilingualSupport: {
+            enabled: boolean;
+            primaryLanguage: string;
+            secondaryLanguage: string;
+            autoLanguageDetection: boolean;
+        };
+        conversationFlow: {
+            personalityAdaptation: boolean;
+            contextAwareness: boolean;
+            emotionBasedResponses: boolean;
+            naturalPauses: boolean;
+        };
+    };
     llmConfig: {
         providers: {
             name: string;

@@ -1,0 +1,35 @@
+{
+  "model_name": "multimodal_emotion_model",
+  "num_classes": 13,
+  "emotion_labels": [
+    "happiness",
+    "sadness",
+    "neutral",
+    "anger",
+    "love",
+    "fear",
+    "disgust",
+    "confusion",
+    "surprise",
+    "shame",
+    "guilt",
+    "sarcasm",
+    "desire"
+  ],
+  "sales_emotion_mapping": {
+    "happiness": "positive",
+    "love": "positive",
+    "surprise": "positive",
+    "neutral": "neutral",
+    "confusion": "neutral",
+    "sadness": "negative",
+    "anger": "negative",
+    "fear": "negative",
+    "disgust": "negative",
+    "shame": "negative",
+    "guilt": "negative",
+    "sarcasm": "negative",
+    "desire": "interested"
+  },
+  "training_timestamp": "2025-05-30T14:55:02.936642"
+}

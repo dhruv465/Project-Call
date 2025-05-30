@@ -1,12 +1,17 @@
 import React from 'react';
 
-export interface BadgeProps {
+export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: 'default' | 'secondary' | 'destructive' | 'outline';
   className?: string;
   children: React.ReactNode;
 }
 
-export const Badge: React.FC<BadgeProps> = ({ variant = 'default', className = '', children }) => {
+export const Badge: React.FC<BadgeProps> = ({ 
+  variant = 'default', 
+  className = '', 
+  children, 
+  ...props 
+}) => {
   const baseClasses = 'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2';
   
   const variantClasses = {
@@ -17,7 +22,10 @@ export const Badge: React.FC<BadgeProps> = ({ variant = 'default', className = '
   };
   
   return (
-    <div className={`${baseClasses} ${variantClasses[variant]} ${className}`}>
+    <div 
+      className={`${baseClasses} ${variantClasses[variant]} ${className}`}
+      {...props}
+    >
       {children}
     </div>
   );

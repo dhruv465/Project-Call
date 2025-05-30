@@ -22,6 +22,7 @@ const callRoutes_1 = __importDefault(require("./routes/callRoutes"));
 const dashboardRoutes_1 = __importDefault(require("./routes/dashboardRoutes"));
 const configurationRoutes_1 = __importDefault(require("./routes/configurationRoutes"));
 const notificationRoutes_1 = __importDefault(require("./routes/notificationRoutes"));
+const voiceAIRoutes_1 = __importDefault(require("./routes/voiceAIRoutes"));
 // Load environment variables
 dotenv_1.default.config();
 // Create logger
@@ -75,7 +76,8 @@ app.use('/api/campaigns', campaignRoutes_1.default);
 app.use('/api/calls', callRoutes_1.default);
 app.use('/api/dashboard', dashboardRoutes_1.default);
 app.use('/api/configuration', configurationRoutes_1.default);
-app.use('/api/notifications', notificationRoutes_1.default); // Add notification routes
+app.use('/api/notifications', notificationRoutes_1.default);
+app.use('/api/voice-ai', voiceAIRoutes_1.default); // Advanced Voice AI routes
 // Global error handler
 app.use((err, _req, res, _next) => {
     logger.error(err.stack);

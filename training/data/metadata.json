@@ -1,0 +1,39 @@
+{
+  "timestamp": "2025-05-30T13:33:17.033270",
+  "total_samples": 65000,
+  "emotion_labels": [
+    "happiness",
+    "sadness",
+    "neutral",
+    "anger",
+    "love",
+    "fear",
+    "disgust",
+    "confusion",
+    "surprise",
+    "shame",
+    "guilt",
+    "sarcasm",
+    "desire"
+  ],
+  "sales_emotion_mapping": {
+    "happiness": "positive",
+    "love": "positive",
+    "surprise": "positive",
+    "neutral": "neutral",
+    "confusion": "neutral",
+    "sadness": "negative",
+    "anger": "negative",
+    "fear": "negative",
+    "disgust": "negative",
+    "shame": "negative",
+    "guilt": "negative",
+    "sarcasm": "negative",
+    "desire": "interested"
+  },
+  "model_performance_targets": {
+    "text_accuracy": 0.92,
+    "audio_accuracy": 0.88,
+    "latency_ms": 100
+  }
+}

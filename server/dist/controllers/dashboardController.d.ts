@@ -19,4 +19,4 @@ export declare const getTimeSeriesData: (req: Request & {
 }, res: Response) => Promise<void>;
 export declare const exportDashboardData: (req: Request & {
     user?: any;
-}, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
+}, res: Response) => Promise<Response<any, Record<string, any>>>;
