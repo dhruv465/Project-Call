@@ -1,0 +1,26 @@
+{
+  "name": "ai-cold-calling-system",
+  "version": "1.0.0",
+  "description": "Comprehensive autonomous AI cold-calling agent with CRM dashboard",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "start:dev": "concurrently \"npm run start:server\" \"npm run start:client\"",
+    "start:server": "cd server && npm run dev",
+    "start:client": "cd client && npm run dev",
+    "build": "concurrently \"cd server && npm run build\" \"cd client && npm run build\""
+  },
+  "keywords": [
+    "ai",
+    "cold-calling",
+    "crm",
+    "twilio",
+    "elevenlabs",
+    "llm"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}

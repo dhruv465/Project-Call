@@ -1,0 +1,258 @@
+import mongoose from 'mongoose';
+
+export interface IConfiguration extends mongoose.Document {
+  twilioConfig: {
+    accountSid: string;
+    authToken: string;
+    phoneNumbers: string[];
+    isEnabled: boolean;
+  };
+  elevenLabsConfig: {
+    apiKey: string;
+    availableVoices: {
+      voiceId: string;
+      name: string;
+      previewUrl: string;
+    }[];
+    isEnabled: boolean;
+  };
+  voiceAIConfig: {
+    personalities: {
+      id: string;
+      name: string;
+      description: string;
+      voiceId: string;
+      personality: string;
+      style: string;
+      emotionalRange: string[];
+      languageSupport: string[];
+      settings: {
+        stability: number;
+        similarityBoost: number;
+        style: number;
+        useSpeakerBoost: boolean;
+      };
+    }[];
+    emotionDetection: {
+      enabled: boolean;
+      sensitivity: number;
+      adaptiveResponseThreshold: number;
+    };
+    bilingualSupport: {
+      enabled: boolean;
+      primaryLanguage: string;
+      secondaryLanguage: string;
+      autoLanguageDetection: boolean;
+    };
+    conversationFlow: {
+      personalityAdaptation: boolean;
+      contextAwareness: boolean;
+      emotionBasedResponses: boolean;
+      naturalPauses: boolean;
+    };
+  };
+  llmConfig: {
+    providers: {
+      name: string;
+      apiKey: string;
+      availableModels: string[];
+      isEnabled: boolean;
+    }[];
+    defaultProvider: string;
+    defaultModel: string;
+  };
+  generalSettings: {
+    defaultLanguage: string;
+    supportedLanguages: string[];
+    maxConcurrentCalls: number;
+    callRetryAttempts: number;
+    callRetryDelay: number;
+    workingHours: {
+      start: string;
+      end: string;
+      timeZone: string;
+      daysOfWeek: string[];
+    };
+  };
+  complianceSettings: {
+    recordCalls: boolean;
+    callIntroduction: string;
+    maxCallsPerLeadPerDay: number;
+    callBlackoutPeriod: {
+      start: string;
+      end: string;
+    };
+  };
+  updatedBy: mongoose.Schema.Types.ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const ConfigurationSchema = new mongoose.Schema(
+  {
+    twilioConfig: {
+      accountSid: {
+        type: String,
+        required: false,
+        default: '',
+      },
+      authToken: {
+        type: String,
+        required: false,
+        default: '',
+      },
+      phoneNumbers: {
+        type: [String],
+        default: [],
+      },
+      isEnabled: {
+        type: Boolean,
+        default: false,
+      },
+    },
+    elevenLabsConfig: {
+      apiKey: {
+        type: String,
+        required: false,
+        default: '',
+      },
+      availableVoices: [
+        {
+          voiceId: {
+            type: String,
+            required: true,
+          },
+          name: {
+            type: String,
+            required: true,
+          },
+          previewUrl: {
+            type: String,
+          },
+        },
+      ],
+      isEnabled: {
+        type: Boolean,
+        default: false,
+      },
+    },
+    llmConfig: {
+      providers: [
+        {
+          name: {
+            type: String,
+            required: true,
+          },
+          apiKey: {
+            type: String,
+            required: false,
+            default: '',
+          },
+          availableModels: {
+            type: [String],
+            required: true,
+          },
+          isEnabled: {
+            type: Boolean,
+            default: true,
+          },
+        },
+      ],
+      defaultProvider: {
+        type: String,
+        required: [true, 'Please specify a default LLM provider'],
+        default: 'OpenAI',
+      },
+      defaultModel: {
+        type: String,
+        required: [true, 'Please specify a default LLM model'],
+        default: 'gpt-4o',
+      },
+    },
+    generalSettings: {
+      defaultLanguage: {
+        type: String,
+        required: [true, 'Please specify a default language'],
+        default: 'English',
+      },
+      supportedLanguages: {
+        type: [String],
+        required: [true, 'Please specify supported languages'],
+        default: ['English', 'Hindi'],
+      },
+      maxConcurrentCalls: {
+        type: Number,
+        default: 10,
+        min: 1,
+        max: 100,
+      },
+      callRetryAttempts: {
+        type: Number,
+        default: 3,
+        min: 0,
+        max: 10,
+      },
+      callRetryDelay: {
+        type: Number,
+        default: 60, // in minutes
+        min: 15,
+        max: 1440,
+      },
+      workingHours: {
+        start: {
+          type: String,
+          default: '09:00',
+        },
+        end: {
+          type: String,
+          default: '18:00',
+        },
+        timeZone: {
+          type: String,
+          default: 'Asia/Kolkata',
+        },
+        daysOfWeek: {
+          type: [String],
+          enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+          default: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+        },
+      },
+    },
+    complianceSettings: {
+      recordCalls: {
+        type: Boolean,
+        default: true,
+      },
+      callIntroduction: {
+        type: String,
+        default: 'Hello, this is an automated call from [Company Name]. This call may be recorded for quality and training purposes.',
+      },
+      maxCallsPerLeadPerDay: {
+        type: Number,
+        default: 1,
+        min: 1,
+        max: 5,
+      },
+      callBlackoutPeriod: {
+        start: {
+          type: String,
+          default: '21:00',
+        },
+        end: {
+          type: String,
+          default: '08:00',
+        },
+      },
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: false,
+    },
+  },
+  { timestamps: true }
+);
+
+const Configuration = mongoose.model<IConfiguration>('Configuration', ConfigurationSchema);
+
+export default Configuration;
