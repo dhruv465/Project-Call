@@ -21,7 +21,6 @@ class ProductionSetupHelper {
                 method,
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': 'Bearer dev-token', // Development token for testing
                 },
             };
 
@@ -179,7 +178,7 @@ class ProductionSetupHelper {
     }
 
     displaySampleConfiguration() {
-        console.log('\n📝 Sample Configuration:');
+        console.log('\n📝 Production Configuration Template:');
         console.log(`
 {
   "providers": {

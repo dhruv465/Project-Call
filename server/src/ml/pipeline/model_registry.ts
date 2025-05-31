@@ -32,10 +32,10 @@ export class ModelRegistry {
   private trainingPath: string;
 
   constructor() {
-    // Set up paths
-    this.registryPath = path.resolve(__dirname, '../../../../../training/model_registry.json');
-    this.deploymentPath = path.resolve(__dirname, '../../../../../training/deployment');
-    this.trainingPath = path.resolve(__dirname, '../../../../../training');
+    // Set up paths - from server/src/ml/pipeline/ to training/
+    this.registryPath = path.resolve(__dirname, '../../../../training/model_registry.json');
+    this.deploymentPath = path.resolve(__dirname, '../../../../training/deployment');
+    this.trainingPath = path.resolve(__dirname, '../../../../training');
     
     // Ensure registry file exists
     if (!fs.existsSync(this.registryPath)) {

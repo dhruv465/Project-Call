@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import Call from '../models/Call';
-import { sendCallNotification } from './notificationController';
 
 // @desc    Update call status
 // @route   PUT /api/calls/:id/status
@@ -52,8 +51,8 @@ export const updateCallStatus = async (req: Request & { user?: any }, res: Respo
     
     await call.save();
     
-    // Send notification manually to ensure it's populated
-    await sendCallNotification(call);
+    // Notification functionality has been removed
+    console.log('Call status updated:', call._id, 'to', status);
     
     return res.status(200).json({
       message: `Call status updated to ${status}`,

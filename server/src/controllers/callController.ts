@@ -58,7 +58,7 @@ export const initiateCall = async (req: Request & { user?: any }, res: Response)
       // Initiate call with Twilio (simplified for now)
       // In a real implementation, this would integrate with Twilio's API
       try {
-        // Simplified mock - in a real app this would make a Twilio API call
+        // Make real Twilio API call here
         newCall.status = 'in-progress';
         (newCall as any).twilioCallSid = `TC${Math.random().toString(36).substring(2, 15)}`;
         
@@ -515,100 +515,6 @@ export const exportCalls = async (req: Request & { user?: any }, res: Response):
     }
   } catch (error) {
     logger.error('Error in exportCalls:', error);
-    return res.status(500).json({
-      message: 'Server error',
-      error: (error as Error).message
-    });
-  }
-};
-
-// @desc    Create a test call (for development/testing only)
-// @route   POST /api/calls/test
-// @access  Private
-export const createTestCall = async (req: Request & { user?: any }, res: Response): Promise<Response> => {
-  try {
-    const { id, leadName, leadPhone, campaignName, status = 'Initiated' } = req.body;
-
-    // Create a mock lead
-    const mockLead = new Lead({
-      name: leadName || 'Test Lead',
-      phoneNumber: leadPhone || '+919876543210', // Valid Indian phone number
-      email: 'test@example.com',
-      source: 'Test Import',
-      languagePreference: 'English',
-      status: 'New',
-      createdBy: req.user?.id || 'test-user'
-    });
-    await mockLead.save();
-
-    // Create a mock campaign
-    const mockCampaign = new Campaign({
-      name: campaignName || 'Test Campaign',
-      description: 'Test campaign for notifications',
-      goal: 'Test campaign goal',
-      targetAudience: 'Test audience',
-      script: {
-        versions: [{
-          name: 'Default',
-          content: 'Hello, this is a test call.',
-          isActive: true
-        }]
-      },
-      leadSources: ['Test Import'],
-      status: 'active',
-      startDate: new Date(),
-      primaryLanguage: 'English',
-      supportedLanguages: ['English'],
-      callTiming: {
-        daysOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-        startTime: '09:00',
-        endTime: '18:00',
-        timeZone: 'Asia/Kolkata'
-      },
-      aiSettings: {
-        model: 'gpt-3.5-turbo',
-        systemPrompt: 'You are a professional sales representative.',
-        maxTokens: 1000,
-        temperature: 0.7
-      },
-      voiceSettings: {
-        provider: 'elevenlabs',
-        voiceId: 'default-voice',
-        speed: 1.0,
-        pitch: 1.0
-      },
-      createdBy: req.user?.id || 'test-user'
-    });
-    await mockCampaign.save();
-
-    // Create the test call
-    const call = new Call({
-      _id: id ? new mongoose.Types.ObjectId(id.replace('test-call-', '').padStart(24, '0')) : undefined,
-      lead: mockLead._id,
-      campaign: mockCampaign._id,
-      status,
-      startTime: new Date(),
-      createdBy: req.user?.id || 'test-user',
-      aiPersonality: 'Professional sales representative',
-      callObjective: 'Test call objective',
-      notes: 'Test call for notification system'
-    });
-
-    await call.save();
-
-    // Populate the call for the response
-    const populatedCall = await Call.findById(call._id)
-      .populate('lead', 'name phoneNumber')
-      .populate('campaign', 'name');
-
-    logger.info(`Test call created: ${call._id}`);
-
-    return res.status(201).json({
-      message: 'Test call created successfully',
-      call: populatedCall
-    });
-  } catch (error) {
-    logger.error('Error in createTestCall:', error);
     return res.status(500).json({
       message: 'Server error',
       error: (error as Error).message

@@ -5,7 +5,8 @@
 import mongoose from 'mongoose';
 import { logger, getErrorMessage } from '../index';
 import leadService from './leadService';
-import ConversationEngineService from './conversationEngineService';
+import { ConversationEngineService } from './conversationEngineService';
+import { EnhancedVoiceAIService } from './enhancedVoiceAIService';
 import Configuration from '../models/Configuration';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -368,11 +369,16 @@ export class CampaignService {
         try {
           // Initialize conversation
           const sessionId = uuidv4();
+          
+          // Get the personality object from the personality ID
+          const personalities = EnhancedVoiceAIService.getEnhancedVoicePersonalities();
+          const personalityObj = personalities.find(p => p.id === variant.personality) || personalities[0];
+          
           await this.conversationEngine.initializeConversation(
             sessionId,
             lead.id,
             campaign.id,
-            variant.personality,
+            personalityObj,
             variant.language
           );
           

@@ -1,7 +1,7 @@
 {
-  "name": "ai-cold-calling-system",
+  "name": "lumina-outreach",
   "version": "1.0.0",
-  "description": "Comprehensive autonomous AI cold-calling agent with CRM dashboard",
+  "description": "Comprehensive intelligent communication system with AI-powered outreach capabilities",
   "main": "index.js",
   "scripts": {
     "test": "jest",
@@ -12,7 +12,7 @@
   },
   "keywords": [
     "ai",
-    "cold-calling",
+    "outreach",
     "crm",
     "twilio",
     "elevenlabs",

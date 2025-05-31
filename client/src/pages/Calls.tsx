@@ -51,53 +51,12 @@ const Calls = () => {
         setCalls(response.calls || []);
       } catch (error) {
         console.error('Error fetching calls:', error);
-        // Use mock data as fallback
-        const mockCalls: Call[] = [
-          {
-            id: '1',
-            leadName: 'John Smith',
-            leadPhone: '+1-555-0101',
-            campaignName: 'Q4 Outreach',
-            status: 'completed',
-            duration: 245,
-            callDate: new Date('2024-01-15T10:30:00'),
-            outcome: 'interested',
-            notes: 'Expressed interest in our premium package. Follow up in 2 days.',
-            recordingUrl: '/recordings/call-1.mp3'
-          },
-          {
-            id: '2',
-            leadName: 'Sarah Johnson',
-            leadPhone: '+1-555-0102',
-            campaignName: 'New Product Launch',
-            status: 'completed',
-            duration: 120,
-            callDate: new Date('2024-01-15T11:15:00'),
-            outcome: 'voicemail',
-            recordingUrl: '/recordings/call-2.mp3'
-          },
-          {
-            id: '3',
-            leadName: 'Mike Wilson',
-            leadPhone: '+1-555-0103',
-            campaignName: 'Q4 Outreach',
-            status: 'failed',
-            duration: 0,
-            callDate: new Date('2024-01-15T14:20:00'),
-            outcome: 'no-answer'
-          },
-          {
-            id: '4',
-            leadName: 'Emily Davis',
-            leadPhone: '+1-555-0104',
-            campaignName: 'Holiday Special',
-            status: 'in-progress',
-            duration: 89,
-            callDate: new Date(),
-            outcome: 'answered'
-          }
-        ];
-        setCalls(mockCalls);
+        toast({
+          title: "Error loading calls",
+          description: "There was a problem loading your call history. Please try again.",
+          variant: "destructive"
+        });
+        setCalls([]);
       } finally {
         setLoading(false);
       }

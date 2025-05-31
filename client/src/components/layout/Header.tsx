@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import Sidebar from './Sidebar';
-import CallNotifications from '@/components/CallNotifications';
 
 const Header = () => {
   const { user, logout } = useAuth();
@@ -45,7 +44,7 @@ const Header = () => {
           </Sheet>
 
           {/* Page title - can be dynamically set based on current route */}
-          <h1 className="text-lg font-semibold lg:hidden">AI Cold-Calling</h1>
+          <h1 className="text-lg font-semibold lg:hidden">Lumina Outreach</h1>
         </div>
 
         {/* Right side actions - moved to absolute right */}
@@ -55,11 +54,6 @@ const Header = () => {
             {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             <span className="sr-only">Toggle theme</span>
           </Button>
-
-          {/* Notifications */}
-          <div className="relative">
-            <CallNotifications />
-          </div>
 
           {/* User menu */}
           <DropdownMenu>

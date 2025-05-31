@@ -13,6 +13,19 @@ export const authenticate = async (
   next: NextFunction
 ) => {
   try {
+    // Bypass authentication in development mode
+    if (process.env.NODE_ENV === 'development' || process.env.BYPASS_AUTH === 'true') {
+      // Create a mock user for development
+      req.user = {
+        id: 'dev-user-123',
+        name: 'Development User',
+        email: 'dev@example.com',
+        role: 'admin'
+      };
+      logger.info('Authentication bypassed for development mode');
+      return next();
+    }
+
     // Get token from header
     const authHeader = req.headers.authorization;
     
@@ -21,12 +34,6 @@ export const authenticate = async (
     }
     
     const token = authHeader.split(' ')[1];
-    
-    // Development bypass for testing
-    if ((token === 'dev-token' || token === 'mock-jwt-token') && process.env.NODE_ENV !== 'production') {
-      req.user = { id: 'dev-user-123', email: 'dev@test.com' };
-      return next();
-    }
     
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret');

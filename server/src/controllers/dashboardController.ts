@@ -130,21 +130,45 @@ export const getLeadMetrics = async (_req: Request & { user?: any }, res: Respon
 // @access  Private
 export const getAgentPerformance = async (_req: Request & { user?: any }, res: Response) => {
   try {
-    // Mock data for agent performance since this is an AI system
-    const mockAgentPerformance = {
-      callVolume: 157,
-      successRate: 0.68,
-      averageCallTime: 132, // seconds
-      positiveResponseRate: 0.42,
-      leadConversionRate: 0.23,
-      callQualityScore: 0.85,
+    // Fetch actual agent performance data from database
+    const callsData = await Call.find({}).sort('-createdAt').limit(200);
+    
+    // Calculate performance metrics
+    const totalCalls = callsData.length;
+    const successfulCalls = callsData.filter(call => call.outcome === 'successful').length;
+    const successRate = totalCalls > 0 ? successfulCalls / totalCalls : 0;
+    
+    // Calculate average call time
+    const totalCallTime = callsData.reduce((acc, call) => {
+      return acc + (call.duration || 0);
+    }, 0);
+    const averageCallTime = totalCalls > 0 ? totalCallTime / totalCalls : 0;
+    
+    // Calculate other metrics
+    const positiveResponses = callsData.filter(call => 
+      call.outcome === 'interested' || call.outcome === 'successful'
+    ).length;
+    const positiveResponseRate = totalCalls > 0 ? positiveResponses / totalCalls : 0;
+    
+    const convertedLeads = await Lead.countDocuments({ status: 'converted' });
+    const totalLeads = await Lead.countDocuments({});
+    const leadConversionRate = totalLeads > 0 ? convertedLeads / totalLeads : 0;
+    
+    // Return the performance data
+    const performanceData = {
+      callVolume: totalCalls,
+      successRate,
+      averageCallTime,
+      positiveResponseRate,
+      leadConversionRate,
+      callQualityScore: 0.85, // This would be calculated based on actual feedback data
       improvement: {
-        weekOverWeek: 0.12,
-        monthOverMonth: 0.28
+        weekOverWeek: 0, // This would be calculated by comparing with previous week's data
+        monthOverMonth: 0 // This would be calculated by comparing with previous month's data
       }
     };
     
-    res.status(200).json(mockAgentPerformance);
+    res.status(200).json(performanceData);
   } catch (error) {
     logger.error('Error in getAgentPerformance:', error);
     res.status(500).json({
@@ -159,17 +183,38 @@ export const getAgentPerformance = async (_req: Request & { user?: any }, res: R
 // @access  Private
 export const getGeographicalDistribution = async (_req: Request & { user?: any }, res: Response) => {
   try {
-    // Mock data for geographical distribution
-    const mockGeoDistribution = [
-      { region: 'North America', count: 243, successRate: 0.72 },
-      { region: 'Europe', count: 157, successRate: 0.65 },
-      { region: 'Asia', count: 128, successRate: 0.58 },
-      { region: 'South America', count: 87, successRate: 0.61 },
-      { region: 'Australia/Oceania', count: 56, successRate: 0.69 },
-      { region: 'Africa', count: 42, successRate: 0.54 }
-    ];
+    // Get geographical distribution from the database
+    const geoData = await Call.aggregate([
+      {
+        $lookup: {
+          from: 'leads',
+          localField: 'lead',
+          foreignField: '_id',
+          as: 'leadData'
+        }
+      },
+      { $unwind: '$leadData' },
+      {
+        $group: {
+          _id: '$leadData.region',
+          count: { $sum: 1 },
+          successful: { 
+            $sum: { $cond: [{ $eq: ['$outcome', 'successful'] }, 1, 0] } 
+          }
+        }
+      },
+      {
+        $project: {
+          region: '$_id',
+          count: 1,
+          successRate: { $divide: ['$successful', '$count'] },
+          _id: 0
+        }
+      },
+      { $sort: { count: -1 } }
+    ]);
     
-    res.status(200).json(mockGeoDistribution);
+    res.status(200).json(geoData);
   } catch (error) {
     logger.error('Error in getGeographicalDistribution:', error);
     res.status(500).json({
@@ -188,29 +233,103 @@ export const getTimeSeriesData = async (req: Request & { user?: any }, res: Resp
     
     // Create time range based on period
     const startDate = new Date();
+    const labels = [];
     
     if (period === 'week') {
       startDate.setDate(startDate.getDate() - 7);
+      
+      // Generate daily labels for the past week
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        labels.push(date.toLocaleDateString('en-US', { weekday: 'short' }));
+      }
     } else if (period === 'month') {
       startDate.setMonth(startDate.getMonth() - 1);
+      
+      // Generate weekly labels for the past month
+      for (let i = 4; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - (i * 7));
+        labels.push(`Week ${i+1}`);
+      }
     } else if (period === 'year') {
       startDate.setFullYear(startDate.getFullYear() - 1);
+      
+      // Generate monthly labels for the past year
+      for (let i = 11; i >= 0; i--) {
+        const date = new Date();
+        date.setMonth(date.getMonth() - i);
+        labels.push(date.toLocaleDateString('en-US', { month: 'short' }));
+      }
     }
     
-    // Mock time series data
-    const mockTimeSeriesData = {
-      labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    // Query the database for time series data based on the metric
+    let data;
+    
+    if (metric === 'calls') {
+      data = await Call.aggregate([
+        { $match: { createdAt: { $gte: startDate } } },
+        {
+          $group: {
+            _id: {
+              $dateToString: { 
+                format: period === 'week' ? '%Y-%m-%d' : period === 'month' ? '%Y-%U' : '%Y-%m',
+                date: '$createdAt'
+              }
+            },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { '_id': 1 } }
+      ]);
+    } else if (metric === 'conversions') {
+      data = await Call.aggregate([
+        { $match: { createdAt: { $gte: startDate }, outcome: 'successful' } },
+        {
+          $group: {
+            _id: {
+              $dateToString: { 
+                format: period === 'week' ? '%Y-%m-%d' : period === 'month' ? '%Y-%U' : '%Y-%m',
+                date: '$createdAt'
+              }
+            },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { '_id': 1 } }
+      ]);
+    } else {
+      // Default to total calls
+      data = await Call.aggregate([
+        { $match: { createdAt: { $gte: startDate } } },
+        {
+          $group: {
+            _id: {
+              $dateToString: { 
+                format: period === 'week' ? '%Y-%m-%d' : period === 'month' ? '%Y-%U' : '%Y-%m',
+                date: '$createdAt'
+              }
+            },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { '_id': 1 } }
+      ]);
+    }
+    
+    // Format the result for the chart
+    const chartData = {
+      labels,
       datasets: [
         {
           label: metric || 'Calls',
-          data: [12, 19, 15, 22, 18, 9, 14]
+          data: data.map((item: any) => item.count)
         }
       ]
     };
     
-    // In a real implementation, we would query the database for time-based metrics
-    
-    res.status(200).json(mockTimeSeriesData);
+    res.status(200).json(chartData);
   } catch (error) {
     logger.error('Error in getTimeSeriesData:', error);
     res.status(500).json({

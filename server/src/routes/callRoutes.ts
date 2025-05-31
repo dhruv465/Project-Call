@@ -8,8 +8,7 @@ import {
   getCallTranscript,
   scheduleCallback,
   getCallAnalytics,
-  exportCalls,
-  createTestCall
+  exportCalls
 } from '../controllers/callController';
 import { updateCallStatus } from '../controllers/updateCallStatusController';
 
@@ -20,7 +19,6 @@ router.use(authenticate);
 
 // Call management routes
 router.post('/initiate', initiateCall);
-router.post('/test', createTestCall);
 router.get('/', getCallHistory);
 router.get('/analytics', getCallAnalytics);
 router.get('/export', exportCalls);

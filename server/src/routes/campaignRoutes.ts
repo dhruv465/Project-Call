@@ -8,7 +8,15 @@ import {
   deleteCampaign,
   generateScript,
   testScript,
-  getCampaignAnalytics
+  getCampaignAnalytics,
+  generateAdvancedScript,
+  createScriptTemplate,
+  getScriptTemplates,
+  createABTest,
+  getCampaignABTests,
+  getABTestResults,
+  updateABTestMetrics,
+  validateScriptCompliance
 } from '../controllers/campaignController';
 
 const router = express.Router();
@@ -26,6 +34,20 @@ router.delete('/:id', deleteCampaign);
 
 // Script generation and testing
 router.post('/:id/generate-script', generateScript);
+router.post('/:id/generate-advanced-script', generateAdvancedScript);
 router.post('/:id/test-script', testScript);
+
+// Script templates
+router.post('/templates', createScriptTemplate);
+router.get('/templates', getScriptTemplates);
+
+// A/B Testing
+router.post('/:id/ab-test', createABTest);
+router.get('/:id/ab-tests', getCampaignABTests);
+router.get('/ab-test/:testId/results', getABTestResults);
+router.put('/ab-test/:testId/metrics', updateABTestMetrics);
+
+// Compliance
+router.post('/validate-compliance', validateScriptCompliance);
 
 export default router;

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from 'react-query';
+import api from '@/services/api';
 import {
   Search,
   Plus,
@@ -28,39 +29,35 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { useToast } from '@/components/ui/use-toast';
+import { Badge } from '@/components/ui/badge';
 import CampaignForm from '@/components/campaigns/CampaignForm';
-// import api from '@/services/api'; // Commented out as not currently used
+import Skeleton from '@/components/ui/Skeleton';
 
-// Define Campaign type based on the server model
+// Types
 interface Campaign {
   _id: string;
   name: string;
   description: string;
+  status: 'Draft' | 'Active' | 'Paused' | 'Completed';
   goal: string;
   targetAudience: string;
+  leadSources: string[];
+  primaryLanguage: string;
+  supportedLanguages: string[];
+  startDate: string;
+  endDate?: string;
   script: {
-    versions: {
+    name: string;
+    content: string;
+    versions: Array<{
       name: string;
       content: string;
       isActive: boolean;
-      performance?: {
-        successRate: number;
-        avgCallDuration: number;
-        conversionRate: number;
-      };
-    }[];
+    }>;
   };
-  leadSources: string[];
-  status: 'Draft' | 'Active' | 'Paused' | 'Completed';
-  startDate: string;
-  endDate?: string;
-  primaryLanguage: string;
-  supportedLanguages: string[];
   callTiming: {
     daysOfWeek: string[];
     startTime: string;
@@ -79,169 +76,49 @@ interface Campaign {
     speed: number;
     pitch: number;
   };
-  metrics: {
+  metrics?: {
     totalCalls: number;
-    connectedCalls: number;
     successfulCalls: number;
     avgCallDuration: number;
     conversionRate: number;
   };
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
-// Mock data for initial development
-const mockCampaigns: Campaign[] = Array.from({ length: 10 }, (_, i) => ({
-  _id: `campaign-${i + 1}`,
-  name: [
-    'Q1 Lead Qualification',
-    'Tech Companies Outreach',
-    'Healthcare Solutions',
-    'SMB Follow-up',
-    'Enterprise Renewals',
-    'Education Sector Outreach',
-    'New Product Introduction',
-    'Customer Feedback',
-    'Appointment Scheduling',
-    'Expired Subscription Renewal'
-  ][i],
-  description: 'Campaign to reach out to potential clients and qualify their interest in our services.',
-  goal: [
-    'Qualify leads for sales team',
-    'Book product demos',
-    'Schedule follow-up calls',
-    'Gather feedback',
-    'Renew subscriptions'
-  ][i % 5],
-  targetAudience: [
-    'Technology companies in Bangalore',
-    'Healthcare providers in Mumbai',
-    'Educational institutions in Delhi',
-    'Financial services in Chennai',
-    'Manufacturing businesses in Pune'
-  ][i % 5],
-  script: {
-    versions: [
-      {
-        name: 'Primary Script',
-        content: 'Hello, this is {agent_name} calling from {company_name}. I wanted to discuss how our {product_name} could help your business. Do you have a few minutes to talk?',
-        isActive: true,
-        performance: {
-          successRate: Math.random() * 0.5 + 0.2,
-          avgCallDuration: Math.floor(Math.random() * 180) + 60,
-          conversionRate: Math.random() * 0.3 + 0.1,
-        },
-      },
-    ],
-  },
-  leadSources: [
-    ['Website Form', 'LinkedIn Campaign'],
-    ['Trade Show', 'Referrals'],
-    ['Cold List', 'Partner Network'],
-    ['Website Visitors', 'Demo Requests'],
-    ['Previous Customers']
-  ][i % 5],
-  status: ['Draft', 'Active', 'Paused', 'Completed'][Math.floor(Math.random() * 4)] as 'Draft' | 'Active' | 'Paused' | 'Completed',
-  startDate: new Date(Date.now() - Math.floor(Math.random() * 30) * 86400000).toISOString(),
-  endDate: Math.random() > 0.5 ? new Date(Date.now() + Math.floor(Math.random() * 30) * 86400000).toISOString() : undefined,
-  primaryLanguage: 'English',
-  supportedLanguages: ['English', 'Hindi'],
-  callTiming: {
-    daysOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-    startTime: '09:00',
-    endTime: '17:00',
-    timeZone: 'Asia/Kolkata',
-  },
-  llmConfiguration: {
-    model: 'gpt-4o',
-    systemPrompt: 'You are an AI assistant making a call on behalf of a company. Be professional, friendly, and helpful.',
-    temperature: 0.7,
-    maxTokens: 500,
-  },
-  voiceConfiguration: {
-    provider: 'elevenlabs',
-    voiceId: `voice-${i + 1}`,
-    speed: 1.0,
-    pitch: 1.0,
-  },
-  metrics: {
-    totalCalls: Math.floor(Math.random() * 500) + 50,
-    connectedCalls: Math.floor(Math.random() * 300) + 30,
-    successfulCalls: Math.floor(Math.random() * 100) + 10,
-    avgCallDuration: Math.floor(Math.random() * 180) + 60,
-    conversionRate: Math.random() * 0.3 + 0.1,
-  },
-  createdBy: 'user-1',
-  createdAt: new Date(Date.now() - Math.floor(Math.random() * 60) * 86400000).toISOString(),
-  updatedAt: new Date(Date.now() - Math.floor(Math.random() * 30) * 86400000).toISOString(),
-}));
+interface CampaignsData {
+  campaigns: Campaign[];
+  pagination?: {
+    page: number;
+    pages: number;
+    total: number;
+    limit: number;
+  };
+}
 
 const Campaigns = () => {
-  const { toast } = useToast();
+  // State
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
-
-  // Fetch campaigns data
-  const { data: campaignsData, isLoading, error } = useQuery(
-    ['campaigns', statusFilter, currentPage, itemsPerPage],
-    async () => {
-      try {
-        // In a real app, we would fetch data from API
-        // const response = await api.get('/campaigns', { 
-        //   params: { 
-        //     status: statusFilter !== 'All' ? statusFilter : undefined,
-        //     page: currentPage,
-        //     limit: itemsPerPage
-        //   } 
-        // });
-        // return response.data;
-        
-        // For now, use mock data
-        const filteredCampaigns = mockCampaigns.filter(campaign => {
-          const matchesStatus = statusFilter === 'All' || campaign.status === statusFilter;
-          const matchesSearch = searchTerm === '' || 
-            campaign.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            campaign.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            campaign.goal.toLowerCase().includes(searchTerm.toLowerCase());
-          
-          return matchesStatus && matchesSearch;
-        });
-        
-        const paginatedCampaigns = filteredCampaigns.slice(
-          (currentPage - 1) * itemsPerPage,
-          currentPage * itemsPerPage
-        );
-        
-        return {
-          campaigns: paginatedCampaigns,
-          pagination: {
-            page: currentPage,
-            limit: itemsPerPage,
-            total: filteredCampaigns.length,
-            pages: Math.ceil(filteredCampaigns.length / itemsPerPage),
-          },
-        };
-      } catch (error) {
-        throw error;
-      }
-    },
-    {
-      keepPreviousData: true,
-      refetchOnWindowFocus: false,
-    }
-  );
-
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editCampaignId, setEditCampaignId] = useState<string | undefined>(undefined);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [showCampaignForm, setShowCampaignForm] = useState(false);
+  const [editingCampaignId, setEditingCampaignId] = useState<string | undefined>();
+  
+  // Event handlers
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(1);
+  };
 
   const handleCreateCampaign = () => {
-    setEditCampaignId(undefined);
-    setIsFormOpen(true);
+    setEditingCampaignId(undefined);
+    setShowCampaignForm(true);
+  };
+
+  const handleEditCampaign = (campaignId: string) => {
+    setEditingCampaignId(campaignId);
+    setShowCampaignForm(true);
   };
 
   const handleViewCampaign = (campaign: Campaign) => {
@@ -249,220 +126,337 @@ const Campaigns = () => {
     setIsSheetOpen(true);
   };
 
-  const handleEditCampaign = (campaignId: string) => {
-    setEditCampaignId(campaignId);
-    setIsFormOpen(true);
+  const handleChangeCampaignStatus = (campaignId: string, newStatus: 'Draft' | 'Active' | 'Paused' | 'Completed') => {
+    console.log(`Changing campaign ${campaignId} status to ${newStatus}`);
+    // In a real app, this would update the campaign via API
   };
 
-  const handleDeleteCampaign = (campaignId: string) => {
-    toast({
-      title: "Delete Campaign",
-      description: `Delete functionality for campaign ${campaignId} will be implemented here.`,
-    });
+  const handleCampaignFormClose = () => {
+    setShowCampaignForm(false);
+    setEditingCampaignId(undefined);
   };
 
-  const handleChangeCampaignStatus = (_campaignId: string, newStatus: 'Draft' | 'Active' | 'Paused' | 'Completed') => {
-    toast({
-      title: `Campaign ${newStatus}`,
-      description: `Campaign status changed to ${newStatus}.`,
-    });
+  const handleCampaignFormSuccess = () => {
+    // Refresh campaigns data
+    console.log('Campaign saved successfully');
   };
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return 'Not set';
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  const getStatusColor = (status: string) => {
+  const getStatusBadgeVariant = (status: string) => {
     switch (status) {
-      case 'Draft':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100';
-      case 'Active':
-        return 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100';
-      case 'Paused':
-        return 'bg-amber-100 text-amber-800 dark:bg-amber-800 dark:text-amber-100';
-      case 'Completed':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100';
+      case 'Active': return 'default';
+      case 'Draft': return 'secondary';
+      case 'Paused': return 'outline';
+      case 'Completed': return 'destructive';
+      default: return 'secondary';
     }
   };
+  
+  // Fetch campaigns from API
+  const { data: campaignsData, isLoading, error, refetch } = useQuery<CampaignsData>(
+    ['campaigns', currentPage, itemsPerPage, searchTerm, statusFilter],
+    async () => {
+      try {
+        const params = new URLSearchParams({
+          page: currentPage.toString(),
+          limit: itemsPerPage.toString(),
+        });
+        
+        if (searchTerm) {
+          params.append('search', searchTerm);
+        }
+        
+        if (statusFilter !== 'All') {
+          params.append('status', statusFilter);
+        }
+        
+        const response = await api.get(`/campaigns?${params.toString()}`);
+        return response.data || { campaigns: [], pagination: { page: 1, pages: 0, total: 0, limit: itemsPerPage } };
+      } catch (err) {
+        console.error('Error fetching campaigns:', err);
+        // Return empty data structure instead of throwing error for new installations
+        return { campaigns: [], pagination: { page: 1, pages: 0, total: 0, limit: itemsPerPage } };
+      }
+    },
+    {
+      refetchOnWindowFocus: false,
+      staleTime: 30000, // 30 seconds
+    }
+  );
 
-  const calculateSuccessRate = (campaign: Campaign) => {
-    if (campaign.metrics.connectedCalls === 0) return '0%';
-    return `${Math.round((campaign.metrics.successfulCalls / campaign.metrics.connectedCalls) * 100)}%`;
-  };
+  // Get filtered campaigns based on data
+  const filteredCampaigns = campaignsData?.campaigns || [];
 
+  // Event handlers
+  
+  // Handle loading state
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-10rem)]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">Loading campaigns...</p>
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-between mb-6">
+          <Skeleton className="h-10 w-48 mb-2" />
+          <Skeleton className="h-10 w-40" />
+        </div>
+        <div className="flex items-center gap-4 mb-6">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <div className="grid grid-cols-1 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="p-6">
+              <div className="flex items-center justify-between mb-2">
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="h-6 w-20" />
+              </div>
+              <Skeleton className="h-4 w-3/4 mb-2" />
+              <Skeleton className="h-4 w-1/2 mb-2" />
+              <div className="flex gap-2 mt-4">
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-8 w-24" />
+              </div>
+            </Card>
+          ))}
         </div>
       </div>
     );
   }
 
+  // Handle error state
   if (error) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Campaign Management</h1>
-        <Card className="p-8 text-center">
-          <AlertTriangle className="h-12 w-12 text-destructive mx-auto" />
-          <p className="mt-4 text-lg">Failed to load campaigns. Please try again.</p>
-          <Button
-            onClick={() => window.location.reload()}
-            className="mt-4"
-          >
-            Retry
-          </Button>
+      <div className="p-8">
+        <Card className="p-6 border-destructive bg-destructive/10">
+          <div className="flex items-center space-x-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            <h3 className="font-medium">Error Loading Campaigns</h3>
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            If this is a new installation, you may not have any campaigns yet. Try creating your first campaign.
+          </p>
+          <div className="flex gap-2 mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => refetch()}
+            >
+              Retry
+            </Button>
+            <Button onClick={handleCreateCampaign}>
+              <Plus size={16} className="mr-2" />
+              Create Campaign
+            </Button>
+          </div>
         </Card>
       </div>
     );
   }
 
+  if (filteredCampaigns.length === 0 && searchTerm === '' && statusFilter === 'All') {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-3xl font-bold">Campaigns</h1>
+        </div>
+        
+        <Card className="p-8 text-center">
+          <AlertTriangle size={48} className="mx-auto text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium mb-2">No campaigns yet</h3>
+          <p className="text-muted-foreground mb-4">
+            Create your first campaign to start making AI-powered cold calls.
+          </p>
+          <Button onClick={handleCreateCampaign}>
+            <Plus size={16} className="mr-2" />
+            Create Campaign
+          </Button>
+        </Card>
+        
+        <Sheet open={showCampaignForm} onOpenChange={(open) => {
+          if (!open) handleCampaignFormClose();
+          setShowCampaignForm(open);
+        }}>
+          {showCampaignForm && (
+            <CampaignForm
+              campaignId={editingCampaignId}
+              onClose={handleCampaignFormClose}
+              onSuccess={handleCampaignFormSuccess}
+            />
+          )}
+        </Sheet>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">Campaign Management</h1>
+    <div className="container mx-auto p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">Campaigns</h1>
         <Button onClick={handleCreateCampaign}>
-          <Plus className="h-4 w-4 mr-2" />
+          <Plus size={16} className="mr-2" />
           Create Campaign
         </Button>
       </div>
 
-      {/* Filters and Search */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      {/* Search and Filters */}
+      <div className="flex items-center gap-4 mb-6">
         <div className="relative flex-grow">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search campaigns..."
-            className="pl-10 h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={handleSearchChange}
+            className="w-full pl-10 pr-4 py-2 border border-input rounded-md bg-background"
           />
         </div>
         
-        <div className="flex gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="flex items-center gap-1">
-                <Filter className="h-4 w-4" />
-                Status: {statusFilter}
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => setStatusFilter('All')}>All</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatusFilter('Draft')}>Draft</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatusFilter('Active')}>Active</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatusFilter('Paused')}>Paused</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatusFilter('Completed')}>Completed</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="flex items-center gap-1">
+              <Filter size={16} />
+              Status: {statusFilter}
+              <ChevronDown size={16} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem onClick={() => setStatusFilter('All')}>
+              All
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setStatusFilter('Active')}>
+              Active
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setStatusFilter('Draft')}>
+              Draft
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setStatusFilter('Paused')}>
+              Paused
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setStatusFilter('Completed')}>
+              Completed
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      {/* Campaigns Cards */}
+      {/* Campaigns Grid */}
       <div className="grid grid-cols-1 gap-4">
-        {campaignsData?.campaigns.map((campaign) => (
-          <Card key={campaign._id} className="overflow-hidden">
-            <div className="p-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xl font-semibold">{campaign.name}</h3>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(campaign.status)}`}>
-                      {campaign.status}
-                    </span>
+        {filteredCampaigns.map((campaign: Campaign) => (
+          <Card key={campaign._id} className="p-6">
+            <div className="flex items-start justify-between">
+              <div className="flex-grow">
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-lg font-semibold">{campaign.name}</h3>
+                  <Badge variant={getStatusBadgeVariant(campaign.status)}>
+                    {campaign.status}
+                  </Badge>
+                </div>
+                
+                <p className="text-muted-foreground mb-3">{campaign.description}</p>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium">Goal:</span>
+                    <p className="text-muted-foreground">{campaign.goal}</p>
                   </div>
-                  <p className="text-muted-foreground mt-1 line-clamp-2">{campaign.description}</p>
+                  <div>
+                    <span className="font-medium">Target:</span>
+                    <p className="text-muted-foreground">{campaign.targetAudience}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium">Language:</span>
+                    <p className="text-muted-foreground">{campaign.primaryLanguage}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium">Start Date:</span>
+                    <p className="text-muted-foreground">{new Date(campaign.startDate).toLocaleDateString()}</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {campaign.status === 'Draft' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleChangeCampaignStatus(campaign._id, 'Active')}
-                    >
-                      <Play className="h-4 w-4 mr-2" />
-                      Activate
-                    </Button>
-                  )}
-                  {campaign.status === 'Active' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleChangeCampaignStatus(campaign._id, 'Paused')}
-                    >
-                      <Pause className="h-4 w-4 mr-2" />
-                      Pause
-                    </Button>
-                  )}
-                  {campaign.status === 'Paused' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleChangeCampaignStatus(campaign._id, 'Active')}
-                    >
-                      <Play className="h-4 w-4 mr-2" />
-                      Resume
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleViewCampaign(campaign)}
-                  >
-                    <Info className="h-4 w-4 mr-2" />
-                    Details
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleEditCampaign(campaign._id)}>
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit Campaign
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleViewCampaign(campaign)}>
-                        <Info className="h-4 w-4 mr-2" />
-                        View Details
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => handleDeleteCampaign(campaign._id)}
-                        className="text-destructive focus:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete Campaign
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                
+                {campaign.metrics && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t text-sm">
+                    <div>
+                      <span className="font-medium">Total Calls:</span>
+                      <p className="text-muted-foreground">{campaign.metrics.totalCalls}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium">Successful:</span>
+                      <p className="text-muted-foreground">{campaign.metrics.successfulCalls}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium">Avg Duration:</span>
+                      <p className="text-muted-foreground">{campaign.metrics.avgCallDuration}m</p>
+                    </div>
+                    <div>
+                      <span className="font-medium">Conversion:</span>
+                      <p className="text-muted-foreground">{campaign.metrics.conversionRate}%</p>
+                    </div>
+                  </div>
+                )}
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
-                <div className="bg-muted/50 p-4 rounded-md">
-                  <p className="text-sm text-muted-foreground">Duration</p>
-                  <p className="font-medium">{formatDate(campaign.startDate)} - {formatDate(campaign.endDate)}</p>
-                </div>
-                <div className="bg-muted/50 p-4 rounded-md">
-                  <p className="text-sm text-muted-foreground">Total Calls</p>
-                  <p className="font-medium">{campaign.metrics.totalCalls}</p>
-                </div>
-                <div className="bg-muted/50 p-4 rounded-md">
-                  <p className="text-sm text-muted-foreground">Connected Calls</p>
-                  <p className="font-medium">{campaign.metrics.connectedCalls} ({Math.round((campaign.metrics.connectedCalls / campaign.metrics.totalCalls) * 100)}%)</p>
-                </div>
-                <div className="bg-muted/50 p-4 rounded-md">
-                  <p className="text-sm text-muted-foreground">Success Rate</p>
-                  <p className="font-medium">{calculateSuccessRate(campaign)}</p>
-                </div>
+              <div className="flex items-center gap-2 ml-4">
+                {campaign.status === 'Draft' && (
+                  <Button 
+                    size="sm" 
+                    onClick={() => handleChangeCampaignStatus(campaign._id, 'Active')}
+                  >
+                    <Play size={16} className="mr-2" />
+                    Start
+                  </Button>
+                )}
+                
+                {campaign.status === 'Active' && (
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => handleChangeCampaignStatus(campaign._id, 'Paused')}
+                  >
+                    <Pause size={16} className="mr-2" />
+                    Pause
+                  </Button>
+                )}
+                
+                {campaign.status === 'Paused' && (
+                  <Button 
+                    size="sm"
+                    onClick={() => handleChangeCampaignStatus(campaign._id, 'Active')}
+                  >
+                    <Play size={16} className="mr-2" />
+                    Resume
+                  </Button>
+                )}
+                
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => handleViewCampaign(campaign)}
+                >
+                  <Info size={16} className="mr-2" />
+                  Details
+                </Button>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      <MoreHorizontal size={16} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleEditCampaign(campaign._id)}>
+                      <Edit size={16} className="mr-2" />
+                      Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleViewCampaign(campaign)}>
+                      <Info size={16} className="mr-2" />
+                      View Details
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => console.log('Delete campaign', campaign._id)}
+                      className="text-destructive"
+                    >
+                      <Trash2 size={16} className="mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </Card>
@@ -470,276 +464,233 @@ const Campaigns = () => {
       </div>
 
       {/* Pagination */}
-      {campaignsData && campaignsData.pagination && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Showing {((campaignsData.pagination.page - 1) * campaignsData.pagination.limit) + 1} to {Math.min(campaignsData.pagination.page * campaignsData.pagination.limit, campaignsData.pagination.total)} of {campaignsData.pagination.total} campaigns
-          </p>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, campaignsData.pagination.pages))}
-              disabled={currentPage === campaignsData.pagination.pages}
-            >
-              Next
-            </Button>
-          </div>
+      {campaignsData?.pagination && campaignsData.pagination.pages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-6">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((prev: number) => Math.max(prev - 1, 1))}
+          >
+            Previous
+          </Button>
+          
+          <span className="text-sm text-muted-foreground">
+            Page {currentPage} of {campaignsData?.pagination?.pages}
+          </span>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage === campaignsData?.pagination?.pages}
+            onClick={() => setCurrentPage((prev: number) => Math.min(prev + 1, campaignsData?.pagination?.pages || 1))}
+          >
+            Next
+          </Button>
         </div>
       )}
 
       {/* Campaign Details Sheet */}
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent className="sm:max-w-xl p-0">
+        <SheetContent className="w-[600px] sm:max-w-[600px]">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Info size={20} />
+              Campaign Details
+            </SheetTitle>
+          </SheetHeader>
+          
           {selectedCampaign && (
-            <div className="flex flex-col h-full">
-              <div className="px-6 py-4 border-b">
-                <SheetHeader>
-                  <div className="flex items-center justify-between">
-                    <SheetTitle>{selectedCampaign.name}</SheetTitle>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedCampaign.status)}`}>
-                      {selectedCampaign.status}
-                    </span>
-                  </div>
-                  <SheetDescription>
-                    {selectedCampaign.description}
-                  </SheetDescription>
-                </SheetHeader>
-              </div>
-              
-              <ScrollArea className="flex-1">
-                <div className="px-6 py-6 space-y-8">
-                {/* Basic Information */}
-                <div className="space-y-4">
+            <ScrollArea className="h-[calc(100vh-8rem)] mt-6">
+              <div className="space-y-6">
+                <div>
                   <h3 className="text-lg font-medium flex items-center gap-2">
-                    <Info className="h-4 w-4" />
-                    Campaign Details
+                    <Zap size={18} />
+                    Basic Information
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Goal</p>
-                      <p className="font-medium">{selectedCampaign.goal}</p>
+                  <div className="mt-3 space-y-2">
+                    <div>
+                      <span className="font-medium">Name:</span>
+                      <p className="text-muted-foreground">{selectedCampaign.name}</p>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Target Audience</p>
-                      <p className="font-medium">{selectedCampaign.targetAudience}</p>
+                    <div>
+                      <span className="font-medium">Description:</span>
+                      <p className="text-muted-foreground">{selectedCampaign.description}</p>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Start Date</p>
-                      <p className="font-medium">{formatDate(selectedCampaign.startDate)}</p>
+                    <div>
+                      <span className="font-medium">Goal:</span>
+                      <p className="text-muted-foreground">{selectedCampaign.goal}</p>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">End Date</p>
-                      <p className="font-medium">{formatDate(selectedCampaign.endDate)}</p>
+                    <div>
+                      <span className="font-medium">Target Audience:</span>
+                      <p className="text-muted-foreground">{selectedCampaign.targetAudience}</p>
                     </div>
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">Lead Sources</p>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedCampaign.leadSources.map((source, idx) => (
-                          <span key={idx} className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-muted">
-                            {source}
-                          </span>
+                    <div>
+                      <span className="font-medium">Lead Sources:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {selectedCampaign.leadSources.map((source: string, idx: number) => (
+                          <Badge key={idx} variant="outline">{source}</Badge>
                         ))}
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">Languages</p>
-                      <div className="flex flex-wrap gap-2">
-                        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-primary/10">
-                          {selectedCampaign.primaryLanguage} (Primary)
-                        </span>
-                        {selectedCampaign.supportedLanguages
-                          .filter(lang => lang !== selectedCampaign.primaryLanguage)
-                          .map((lang, idx) => (
-                            <span key={idx} className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-muted">
-                              {lang}
-                            </span>
-                          ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Call Timing */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium flex items-center gap-2">
-                    <Zap className="h-4 w-4" />
-                    Call Schedule
-                  </h3>
-                  <div className="bg-muted/50 p-6 rounded-lg">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">Days</p>
-                        <p className="font-medium">{selectedCampaign.callTiming.daysOfWeek.join(', ')}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">Time</p>
-                        <p className="font-medium">{selectedCampaign.callTiming.startTime} - {selectedCampaign.callTiming.endTime} ({selectedCampaign.callTiming.timeZone})</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Script */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4" />
-                    Call Script
-                  </h3>
-                  {selectedCampaign.script.versions.map((version, idx) => (
-                    <div key={idx} className="bg-muted/50 p-6 rounded-lg space-y-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="font-medium">{version.name}</p>
-                        {version.isActive && (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">
-                            Active
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm whitespace-pre-line">{version.content}</p>
-                      {version.performance && (
-                        <div className="grid grid-cols-3 gap-2 mt-4">
-                          <div>
-                            <p className="text-xs text-muted-foreground">Success Rate</p>
-                            <p className="text-sm font-medium">{Math.round(version.performance.successRate * 100)}%</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">Avg. Duration</p>
-                            <p className="text-sm font-medium">{version.performance.avgCallDuration} sec</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">Conversion</p>
-                            <p className="text-sm font-medium">{Math.round(version.performance.conversionRate * 100)}%</p>
-                          </div>
+                    <div>
+                      <span className="font-medium">Languages:</span>
+                      <p className="text-muted-foreground">
+                        Primary: {selectedCampaign.primaryLanguage}
+                      </p>
+                      {selectedCampaign.supportedLanguages.length > 1 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {selectedCampaign.supportedLanguages
+                            .filter((lang: string) => lang !== selectedCampaign.primaryLanguage)
+                            .map((lang: string, idx: number) => (
+                              <Badge key={idx} variant="secondary">{lang}</Badge>
+                            ))}
                         </div>
                       )}
                     </div>
-                  ))}
+                  </div>
                 </div>
 
-                {/* LLM Configuration */}
-                <div className="space-y-2">
+                <div>
                   <h3 className="text-lg font-medium flex items-center gap-2">
-                    <Zap className="h-4 w-4" />
-                    AI Configuration
+                    <MessageSquare size={18} />
+                    Call Script
                   </h3>
-                  <div className="bg-muted/50 p-4 rounded-md">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">LLM Model</p>
-                        <p className="font-medium">{selectedCampaign.llmConfiguration.model}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Temperature</p>
-                        <p className="font-medium">{selectedCampaign.llmConfiguration.temperature}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Max Tokens</p>
-                        <p className="font-medium">{selectedCampaign.llmConfiguration.maxTokens}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Voice Provider</p>
-                        <p className="font-medium">{selectedCampaign.voiceConfiguration.provider}</p>
+                  <div className="mt-3">
+                    <div>
+                      <span className="font-medium">Script Name:</span>
+                      <p className="text-muted-foreground">{selectedCampaign.script.name}</p>
+                    </div>
+                    <div className="mt-2">
+                      <span className="font-medium">Content:</span>
+                      <div className="mt-1 p-3 bg-muted rounded-md text-sm">
+                        {selectedCampaign.script.content}
                       </div>
                     </div>
-                    <div className="mt-4">
-                      <p className="text-sm text-muted-foreground">System Prompt</p>
-                      <p className="text-sm mt-1 bg-background p-2 rounded-md whitespace-pre-line">{selectedCampaign.llmConfiguration.systemPrompt}</p>
+                    {selectedCampaign.script.versions.length > 0 && (
+                      <div className="mt-3">
+                        <span className="font-medium">Versions:</span>
+                        {selectedCampaign.script.versions.map((version: any, idx: number) => (
+                          <div key={idx} className="mt-2 p-2 border rounded">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-sm">{version.name}</span>
+                              {version.isActive && (
+                                <Badge variant="default">Active</Badge>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-medium flex items-center gap-2">
+                    <Zap size={18} />
+                    Call Timing
+                  </h3>
+                  <div className="mt-3 space-y-2">
+                    <div>
+                      <span className="font-medium">Days:</span>
+                      <p className="text-muted-foreground">{selectedCampaign.callTiming.daysOfWeek.join(', ')}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium">Time:</span>
+                      <p className="text-muted-foreground">
+                        {selectedCampaign.callTiming.startTime} - {selectedCampaign.callTiming.endTime}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium">Timezone:</span>
+                      <p className="text-muted-foreground">{selectedCampaign.callTiming.timeZone}</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Metrics */}
-                <div className="space-y-2">
-                  <h3 className="text-lg font-medium flex items-center gap-2">
-                    <BarChart3 className="h-4 w-4" />
-                    Campaign Metrics
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="bg-muted/50 p-4 rounded-md">
-                      <p className="text-sm text-muted-foreground">Total Calls</p>
-                      <p className="text-xl font-medium">{selectedCampaign.metrics.totalCalls}</p>
-                    </div>
-                    <div className="bg-muted/50 p-4 rounded-md">
-                      <p className="text-sm text-muted-foreground">Connected</p>
-                      <p className="text-xl font-medium">{selectedCampaign.metrics.connectedCalls}</p>
-                      <p className="text-xs text-muted-foreground">{Math.round((selectedCampaign.metrics.connectedCalls / selectedCampaign.metrics.totalCalls) * 100)}% connect rate</p>
-                    </div>
-                    <div className="bg-muted/50 p-4 rounded-md">
-                      <p className="text-sm text-muted-foreground">Successful</p>
-                      <p className="text-xl font-medium">{selectedCampaign.metrics.successfulCalls}</p>
-                      <p className="text-xs text-muted-foreground">{Math.round((selectedCampaign.metrics.successfulCalls / selectedCampaign.metrics.connectedCalls) * 100)}% success rate</p>
-                    </div>
-                    <div className="bg-muted/50 p-4 rounded-md">
-                      <p className="text-sm text-muted-foreground">Avg. Call Duration</p>
-                      <p className="text-xl font-medium">{selectedCampaign.metrics.avgCallDuration} sec</p>
-                    </div>
-                    <div className="bg-muted/50 p-4 rounded-md">
-                      <p className="text-sm text-muted-foreground">Conversion Rate</p>
-                      <p className="text-xl font-medium">{Math.round(selectedCampaign.metrics.conversionRate * 100)}%</p>
+                {selectedCampaign.metrics && (
+                  <div>
+                    <h3 className="text-lg font-medium flex items-center gap-2">
+                      <BarChart3 size={18} />
+                      Performance Metrics
+                    </h3>
+                    <div className="mt-3 grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="font-medium">Total Calls:</span>
+                        <p className="text-2xl font-bold text-primary">{selectedCampaign.metrics.totalCalls}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium">Successful:</span>
+                        <p className="text-2xl font-bold text-green-600">{selectedCampaign.metrics.successfulCalls}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium">Avg Duration:</span>
+                        <p className="text-2xl font-bold text-blue-600">{selectedCampaign.metrics.avgCallDuration}m</p>
+                      </div>
+                      <div>
+                        <span className="font-medium">Conversion Rate:</span>
+                        <p className="text-2xl font-bold text-purple-600">{selectedCampaign.metrics.conversionRate}%</p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
-                {/* Actions */}
-                <div className="flex items-center justify-end gap-2 pt-4">
-                  <Button
-                    variant="outline"
+                <div className="flex gap-2 pt-4">
+                  <Button 
                     onClick={() => handleEditCampaign(selectedCampaign._id)}
+                    className="flex-1"
                   >
-                    <Edit className="h-4 w-4 mr-2" />
+                    <Edit size={16} className="mr-2" />
                     Edit Campaign
                   </Button>
+                  
                   {selectedCampaign.status === 'Draft' && (
-                    <Button
+                    <Button 
                       onClick={() => handleChangeCampaignStatus(selectedCampaign._id, 'Active')}
+                      className="flex-1"
                     >
-                      <Play className="h-4 w-4 mr-2" />
-                      Activate Campaign
+                      <Play size={16} className="mr-2" />
+                      Start Campaign
                     </Button>
                   )}
+                  
                   {selectedCampaign.status === 'Active' && (
-                    <Button
+                    <Button 
+                      variant="outline"
                       onClick={() => handleChangeCampaignStatus(selectedCampaign._id, 'Paused')}
+                      className="flex-1"
                     >
-                      <Pause className="h-4 w-4 mr-2" />
+                      <Pause size={16} className="mr-2" />
                       Pause Campaign
                     </Button>
                   )}
+                  
                   {selectedCampaign.status === 'Paused' && (
-                    <Button
+                    <Button 
                       onClick={() => handleChangeCampaignStatus(selectedCampaign._id, 'Active')}
+                      className="flex-1"
                     >
-                      <Play className="h-4 w-4 mr-2" />
+                      <Play size={16} className="mr-2" />
                       Resume Campaign
                     </Button>
                   )}
                 </div>
               </div>
             </ScrollArea>
-            </div>
           )}
         </SheetContent>
       </Sheet>
 
-      {/* Campaign Form Sheet */}
-      <Sheet open={isFormOpen} onOpenChange={setIsFormOpen}>
-        {isFormOpen && (
-          <CampaignForm 
-            campaignId={editCampaignId}
-            onClose={() => setIsFormOpen(false)}
-            onSuccess={() => {
-              setIsFormOpen(false);
-              // Optionally, refetch campaigns data or update local state
-            }}
+      {/* Campaign Form */}
+      <Sheet open={showCampaignForm} onOpenChange={(open) => {
+        if (!open) handleCampaignFormClose();
+        setShowCampaignForm(open);
+      }}>
+        {showCampaignForm && (
+          <CampaignForm
+            campaignId={editingCampaignId}
+            onClose={handleCampaignFormClose}
+            onSuccess={handleCampaignFormSuccess}
           />
         )}
       </Sheet>

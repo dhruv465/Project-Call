@@ -9,8 +9,6 @@ import {
   Megaphone,
   BarChart4,
   LogOut,
-  Bell,
-  Brain,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -58,7 +56,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onNavigate }) => {
     <div className="flex flex-col w-64 border-r bg-card lg:w-64">
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b">
-        <h1 className="text-xl font-bold">AI Cold-Calling</h1>
+        <h1 className="text-xl font-bold">Lumina Outreach</h1>
       </div>
 
       {/* Navigation */}
@@ -95,21 +93,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onNavigate }) => {
             onNavigate={onNavigate}
           />
           <SidebarItem
-            href="/voice-ai"
-            icon={<Brain size={18} />}
-            title="Voice AI"
-            onNavigate={onNavigate}
-          />
-          <SidebarItem
             href="/configuration"
             icon={<Settings size={18} />}
             title="Configuration"
-            onNavigate={onNavigate}
-          />
-          <SidebarItem
-            href="/test-notifications"
-            icon={<Bell size={18} />}
-            title="Test Notifications"
             onNavigate={onNavigate}
           />
         </nav>

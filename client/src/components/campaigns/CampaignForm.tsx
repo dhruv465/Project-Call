@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 
 // Custom styles with consistent spacing
 const inputStyles = "w-full rounded-md border border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
@@ -322,7 +323,7 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
           <SheetHeader>
             <SheetTitle>{campaignId ? 'Edit Campaign' : 'Create New Campaign'}</SheetTitle>
             <SheetDescription>
-              {campaignId ? 'Update campaign details and configuration' : 'Create a new AI cold-calling campaign'}
+              {campaignId ? 'Update campaign details and configuration' : 'Create a new Lumina Outreach campaign'}
             </SheetDescription>
           </SheetHeader>
         </div>
@@ -531,19 +532,21 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                         <label className="block text-sm font-medium mb-1">
                           Supported Languages
                         </label>
-                        <div className="bg-muted/50 p-2 rounded-md max-h-[120px] overflow-y-auto">
-                          <div className="grid grid-cols-2">
-                            {languages.map((language: string) => (
-                              <label key={language} className="flex items-center gap-2 p-1">
-                                <input
-                                  type="checkbox"
-                                  checked={formData.supportedLanguages.includes(language)}
-                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleLanguageChange(language, e.target.checked)}
-                                  className="rounded border-gray-300 text-primary focus:ring-primary"
-                                />
-                                <span className="text-sm">{language}</span>
-                              </label>
-                            ))}
+                        <div className="bg-muted/50 p-3 rounded-md max-h-[120px] overflow-y-auto">
+                          <div className="flex flex-wrap gap-2">
+                            {languages.map((language: string) => {
+                              const isSelected = formData.supportedLanguages.includes(language);
+                              return (
+                                <Badge 
+                                  key={language} 
+                                  variant={isSelected ? "default" : "outline"}
+                                  className={`cursor-pointer transition-colors ${isSelected ? "" : "hover:bg-secondary/20"}`}
+                                  onClick={() => handleLanguageChange(language, !isSelected)}
+                                >
+                                  {language}
+                                </Badge>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>

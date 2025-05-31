@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery, useQueryClient } from 'react-query';
 import { 
   Search, 
   Plus, 
@@ -10,105 +10,93 @@ import {
   ChevronDown, 
   Trash2, 
   Edit, 
-  Phone,
+  Phone, 
   AlertTriangle
 } from 'lucide-react';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card } from '../components/ui/card';
+import { Button } from '../components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { useToast } from '@/components/ui/use-toast';
+} from '../components/ui/dropdown-menu';
+import { useToast } from '../components/ui/use-toast';
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+} from '../components/ui/dialog';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import Skeleton from '../components/ui/Skeleton';
 
-// Mock data for initial development
-const mockLeads = Array.from({ length: 20 }, (_, i) => ({
-  id: `lead-${i + 1}`,
-  name: [
-    'Rahul Sharma', 'Priya Patel', 'Amit Kumar', 'Sneha Reddy', 'Rajesh Gupta',
-    'Meera Desai', 'Vikram Singh', 'Pooja Verma', 'Suresh Mehta', 'Neha Joshi'
-  ][i % 10],
-  phoneNumber: `+91 ${Math.floor(70000 + Math.random() * 30000)} ${Math.floor(10000 + Math.random() * 90000)}`,
-  email: ['', '', 'example@email.com'][Math.floor(Math.random() * 3)],
-  company: [
-    'ABC Tech', 'XYZ Solutions', 'Global Innovations', 'Tech Dynamics', 'Future Systems',
-    'Insight Technologies', 'Smart Solutions', 'Digital Innovators', 'Next Gen Tech', 'Elite Enterprises'
-  ][i % 10],
-  source: ['Website', 'Referral', 'Event', 'LinkedIn', 'Cold Outreach'][Math.floor(Math.random() * 5)],
-  status: ['New', 'Contacted', 'Qualified', 'Not Interested', 'Converted', 'Scheduled Callback'][Math.floor(Math.random() * 6)],
-  lastContacted: Math.random() > 0.3 ? new Date(Date.now() - Math.floor(Math.random() * 30) * 86400000) : null,
-  callCount: Math.floor(Math.random() * 5),
-  languagePreference: ['English', 'Hindi', 'Tamil', 'Telugu', 'Marathi'][Math.floor(Math.random() * 5)],
-  tags: Array.from({ length: Math.floor(Math.random() * 3) }, () => 
-    ['High Value', 'Urgent', 'Tech', 'Finance', 'Healthcare', 'Education'][Math.floor(Math.random() * 6)]
-  ),
-}));
+// Import lead-related components
+import LeadForm from '../components/leads/LeadForm';
+import DeleteLeadDialog from '../components/leads/DeleteLeadDialog';
+import CallLeadSheet from '../components/leads/CallLeadSheet';
+
+// Import lead API service
+import { leadsApi } from '../services/leadsApi';
+
+// Type definitions
+interface Lead {
+  id: string;
+  name: string;
+  company: string;
+  phoneNumber: string;
+  source: string;
+  status: string;
+  createdAt: string;
+  lastContacted?: string;
+  languagePreference: string;
+  email?: string;
+}
 
 const Leads = () => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [sourceFilter, setSourceFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  // Import Dialog
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  
+  // Lead form state
+  const [isLeadFormOpen, setIsLeadFormOpen] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | undefined>(undefined);
+
+  // Delete dialog state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [leadToDelete, setLeadToDelete] = useState<{ id: string; name: string } | null>(null);
+
+  // Call sheet state
+  const [isCallSheetOpen, setIsCallSheetOpen] = useState(false);
+  const [leadToCall, setLeadToCall] = useState<Lead | null>(null);
 
   // Fetch leads data
   const { data: leadsData, isLoading, error, refetch } = useQuery(
     ['leads', statusFilter, sourceFilter, currentPage, itemsPerPage, searchTerm],
     async () => {
       try {
-        // In a real app, we would fetch data from API
-        // const response = await leadsApi.getLeads({ 
-        //   status: statusFilter !== 'All' ? statusFilter : undefined,
-        //   source: sourceFilter !== 'All' ? sourceFilter : undefined,
-        //   page: currentPage,
-        //   limit: itemsPerPage,
-        //   search: searchTerm || undefined
-        // });
-        // return response;
-        
-        // For now, use mock data
-        const filteredLeads = mockLeads.filter(lead => {
-          const matchesStatus = statusFilter === 'All' || lead.status === statusFilter;
-          const matchesSource = sourceFilter === 'All' || lead.source === sourceFilter;
-          const matchesSearch = searchTerm === '' || 
-            lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            lead.phoneNumber.includes(searchTerm) ||
-            (lead.email && lead.email.toLowerCase().includes(searchTerm.toLowerCase()));
-          
-          return matchesStatus && matchesSource && matchesSearch;
+        // Use the leads API service
+        return await leadsApi.getLeads({
+          page: currentPage,
+          limit: itemsPerPage,
+          status: statusFilter !== 'All' ? statusFilter : undefined,
+          source: sourceFilter !== 'All' ? sourceFilter : undefined,
+          search: searchTerm || undefined
         });
-        
-        const paginatedLeads = filteredLeads.slice(
-          (currentPage - 1) * itemsPerPage,
-          currentPage * itemsPerPage
-        );
-        
-        return {
-          leads: paginatedLeads,
-          pagination: {
-            page: currentPage,
-            limit: itemsPerPage,
-            total: filteredLeads.length,
-            pages: Math.ceil(filteredLeads.length / itemsPerPage),
-          },
-        };
       } catch (error) {
-        throw error;
+        console.error('Error fetching leads:', error);
+        // Return empty data for new installations
+        return { leads: [], pagination: { page: 1, pages: 0, total: 0, limit: itemsPerPage } };
       }
     },
     {
@@ -116,101 +104,159 @@ const Leads = () => {
     }
   );
 
+  // Handle export leads
   const handleExportLeads = async (format: 'csv' | 'json' | 'xlsx') => {
-    // Mock function that doesn't actually use state
-    const simulateIsExporting = () => { /* No-op function */ };
-    simulateIsExporting();
-
     try {
-      // Here we would use the leadsApi.exportLeads method
-      // For now, just simulate a successful export
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      toast({
+        title: "Exporting Leads",
+        description: `Exporting leads as ${format.toUpperCase()}...`,
+      });
+
+      // Get the exported file blob
+      const blob = await leadsApi.exportLeads({
+        format,
+        status: statusFilter !== 'All' ? statusFilter : undefined,
+        source: sourceFilter !== 'All' ? sourceFilter : undefined
+      });
+
+      // Create a URL for the blob
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create a temporary link element
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `leads-export-${new Date().toISOString().slice(0, 10)}.${format}`);
+      
+      // Append to the document, click it, and remove it
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up the URL
+      window.URL.revokeObjectURL(url);
       
       toast({
         title: "Export Successful",
         description: `Leads exported successfully as ${format.toUpperCase()}.`,
       });
     } catch (error) {
+      console.error('Error exporting leads:', error);
       toast({
         title: "Export Failed",
         description: "An error occurred while exporting leads.",
         variant: "destructive",
       });
-    } finally {
-      simulateIsExporting();
     }
   };
 
+  // Handle add lead
   const handleAddLeadClick = () => {
-    toast({
-      title: "Add New Lead",
-      description: "Add lead form will be implemented here.",
-    });
+    setSelectedLeadId(undefined);
+    setIsLeadFormOpen(true);
   };
 
-  const handleDeleteLead = (leadId: string) => {
-    toast({
-      title: "Delete Lead",
-      description: `Delete functionality for lead ${leadId} will be implemented here.`,
-    });
-  };
-
+  // Handle edit lead
   const handleEditLead = (leadId: string) => {
-    toast({
-      title: "Edit Lead",
-      description: `Edit functionality for lead ${leadId} will be implemented here.`,
-    });
+    setSelectedLeadId(leadId);
+    setIsLeadFormOpen(true);
   };
 
+  // Handle delete lead
+  const handleDeleteLead = (leadId: string) => {
+    // Find the lead to get its name
+    const lead = leadsData?.leads.find((lead: Lead) => lead.id === leadId);
+    if (lead) {
+      setLeadToDelete({ id: leadId, name: lead.name });
+      setIsDeleteDialogOpen(true);
+    }
+  };
+
+  // Handle call lead
   const handleCallLead = (leadId: string) => {
-    toast({
-      title: "Call Lead",
-      description: `Call functionality for lead ${leadId} will be implemented here.`,
-    });
+    // Find the lead to get its details
+    const lead = leadsData?.leads.find((lead: Lead) => lead.id === leadId);
+    if (lead) {
+      setLeadToCall(lead);
+      setIsCallSheetOpen(true);
+    }
   };
 
+  // Handle import file change
   const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
     setImportFile(file);
   };
 
+  // Handle import submit
   const handleImportSubmit = async () => {
     if (!importFile) return;
 
     setIsImporting(true);
 
     try {
-      // Here we would typically upload the file to the server
-      // For now, just simulate a successful import
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
+      // Use the leads API service to import leads
+      const result = await leadsApi.importLeadsFromCSV(importFile);
+      
       toast({
         title: "Import Successful",
-        description: "Leads imported successfully.",
+        description: `${result.count || 'Multiple'} leads imported successfully.`,
       });
 
       // Refetch leads data
       refetch();
+      
+      // Close the dialog and reset state
+      setIsImportDialogOpen(false);
+      setImportFile(null);
     } catch (error) {
+      console.error('Error importing leads:', error);
       toast({
         title: "Import Failed",
-        description: "An error occurred while importing leads.",
+        description: "An error occurred while importing leads. Please check your file format and try again.",
         variant: "destructive",
       });
     } finally {
       setIsImporting(false);
-      setIsImportDialogOpen(false);
-      setImportFile(null);
     }
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-10rem)]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">Loading leads...</p>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <Skeleton className="h-8 w-48 mb-2" />
+          <div className="flex gap-2">
+            <Skeleton className="h-10 w-32" />
+            <Skeleton className="h-10 w-32" />
+            <Skeleton className="h-10 w-32" />
+          </div>
         </div>
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  {[...Array(7)].map((_, i) => (
+                    <th key={i} className="p-4">
+                      <Skeleton className="h-4 w-24" />
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[...Array(8)].map((_, rowIdx) => (
+                  <tr key={rowIdx} className="border-b">
+                    {[...Array(7)].map((_, colIdx) => (
+                      <td key={colIdx} className="p-4">
+                        <Skeleton className="h-4 w-full" />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       </div>
     );
   }
@@ -221,13 +267,22 @@ const Leads = () => {
         <h1 className="text-2xl font-bold">Lead Management</h1>
         <Card className="p-8 text-center">
           <AlertTriangle className="h-12 w-12 text-destructive mx-auto" />
-          <p className="mt-4 text-lg">Failed to load leads. Please try again.</p>
-          <Button
-            onClick={() => window.location.reload()}
-            className="mt-4"
-          >
-            Retry
-          </Button>
+          <p className="mt-4 text-lg">Failed to load leads</p>
+          <p className="text-muted-foreground mb-4">
+            If this is a new installation, you may not have any leads yet. Try adding your first lead.
+          </p>
+          <div className="flex gap-2 justify-center">
+            <Button
+              onClick={() => refetch()}
+              variant="outline"
+            >
+              Retry
+            </Button>
+            <Button onClick={handleAddLeadClick}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Lead
+            </Button>
+          </div>
         </Card>
       </div>
     );
@@ -337,16 +392,17 @@ const Leads = () => {
               </tr>
             </thead>
             <tbody>
-              {leadsData?.leads.map((lead) => (
-                <tr key={lead.id} className="border-b hover:bg-muted/50">
-                  <td className="p-4">
-                    <div>
-                      <p className="font-medium">{lead.name}</p>
-                      <p className="text-sm text-muted-foreground">{lead.company}</p>
-                    </div>
-                  </td>
-                  <td className="p-4">{lead.phoneNumber}</td>
-                  <td className="p-4">{lead.source}</td>
+              {(leadsData?.leads || []).length > 0 ? (
+                (leadsData?.leads || []).map((lead: Lead) => (
+                  <tr key={lead.id} className="border-b hover:bg-muted/50">
+                    <td className="p-4">
+                      <div>
+                        <p className="font-medium">{lead.name}</p>
+                        <p className="text-sm text-muted-foreground">{lead.company}</p>
+                      </div>
+                    </td>
+                    <td className="p-4">{lead.phoneNumber}</td>
+                    <td className="p-4">{lead.source}</td>
                   <td className="p-4">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       lead.status === 'New' 
@@ -415,7 +471,14 @@ const Leads = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+              ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                    No leads found. Add your first lead to get started.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -492,6 +555,45 @@ const Leads = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Lead Form (Add/Edit) */}
+      <LeadForm
+        open={isLeadFormOpen}
+        onOpenChange={setIsLeadFormOpen}
+        leadId={selectedLeadId}
+        title={selectedLeadId ? 'Edit Lead' : 'Add New Lead'}
+        onSuccess={() => {
+          // Invalidate and refetch leads
+          queryClient.invalidateQueries(['leads']);
+        }}
+      />
+
+      {/* Delete Lead Dialog */}
+      {leadToDelete && (
+        <DeleteLeadDialog
+          open={isDeleteDialogOpen}
+          onOpenChange={setIsDeleteDialogOpen}
+          leadId={leadToDelete.id}
+          leadName={leadToDelete.name}
+          onSuccess={() => {
+            // Invalidate and refetch leads
+            queryClient.invalidateQueries(['leads']);
+          }}
+        />
+      )}
+
+      {/* Call Lead Sheet */}
+      {leadToCall && (
+        <CallLeadSheet
+          open={isCallSheetOpen}
+          onOpenChange={setIsCallSheetOpen}
+          lead={leadToCall}
+          onSuccess={() => {
+            // Invalidate and refetch leads
+            queryClient.invalidateQueries(['leads']);
+          }}
+        />
+      )}
     </div>
   );
 };

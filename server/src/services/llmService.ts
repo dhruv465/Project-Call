@@ -63,6 +63,20 @@ export class LLMService {
   }
   
   /**
+   * Get current OpenAI API key
+   */
+  public getOpenAIApiKey(): string {
+    return this.openAIApiKey;
+  }
+  
+  /**
+   * Get current Anthropic API key
+   */
+  public getAnthropicApiKey(): string {
+    return this.anthropicApiKey;
+  }
+  
+  /**
    * Generate a response using the specified or automatic LLM provider
    */
   public async generateResponse(

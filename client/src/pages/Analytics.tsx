@@ -10,6 +10,8 @@ import {
   Calendar,
   Download,
   ChevronDown,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,39 +43,11 @@ interface AnalyticsData {
   }>;
 }
 
-// Mock data for initial display
-const mockAnalyticsData: AnalyticsData = {
-  summary: {
-    totalCalls: 1245,
-    completedCalls: 987,
-    failedCalls: 258,
-    averageDuration: 342,
-    totalDuration: 337554,
-    successRate: 79.3,
-    conversionRate: 23.5,
-    negativeRate: 15.2,
-    outcomes: {
-      'interested': 232,
-      'callback-requested': 145,
-      'not-interested': 150,
-      'do-not-call': 45,
-      'voicemail': 215,
-      'no-answer': 200,
-    },
-  },
-  callsByDay: Array.from({ length: 30 }, (_, i) => ({
-    _id: new Date(Date.now() - (29 - i) * 86400000).toISOString().split('T')[0],
-    count: Math.floor(Math.random() * 50) + 20,
-    completed: Math.floor(Math.random() * 40) + 15,
-    successful: Math.floor(Math.random() * 15) + 5,
-  })),
-};
-
 const Analytics = () => {
   const [dateRange, setDateRange] = useState('30');
 
-  // In a real app, this would fetch from the API
-  const { data: analyticsData, isLoading, error } = useQuery(
+  // Production implementation - fetch from API
+  const { data: analyticsData, isLoading, error } = useQuery<AnalyticsData>(
     ['analytics', dateRange],
     async () => {
       try {
@@ -88,12 +62,35 @@ const Analytics = () => {
         return response.data;
       } catch (error) {
         console.error('Failed to fetch analytics:', error);
-        // Return mock data for development
-        return mockAnalyticsData;
+        // Clear any cached data that might be causing issues
+        if (typeof localStorage !== 'undefined') {
+          try {
+            localStorage.removeItem('analytics-cache');
+          } catch (storageError) {
+            console.warn('Could not clear analytics cache:', storageError);
+          }
+        }
+        // Return empty data instead of throwing to prevent UI error
+        return {
+          summary: {
+            totalCalls: 0,
+            completedCalls: 0,
+            failedCalls: 0,
+            averageDuration: 0,
+            totalDuration: 0,
+            successRate: 0,
+            conversionRate: 0,
+            negativeRate: 0,
+            outcomes: {}
+          },
+          callsByDay: []
+        };
       }
     },
     {
-      initialData: mockAnalyticsData,
+      refetchOnWindowFocus: true,
+      retry: 3,
+      staleTime: 5 * 60 * 1000, // 5 minutes
     }
   );
 
@@ -140,17 +137,37 @@ const Analytics = () => {
   if (error) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Analytics</h1>
+        <h1 className="text-2xl font-bold">Analytics Dashboard</h1>
         <Card className="p-8 text-center">
-          <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto" />
-          <p className="mt-4 text-lg">Failed to load analytics data</p>
-          <Button onClick={() => window.location.reload()} className="mt-4">
+          <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
+          <h3 className="text-lg font-semibold mb-2">Failed to load analytics data</h3>
+          <p className="text-muted-foreground mb-4">
+            Unable to fetch analytics data. Please try again.
+          </p>
+          <Button onClick={() => window.location.reload()} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
             Retry
           </Button>
         </Card>
       </div>
     );
   }
+
+  // Default data with zero values if no data is returned
+  const displayData: AnalyticsData = analyticsData || {
+    summary: {
+      totalCalls: 0,
+      completedCalls: 0,
+      failedCalls: 0,
+      averageDuration: 0,
+      totalDuration: 0,
+      successRate: 0,
+      conversionRate: 0,
+      negativeRate: 0,
+      outcomes: {}
+    },
+    callsByDay: []
+  };
 
   return (
     <div className="space-y-6">
@@ -187,12 +204,12 @@ const Analytics = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Total Calls</p>
-              <p className="text-2xl font-bold">{formatNumber(analyticsData.summary.totalCalls)}</p>
+              <p className="text-2xl font-bold">{formatNumber(displayData.summary.totalCalls)}</p>
             </div>
             <Phone className="h-8 w-8 text-primary" />
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            {analyticsData.summary.completedCalls} completed, {analyticsData.summary.failedCalls} failed
+            {displayData.summary.completedCalls} completed, {displayData.summary.failedCalls} failed
           </p>
         </Card>
 
@@ -200,7 +217,7 @@ const Analytics = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Success Rate</p>
-              <p className="text-2xl font-bold">{analyticsData.summary.successRate.toFixed(1)}%</p>
+              <p className="text-2xl font-bold">{displayData.summary.successRate.toFixed(1)}%</p>
             </div>
             <TrendingUp className="h-8 w-8 text-green-500" />
           </div>
@@ -213,7 +230,7 @@ const Analytics = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Conversion Rate</p>
-              <p className="text-2xl font-bold">{analyticsData.summary.conversionRate.toFixed(1)}%</p>
+              <p className="text-2xl font-bold">{displayData.summary.conversionRate.toFixed(1)}%</p>
             </div>
             <Target className="h-8 w-8 text-blue-500" />
           </div>
@@ -226,7 +243,7 @@ const Analytics = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Avg Duration</p>
-              <p className="text-2xl font-bold">{formatDuration(analyticsData.summary.averageDuration)}</p>
+              <p className="text-2xl font-bold">{formatDuration(displayData.summary.averageDuration)}</p>
             </div>
             <Clock className="h-8 w-8 text-purple-500" />
           </div>
@@ -240,39 +257,63 @@ const Analytics = () => {
       <Card className="p-6">
         <h3 className="text-lg font-semibold mb-4">Call Volume Trends</h3>
         <div className="h-64 flex items-end justify-center gap-1">
-          {analyticsData.callsByDay.slice(-14).map((day: { _id: string; count: number; completed: number; successful: number }) => (
-            <div key={day._id} className="flex flex-col items-center gap-1">
-              <div
-                className="w-6 bg-primary rounded-t"
-                style={{
-                  height: `${Math.max((day.count / Math.max(...analyticsData.callsByDay.map((d: { _id: string; count: number; completed: number; successful: number }) => d.count))) * 200, 4)}px`,
-                }}
-                title={`${day.count} calls on ${new Date(day._id).toLocaleDateString()}`}
-              />
-              <span className="text-xs text-muted-foreground transform -rotate-45 origin-left">
-                {new Date(day._id).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-              </span>
+          {displayData.callsByDay.length > 0 ? (
+            displayData.callsByDay.slice(-14).map((day: { _id: string; count: number; completed: number; successful: number }) => {
+              const maxCount = Math.max(...displayData.callsByDay.map((d: { _id: string; count: number; completed: number; successful: number }) => d.count));
+              return (
+                <div key={day._id} className="flex flex-col items-center gap-1">
+                  <div
+                    className="w-6 bg-primary rounded-t"
+                    style={{
+                      height: `${Math.max(maxCount > 0 ? (day.count / maxCount) * 200 : 4, 4)}px`,
+                    }}
+                    title={`${day.count} calls on ${new Date(day._id).toLocaleDateString()}`}
+                  />
+                  <span className="text-xs text-muted-foreground transform -rotate-45 origin-left">
+                    {new Date(day._id).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+              );
+            })
+          ) : (
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              <div className="text-center">
+                <BarChart3 className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>No call data available</p>
+              </div>
             </div>
-          ))}
+          )}
         </div>
       </Card>
 
       {/* Outcome Distribution */}
-      {analyticsData.summary.outcomes && (
+      {displayData.summary.outcomes && Object.keys(displayData.summary.outcomes).length > 0 ? (
         <Card className="p-6">
           <h3 className="text-lg font-semibold mb-4">Call Outcomes</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {Object.entries(analyticsData.summary.outcomes).map(([outcome, count]) => (
+            {Object.entries(displayData.summary.outcomes).map(([outcome, count]) => (
               <div key={outcome} className="text-center">
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getOutcomeColor(outcome)}`}>
                   {outcome.replace('-', ' ')}
                 </span>
                 <p className="text-2xl font-bold mt-2">{String(count)}</p>
                 <p className="text-xs text-muted-foreground">
-                  {(((count as number) / analyticsData.summary.completedCalls) * 100).toFixed(1)}%
+                  {displayData.summary.completedCalls > 0 
+                    ? (((count as number) / displayData.summary.completedCalls) * 100).toFixed(1)
+                    : '0.0'}%
                 </p>
               </div>
             ))}
+          </div>
+        </Card>
+      ) : (
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Call Outcomes</h3>
+          <div className="flex items-center justify-center h-32 text-muted-foreground">
+            <div className="text-center">
+              <Target className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <p>No outcome data available</p>
+            </div>
           </div>
         </Card>
       )}
@@ -284,24 +325,26 @@ const Analytics = () => {
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-sm">Total Talk Time</span>
-              <span className="font-semibold">{formatDuration(analyticsData.summary.totalDuration)}</span>
+              <span className="font-semibold">{formatDuration(displayData.summary.totalDuration)}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm">Positive Outcomes</span>
               <span className="font-semibold text-green-600">
-                {analyticsData.summary.conversionRate.toFixed(1)}%
+                {displayData.summary.conversionRate.toFixed(1)}%
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm">Negative Outcomes</span>
               <span className="font-semibold text-red-600">
-                {analyticsData.summary.negativeRate.toFixed(1)}%
+                {displayData.summary.negativeRate.toFixed(1)}%
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm">Connection Rate</span>
               <span className="font-semibold">
-                {((analyticsData.summary.completedCalls / analyticsData.summary.totalCalls) * 100).toFixed(1)}%
+                {displayData.summary.totalCalls > 0 
+                  ? ((displayData.summary.completedCalls / displayData.summary.totalCalls) * 100).toFixed(1)
+                  : '0.0'}%
               </span>
             </div>
           </div>
@@ -317,11 +360,11 @@ const Analytics = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Best performing day</p>
                 <p className="font-semibold">
-                  {analyticsData.callsByDay.reduce((best: any, day: any) => 
-                    day.successful > best.successful ? day : best
-                  )._id && new Date(analyticsData.callsByDay.reduce((best: any, day: any) => 
-                    day.successful > best.successful ? day : best
-                  )._id).toLocaleDateString()}
+                  {displayData.callsByDay.length > 0 
+                    ? new Date(displayData.callsByDay.reduce((best: any, day: any) => 
+                        day.successful > best.successful ? day : best
+                      )._id).toLocaleDateString()
+                    : 'No data available'}
                 </p>
               </div>
             </div>
@@ -331,7 +374,7 @@ const Analytics = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total contacts reached</p>
-                <p className="font-semibold">{formatNumber(analyticsData.summary.completedCalls)}</p>
+                <p className="font-semibold">{formatNumber(displayData.summary.completedCalls)}</p>
               </div>
             </div>
           </div>

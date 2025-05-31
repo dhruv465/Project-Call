@@ -132,16 +132,12 @@ CallSchema.index({ 'callback.scheduled': 1, 'callback.dateTime': 1 });
 // Middleware for sending notifications when call status changes
 CallSchema.post('save', async function(doc) {
   try {
-    // Only send notification if the document has been populated with campaign and lead
+    // Only log call completion since notification functionality has been removed
     if (doc.populated('campaign') && doc.populated('lead')) {
-      // Import here to avoid circular dependency
-      const { sendCallNotification } = require('../controllers/notificationController');
-      
-      // Send notification
-      await sendCallNotification(doc);
+      console.log('Call completed:', doc._id);
     }
   } catch (error) {
-    console.error('Error sending call notification:', error);
+    console.error('Error in call post-save hook:', error);
   }
 });
 

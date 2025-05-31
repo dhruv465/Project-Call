@@ -1,37 +1,35 @@
-// Advanced Voice AI Routes
-import { Router } from 'express';
-import VoiceAIController from '../controllers/voiceAIController';
-import VoiceAIDemoController from '../controllers/voiceAIDemoController';
-import EnhancedVoiceAIController from '../controllers/enhanced_controller_integration';
+import express from 'express';
 import { authenticate } from '../middleware/auth';
+import {
+  analyzeEmotion,
+  getVoicePersonalities,
+  synthesizeVoice,
+  adaptConversation,
+  trainVoicePersonality,
+  getEmotionMetrics,
+  testVoiceAI
+} from '../controllers/voiceAIController';
 
-const router = Router();
-const voiceAIController = new VoiceAIController();
-const voiceAIDemoController = new VoiceAIDemoController();
-const enhancedVoiceAIController = new EnhancedVoiceAIController();
+const router = express.Router();
 
-// Training and Model Management Routes
-router.post('/train-model', authenticate, voiceAIController.trainVoiceModel);
-router.post('/validate-model', authenticate, voiceAIController.validateModelPerformance);
-router.get('/personalities', authenticate, voiceAIController.getVoicePersonalities);
+// All routes are protected
+router.use(authenticate);
 
-// Core Voice AI Features
-router.post('/analyze-emotion', authenticate, voiceAIController.analyzeEmotion);
-router.post('/generate-response', authenticate, voiceAIController.generateAdaptiveResponse);
-router.post('/synthesize-speech', authenticate, voiceAIController.synthesizeSpeech);
+// Emotion Analysis
+router.post('/analyze-emotion', analyzeEmotion);
+router.get('/metrics', getEmotionMetrics);
 
-// Enhanced Emotion Detection Routes
-router.post('/analyze-emotion-enhanced', authenticate, enhancedVoiceAIController.analyzeEmotionEnhanced.bind(enhancedVoiceAIController));
-router.post('/analyze-emotion-audio', authenticate, enhancedVoiceAIController.analyzeEmotionAudio.bind(enhancedVoiceAIController));
-router.post('/analyze-emotion-multimodal', authenticate, enhancedVoiceAIController.analyzeEmotionMultimodal.bind(enhancedVoiceAIController));
-router.get('/model-status', authenticate, enhancedVoiceAIController.getModelStatus.bind(enhancedVoiceAIController));
+// Voice Personalities
+router.get('/personalities', getVoicePersonalities);
+router.post('/train-personality', trainVoicePersonality);
 
-// Advanced Conversation Management
-router.post('/manage-conversation', authenticate, voiceAIController.manageConversationFlow);
-router.post('/conversation-analytics', authenticate, voiceAIController.getConversationAnalytics);
+// Voice Synthesis
+router.post('/synthesize', synthesizeVoice);
 
-// Demo and Testing Routes
-router.post('/demo/run-complete', authenticate, voiceAIDemoController.runCompleteDemo);
-router.get('/demo/status', authenticate, voiceAIDemoController.getVoiceAIStatus);
+// Conversation Adaptation
+router.post('/adapt-conversation', adaptConversation);
+
+// Testing and Development
+router.post('/test', testVoiceAI);
 
 export default router;

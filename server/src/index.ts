@@ -17,12 +17,12 @@ import campaignRoutes from './routes/campaignRoutes';
 import callRoutes from './routes/callRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import configurationRoutes from './routes/configurationRoutes';
-import notificationRoutes from './routes/notificationRoutes';
 import voiceAIRoutes from './routes/voiceAIRoutes';
+import telephonyRoutes from './routes/telephonyRoutes';
 
 // Services initialization
 import { initializeSpeechService } from './services/realSpeechService';
-import ConversationEngineService from './services/conversationEngineService';
+import { ConversationEngineService } from './services/conversationEngineService';
 import CampaignService from './services/campaignService';
 import leadService from './services/leadService';
 import { ModelRegistry } from './ml/pipeline/model_registry';
@@ -37,7 +37,7 @@ const logger = winston.createLogger({
     winston.format.timestamp(),
     winston.format.json()
   ),
-  defaultMeta: { service: 'ai-cold-calling-system' },
+  defaultMeta: { service: 'lumina-outreach' },
   transports: [
     new winston.transports.Console({
       format: winston.format.combine(
@@ -63,7 +63,24 @@ const io = new SocketIOServer(server, {
 
 // Middleware
 app.use(cors());
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https:", "data:"],
+      fontSrc: ["'self'", "https:", "data:", "blob:"],
+      imgSrc: ["'self'", "https:", "data:", "blob:"],
+      connectSrc: ["'self'", "ws:", "wss:", "https:"],
+      mediaSrc: ["'self'", "blob:", "data:"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined'));
@@ -89,8 +106,8 @@ app.use('/api/campaigns', campaignRoutes);
 app.use('/api/calls', callRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/configuration', configurationRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/voice-ai', voiceAIRoutes); // Advanced Voice AI routes
+app.use('/api/voice-ai', voiceAIRoutes);
+app.use('/api/telephony', telephonyRoutes);
 
 // Global error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -131,7 +148,7 @@ io.on('connection', (socket) => {
 // Connect to MongoDB
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/ai-cold-calling');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/lumina-outreach');
     logger.info('MongoDB connected successfully');
   } catch (error) {
     logger.error('MongoDB connection error:', error);
@@ -265,12 +282,10 @@ declare global {
 }
 
 export {
-  getErrorMessage
-};
+  getErrorMessage,
   campaignService,
   leadService,
   app,
   io,
-  logger,
-  getErrorMessage
+  logger
 };

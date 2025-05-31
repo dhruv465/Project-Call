@@ -14,38 +14,50 @@ import Campaigns from '@/pages/Campaigns';
 import Calls from '@/pages/Calls';
 import Analytics from '@/pages/Analytics';
 import Configuration from '@/pages/Configuration';
-import VoiceAI from '@/pages/VoiceAI';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import NotFound from '@/pages/NotFound';
 
-// Test Components
-import NotificationTest from '@/components/NotificationTest';
-
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
+  const isDevelopment = import.meta.env.VITE_ENV === 'development';
 
   if (isLoading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+  // In development mode, always allow access
+  if (isDevelopment || isAuthenticated) {
+    return <>{children}</>;
   }
 
-  return <>{children}</>;
+  return <Navigate to="/login" replace />;
 };
 
 function App() {
+  const isDevelopment = import.meta.env.VITE_ENV === 'development';
+  
   return (
     <>
       <Routes>
         {/* Auth routes */}
         <Route path="/" element={<AuthLayout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="login" element={<Login />} />
-          <Route path="register" element={<Register />} />
+          {/* Only show auth routes in production or if explicitly accessed */}
+          {!isDevelopment && (
+            <>
+              <Route path="login" element={<Login />} />
+              <Route path="register" element={<Register />} />
+            </>
+          )}
+          {/* In development, redirect auth routes to dashboard */}
+          {isDevelopment && (
+            <>
+              <Route path="login" element={<Navigate to="/dashboard" replace />} />
+              <Route path="register" element={<Navigate to="/dashboard" replace />} />
+            </>
+          )}
         </Route>
 
         {/* Dashboard routes */}
@@ -63,8 +75,6 @@ function App() {
           <Route path="calls" element={<Calls />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="configuration" element={<Configuration />} />
-          <Route path="voice-ai" element={<VoiceAI />} />
-          <Route path="test-notifications" element={<NotificationTest />} />
         </Route>
 
         {/* 404 route */}

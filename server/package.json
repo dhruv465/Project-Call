@@ -1,7 +1,7 @@
 {
-  "name": "ai-cold-calling-server",
+  "name": "lumina-outreach-server",
   "version": "1.0.0",
-  "description": "Backend server for AI cold-calling system",
+  "description": "Backend server for Lumina Outreach intelligent communication system",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

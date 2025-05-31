@@ -7,7 +7,7 @@ const logger = winston.createLogger({
     winston.format.timestamp(),
     winston.format.json()
   ),
-  defaultMeta: { service: 'ai-cold-calling-system' },
+  defaultMeta: { service: 'lumina-outreach' },
   transports: [
     new winston.transports.Console({
       format: winston.format.combine(

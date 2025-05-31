@@ -1,6 +1,6 @@
-# AI Cold-Calling System with CRM Dashboard
+# Lumina Outreach: Intelligent Communication System
 
-A comprehensive autonomous AI cold-calling agent integrated with a custom CRM dashboard that manages leads, executes outbound calls, handles conversations intelligently, and provides detailed performance analytics.
+A comprehensive intelligent communication platform with AI-powered outreach capabilities, integrated with a custom CRM dashboard that manages leads, executes outbound calls, handles conversations intelligently, and provides detailed performance analytics.
 
 ## Features
 
@@ -129,7 +129,7 @@ A comprehensive autonomous AI cold-calling agent integrated with a custom CRM da
 
 ## Project Structure
 ```
-ai-cold-calling-system/
+lumina-outreach/
 ├── client/                  # Frontend React application
 │   ├── public/
 │   └── src/
