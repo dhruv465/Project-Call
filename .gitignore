@@ -1,0 +1,601 @@
+# ===================================
+# AI Cold-Calling System .gitignore
+# ===================================
+
+# ================================
+# Environment & Secrets
+# ================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+.env.staging
+
+# Configuration files with sensitive data
+config/production.json
+config/secrets.json
+**/config/credentials.json
+**/config/api-keys.json
+
+# API Keys and secrets
+api-keys.txt
+secrets.txt
+credentials.json
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# ================================
+# Node.js & NPM
+# ================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+.nyc_output
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional stylelint cache
+.stylelintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Next.js build output
+.next
+
+# Nuxt.js build / generate output
+.nuxt
+dist
+
+# Vite build outputs
+dist/
+dist-ssr/
+
+# Gatsby files
+.cache/
+public
+
+# Storybook build outputs
+.out
+.storybook-out
+storybook-static
+
+# ================================
+# TypeScript
+# ================================
+*.tsbuildinfo
+.tsbuildinfo
+
+# TypeScript cache
+*.tsbuildinfo
+
+# ================================
+# Python & Machine Learning
+# ================================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# pdm
+.pdm.toml
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+emotion_venv/
+training_env/
+ml_env/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# ================================
+# Machine Learning Specific
+# ================================
+# Model files (large binary files)
+*.pkl
+*.joblib
+*.h5
+*.hdf5
+*.pb
+*.onnx
+*.tflite
+*.bin
+*.safetensors
+
+# Training data and datasets
+training/data/raw/
+training/data/processed/
+training/data/datasets/
+training/data/audio_samples/
+training/data/embeddings/
+**/datasets/
+**/raw_data/
+**/processed_data/
+
+# Model checkpoints and training artifacts
+training/models/checkpoints/
+training/models/saved_models/
+training/models/experiments/
+**/checkpoints/
+**/saved_models/
+**/model_cache/
+**/wandb/
+**/mlruns/
+**/tensorboard_logs/
+
+# Training logs and outputs
+training/logs/
+training/outputs/
+training/runs/
+**/training_logs/
+**/experiment_logs/
+
+# Evaluation results
+training/evaluation_results/plots/
+training/evaluation_results/reports/
+**/evaluation_outputs/
+
+# Temporary ML files
+*.tmp
+*.temp
+temp_*
+tmp_*
+
+# CUDA/GPU cache
+.cuda_cache/
+
+# Hugging Face cache
+.cache/huggingface/
+.cache/transformers/
+
+# ================================
+# Audio & Media Files
+# ================================
+# Audio files
+*.wav
+*.mp3
+*.flac
+*.aac
+*.ogg
+*.m4a
+*.wma
+
+# Video files
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wmv
+
+# Image files (except icons/logos)
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.webp
+# Keep small icons and logos
+!**/public/favicon.*
+!**/public/logo.*
+!**/assets/icons/*
+!**/assets/logos/*
+
+# ================================
+# Database Files
+# ================================
+*.db
+*.sqlite
+*.sqlite3
+*.db3
+*.s3db
+*.sl3
+
+# MongoDB
+mongodb_data/
+mongo_data/
+
+# PostgreSQL
+postgres_data/
+pg_data/
+
+# ================================
+# Logs
+# ================================
+logs/
+*.log
+*.log.*
+combined.log
+error.log
+access.log
+debug.log
+app.log
+server.log
+client.log
+
+# ================================
+# Docker
+# ================================
+.dockerignore
+docker-compose.override.yml
+docker-compose.prod.yml
+.docker/
+
+# ================================
+# Build & Deployment
+# ================================
+build/
+dist/
+out/
+.output/
+.vercel/
+.netlify/
+
+# Deployment artifacts
+deployment/artifacts/
+deployment/builds/
+deployment/releases/
+
+# ================================
+# IDE & Editor Files
+# ================================
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Eclipse
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+.metadata
+.recommenders
+
+# Sublime Text
+*.tmlanguage.cache
+*.tmPreferences.cache
+*.stTheme.cache
+*.sublime-workspace
+*.sublime-project
+
+# Vim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ================================
+# Operating System Files
+# ================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ================================
+# Testing
+# ================================
+# Test results
+test-results/
+test-reports/
+coverage-reports/
+.test-results/
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Jest
+jest-coverage/
+
+# ================================
+# Temporary Files
+# ================================
+*.tmp
+*.temp
+temp/
+tmp/
+.tmp/
+.temp/
+
+# ================================
+# Backup Files
+# ================================
+*.bak
+*.backup
+*.old
+*.orig
+*~
+
+# ================================
+# Project Specific
+# ================================
+# Uploaded files
+server/uploads/
+uploads/
+**/uploads/audio/
+**/uploads/temp/
+
+# Generated documentation
+docs/generated/
+**/api-docs/
+
+# Configuration backups
+config/*.backup
+config/*.bak
+
+# Performance monitoring data
+monitoring/data/
+**/performance_logs/
+
+# Integration test artifacts
+integration_results/
+**/test_outputs/
+
+# Training data processing artifacts
+training/data/emotion_data_processed.pkl
+training/data/cache/
+training/integration_results/
+
+# Generated model configurations
+**/models/*_config.json
+**/models/*_training_history.json
+**/models/*.pth
+**/models/*.pkl
+
+# Deployment scripts output
+deployment/logs/
+deployment/backups/
+
+# ================================
+# Keep Important Files
+# ================================
+# Keep essential config templates
+!config/template.json
+!config/example.env
+!.env.example
+
+# Keep documentation
+!README*.md
+!docs/
+!*.md
+
+# Keep essential scripts
+!scripts/
+!deployment/*.sh
+!run.sh
+
+# Keep model configurations (templates)
+!training/data/training_config.json
+!training/deployment/models_config.json
+!training/deployment/deployment_config.json
+
+# Keep package files
+!package.json
+!requirements.txt
+!Dockerfile
+!docker-compose.yml
+!tsconfig*.json
+!*.config.js
+!*.config.ts
