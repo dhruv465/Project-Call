@@ -10,10 +10,7 @@ const axios_1 = __importDefault(require("axios"));
 const twilio_1 = __importDefault(require("twilio"));
 // Helper function to handle unknown errors
 const handleError = (error) => {
-    if (error instanceof Error) {
-        return error.message;
-    }
-    return String(error);
+    return (0, index_1.getErrorMessage)(error);
 };
 // @desc    Get system configuration
 // @route   GET /api/configuration

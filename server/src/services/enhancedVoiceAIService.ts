@@ -1,7 +1,7 @@
 // Enhanced Voice AI Service with Perfect Training and Advanced Capabilities
 import axios from 'axios';
-import { logger } from '../index';
-import ProductionEmotionService from './productionEmotionService';
+import { logger, getErrorMessage } from '../index';
+import productionEmotionService from './resilientEmotionService';
 
 export interface VoicePersonality {
   id: string;
@@ -73,12 +73,13 @@ export class EnhancedVoiceAIService {
   private openAIApiKey: string;
   private isModelTrained: boolean = false;
   private trainingMetrics: ConversationMetrics;
-  private productionEmotionService: ProductionEmotionService;
+  // Use the imported singleton instance
+  private emotionService = productionEmotionService;
 
   constructor(elevenLabsApiKey: string, openAIApiKey: string) {
     this.elevenLabsApiKey = elevenLabsApiKey;
     this.openAIApiKey = openAIApiKey;
-    this.productionEmotionService = new ProductionEmotionService();
+    // No need to initialize emotionService here - using imported singleton
     this.trainingMetrics = {
       emotionalEngagement: 0.95,
       personalityConsistency: 0.92,
@@ -86,6 +87,20 @@ export class EnhancedVoiceAIService {
       adaptationSuccess: 0.94,
       overallEffectiveness: 0.94
     };
+  }
+
+  /**
+   * Get current ElevenLabs API key
+   */
+  public getElevenLabsApiKey(): string {
+    return this.elevenLabsApiKey;
+  }
+
+  /**
+   * Get current OpenAI API key
+   */
+  public getOpenAIApiKey(): string {
+    return this.openAIApiKey;
   }
 
   // Enhanced Voice Personalities with Cultural Adaptations
@@ -210,7 +225,7 @@ export class EnhancedVoiceAIService {
   ): Promise<EmotionAnalysis> {
     try {
       // Use production emotion detection models for primary analysis
-      const productionResult = await this.productionEmotionService.detectEmotionFromText(audioText);
+      const productionResult = await this.emotionService.detectEmotionFromText(audioText);
       
       // Map production model result to our EmotionAnalysis interface
       const emotionAnalysis: EmotionAnalysis = {
@@ -232,7 +247,7 @@ export class EnhancedVoiceAIService {
 
       return emotionAnalysis;
     } catch (error) {
-      logger.error('Error in production emotion detection, falling back to OpenAI:', error);
+      logger.error(`Error in production emotion detection, falling back to OpenAI: ${getErrorMessage(error)}`);
       
       // Fallback to OpenAI-based detection if production models fail
       return this.detectEmotionWithOpenAI(audioText, language, culturalContext);
@@ -303,7 +318,7 @@ export class EnhancedVoiceAIService {
         adaptationNeeded: result.adaptationNeeded
       };
     } catch (error) {
-      logger.error('Error in fallback emotion detection:', error);
+      logger.error(`Error in fallback emotion detection: ${getErrorMessage(error)}`);
       return {
         primary: 'neutral',
         confidence: 0.5,
@@ -450,7 +465,7 @@ export class EnhancedVoiceAIService {
       logger.info('Culturally-adapted response generated:', result);
       return result;
     } catch (error) {
-      logger.error('Error generating culturally-adapted response:', error);
+      logger.error(`Error generating culturally-adapted response: ${getErrorMessage(error)}`);
       return this.getCulturalFallbackResponse(emotion.primary as EmotionType, personality, language);
     }
   }
@@ -503,8 +518,8 @@ export class EnhancedVoiceAIService {
       logger.info('Multilingual speech synthesized successfully');
       return Buffer.from(response.data);
     } catch (error) {
-      logger.error('Error synthesizing multilingual speech:', error);
-      throw new Error('Failed to synthesize multilingual speech');
+      logger.error(`Error synthesizing multilingual speech: ${getErrorMessage(error)}`);
+      throw new Error(`Failed to synthesize multilingual speech: ${getErrorMessage(error)}`);
     }
   }
 
@@ -569,7 +584,7 @@ export class EnhancedVoiceAIService {
       logger.info('Advanced conversation flow analyzed:', result);
       return result;
     } catch (error) {
-      logger.error('Error managing advanced conversation flow:', error);
+      logger.error(`Error managing advanced conversation flow: ${getErrorMessage(error)}`);
       return {
         nextAction: 'ask_question',
         suggestedResponse: language === 'Hindi' ? 'मैं आपकी कैसे सहायता कर सकता हूं?' : 'How can I help you today?',
@@ -620,7 +635,7 @@ export class EnhancedVoiceAIService {
         confidence: 0.9
       };
     } catch (error) {
-      logger.error('Error in real-time voice adaptation:', error);
+      logger.error(`Error in real-time voice adaptation: ${getErrorMessage(error)}`);
       return {
         adaptedPersonality: personality,
         adaptationReason: 'Adaptation failed, using original personality',

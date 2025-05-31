@@ -37,7 +37,7 @@ class VoiceAIController {
                 res.status(500).json({
                     success: false,
                     message: 'Failed to train voice AI model',
-                    error: error.message
+                    error: (0, index_1.getErrorMessage)(error)
                 });
             }
         };
@@ -57,7 +57,7 @@ class VoiceAIController {
                 res.status(500).json({
                     success: false,
                     message: 'Failed to get voice personalities',
-                    error: error.message
+                    error: (0, index_1.getErrorMessage)(error)
                 });
             }
         };
@@ -83,7 +83,7 @@ class VoiceAIController {
                 res.status(500).json({
                     success: false,
                     message: 'Failed to analyze emotion',
-                    error: error.message
+                    error: (0, index_1.getErrorMessage)(error)
                 });
             }
         };
@@ -120,7 +120,7 @@ class VoiceAIController {
                 res.status(500).json({
                     success: false,
                     message: 'Failed to generate adaptive response',
-                    error: error.message
+                    error: (0, index_1.getErrorMessage)(error)
                 });
             }
         };
@@ -152,7 +152,7 @@ class VoiceAIController {
                 res.status(500).json({
                     success: false,
                     message: 'Failed to synthesize speech',
-                    error: error.message
+                    error: (0, index_1.getErrorMessage)(error)
                 });
             }
         };
@@ -212,7 +212,7 @@ class VoiceAIController {
                 res.status(500).json({
                     success: false,
                     message: 'Failed to manage conversation flow',
-                    error: error.message
+                    error: (0, index_1.getErrorMessage)(error)
                 });
             }
         };
@@ -248,7 +248,7 @@ class VoiceAIController {
                 res.status(500).json({
                     success: false,
                     message: 'Failed to get conversation analytics',
-                    error: error.message
+                    error: (0, index_1.getErrorMessage)(error)
                 });
             }
         };
@@ -281,7 +281,7 @@ class VoiceAIController {
                 res.status(500).json({
                     success: false,
                     message: 'Failed to validate model performance',
-                    error: error.message
+                    error: (0, index_1.getErrorMessage)(error)
                 });
             }
         };

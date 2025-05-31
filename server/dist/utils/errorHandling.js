@@ -4,16 +4,14 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.extractApiErrorMessage = exports.isErrorWithResponse = exports.handleError = void 0;
+const index_1 = require("../index");
 /**
  * Handle unknown error types safely
  * @param error Unknown error object
  * @returns Formatted error message string
  */
 const handleError = (error) => {
-    if (error instanceof Error) {
-        return error.message;
-    }
-    return String(error);
+    return (0, index_1.getErrorMessage)(error);
 };
 exports.handleError = handleError;
 /**
@@ -32,7 +30,7 @@ exports.isErrorWithResponse = isErrorWithResponse;
  */
 const extractApiErrorMessage = (error) => {
     if ((0, exports.isErrorWithResponse)(error) && error.response?.data) {
-        return error.response.data.message || error.response.data || error.message;
+        return error.response.data.message || error.response.data || (0, index_1.getErrorMessage)(error);
     }
     return (0, exports.handleError)(error);
 };

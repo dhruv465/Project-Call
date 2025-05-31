@@ -1,7 +1,13 @@
 // Advanced Voice AI Training Service for Perfect Voice Model Training
 import axios from 'axios';
-import { logger } from '../index';
+import * as fs from 'fs';
+import * as path from 'path';
+import { logger, getErrorMessage } from '../index';
 import { VoicePersonality, EmotionAnalysis } from './voiceAIService';
+import { EmotionDetectionModel } from './emotionDetectionModel';
+import * as tf from '@tensorflow/tfjs';
+import { ModelTrainingPipeline } from '../ml/pipeline/training_pipeline';
+import { ModelRegistry } from '../ml/pipeline/model_registry';
 
 export interface TrainingData {
   emotions: EmotionalTrainingSet[];
@@ -385,7 +391,7 @@ export class VoiceTrainingService {
     ];
   }
 
-  // Train emotion recognition model
+  // Train emotion recognition model - real implementation
   async trainEmotionRecognition(): Promise<{
     accuracy: number;
     trainingComplete: boolean;
@@ -394,8 +400,8 @@ export class VoiceTrainingService {
     try {
       logger.info('Starting emotion recognition training...');
       
-      // Simulate training with actual training data
-      const trainingResults = await this.simulateModelTraining('emotion', this.trainingData.emotions);
+      // Use real training instead of simulation
+      const trainingResults = await this.trainModel('emotion', this.trainingData.emotions);
       
       logger.info('Emotion recognition training completed', trainingResults);
       return trainingResults;
@@ -405,7 +411,7 @@ export class VoiceTrainingService {
     }
   }
 
-  // Train personality adaptation model
+  // Train personality adaptation model - real implementation
   async trainPersonalityAdaptation(): Promise<{
     accuracy: number;
     trainingComplete: boolean;
@@ -414,7 +420,7 @@ export class VoiceTrainingService {
     try {
       logger.info('Starting personality adaptation training...');
       
-      const trainingResults = await this.simulateModelTraining('personality', this.trainingData.personalities);
+      const trainingResults = await this.trainModel('personality', this.trainingData.personalities);
       
       logger.info('Personality adaptation training completed', trainingResults);
       return trainingResults;
@@ -424,7 +430,7 @@ export class VoiceTrainingService {
     }
   }
 
-  // Train bilingual conversation model
+  // Train bilingual conversation model - real implementation
   async trainBilingualConversation(): Promise<{
     accuracy: number;
     trainingComplete: boolean;
@@ -433,7 +439,7 @@ export class VoiceTrainingService {
     try {
       logger.info('Starting bilingual conversation training...');
       
-      const trainingResults = await this.simulateModelTraining('bilingual', this.trainingData.bilingual);
+      const trainingResults = await this.trainModel('bilingual', this.trainingData.bilingual);
       
       logger.info('Bilingual conversation training completed', trainingResults);
       return trainingResults;
@@ -443,7 +449,7 @@ export class VoiceTrainingService {
     }
   }
 
-  // Train complete voice model
+  // Train complete voice model - real implementation
   async trainCompleteVoiceModel(): Promise<{
     emotionAccuracy: number;
     personalityAccuracy: number;
@@ -460,7 +466,7 @@ export class VoiceTrainingService {
         this.trainEmotionRecognition(),
         this.trainPersonalityAdaptation(),
         this.trainBilingualConversation(),
-        this.simulateModelTraining('conversational', this.trainingData.conversational)
+        this.trainModel('conversational', this.trainingData.conversational)
       ]);
 
       const overallAccuracy = (
@@ -469,6 +475,9 @@ export class VoiceTrainingService {
         bilingualResults.accuracy +
         conversationResults.accuracy
       ) / 4;
+
+      // Promote models to production in the registry
+      await this.promoteModelsToProd([emotionResults, personalityResults, bilingualResults, conversationResults]);
 
       const result = {
         emotionAccuracy: emotionResults.accuracy,
@@ -484,6 +493,33 @@ export class VoiceTrainingService {
       return result;
     } catch (error) {
       logger.error('Error training complete voice model:', error);
+      throw error;
+    }
+  }
+
+  // Promote trained models to production
+  private async promoteModelsToProd(modelResults: any[]): Promise<void> {
+    try {
+      const modelRegistry = new ModelRegistry();
+      const models = await modelRegistry.listModels({ status: 'staging' });
+      
+      // Find the latest models for each type and promote to production
+      const latestModels = new Map<string, string>(); // modelType -> modelId
+      
+      for (const model of models) {
+        if (!latestModels.has(model.modelType) || 
+            new Date(model.createdAt) > new Date(latestModels.get(model.modelType))) {
+          latestModels.set(model.modelType, model.modelId);
+        }
+      }
+      
+      // Promote each model to production
+      for (const [modelType, modelId] of latestModels.entries()) {
+        await modelRegistry.promoteModelToProduction(modelId);
+        logger.info(`Model ${modelId} (${modelType}) promoted to production`);
+      }
+    } catch (error) {
+      logger.error('Error promoting models to production:', error);
       throw error;
     }
   }
@@ -527,25 +563,72 @@ export class VoiceTrainingService {
     }
   }
 
-  // Private helper methods
-  private async simulateModelTraining(modelType: string, trainingData: any): Promise<{
+  // Real model training with TensorFlow.js
+  private async trainModel(modelType: string, trainingData: any): Promise<{
     accuracy: number;
     trainingComplete: boolean;
     modelVersion: string;
   }> {
-    // Simulate training time
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    logger.info(`Starting real ${modelType} model training with ${trainingData.length} samples`);
     
-    // Simulate high accuracy based on comprehensive training data
-    const baseAccuracy = 0.85;
-    const dataQualityBonus = Math.min(0.1, trainingData.length * 0.01);
-    const accuracy = Math.min(0.98, baseAccuracy + dataQualityBonus);
+    try {
+      // Map modelType to valid TrainingConfig modelType
+      const getValidModelType = (type: string): 'audio' | 'text' | 'multimodal' => {
+        switch (type) {
+          case 'emotion':
+            return 'text';
+          case 'personality':
+            return 'text';
+          case 'bilingual':
+            return 'multimodal';
+          case 'conversational':
+            return 'multimodal';
+          default:
+            return 'text';
+        }
+      };
 
-    return {
-      accuracy,
-      trainingComplete: true,
-      modelVersion: `${modelType}_v${Date.now()}`
-    };
+      // Prepare training configuration
+      const trainingConfig = {
+        modelType: getValidModelType(modelType),
+        datasetPath: path.resolve(__dirname, '../../../../training/data/processed_data.json'),
+        epochs: 20,
+        batchSize: 32,
+        learningRate: 0.001,
+        validationSplit: 0.2,
+        outputDir: path.resolve(__dirname, '../../../../training/models')
+      };
+      
+      // Save training data for the pipeline
+      const jsonData = JSON.stringify(trainingData);
+      fs.writeFileSync(trainingConfig.datasetPath, jsonData);
+      
+      // Initialize and use training pipeline
+      const pipeline = new ModelTrainingPipeline();
+      const result = await pipeline.trainModel(trainingConfig);
+      
+      // Register model in registry
+      const modelRegistry = new ModelRegistry();
+      const modelMeta = await modelRegistry.registerModel({
+        modelId: result.modelId,
+        modelType: result.modelType,
+        version: result.version,
+        accuracy: result.accuracy,
+        loss: result.loss,
+        path: result.modelPath
+      });
+      
+      logger.info(`Model training completed. ID: ${result.modelId}, Accuracy: ${result.accuracy}`);
+      
+      return {
+        accuracy: result.accuracy,
+        trainingComplete: true,
+        modelVersion: modelMeta.version
+      };
+    } catch (error) {
+      logger.error('Error during model training:', error);
+      throw new Error(`Model training failed: ${getErrorMessage(error)}`);
+    }
   }
 
   private async testScenario(scenario: any): Promise<{
@@ -555,16 +638,41 @@ export class VoiceTrainingService {
     expectedResponse: string;
     accuracy: number;
   }> {
-    // Simulate scenario testing
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    return {
-      scenarioId: scenario.id || 'test_scenario',
-      success: Math.random() > 0.1, // 90% success rate for well-trained model
-      actualResponse: 'Generated response based on training',
-      expectedResponse: scenario.expectedResponse || 'Expected response',
-      accuracy: 0.9 + Math.random() * 0.08 // 90-98% accuracy range
-    };
+    try {
+      // Load emotion detection model for validation
+      const emotionModel = new EmotionDetectionModel({
+        modelPath: path.resolve(__dirname, '../../../../training/deployment/text/latest/model.json'),
+        vocabPath: path.resolve(__dirname, '../../../../training/deployment/text/latest/vocab.json'),
+        embeddingDim: 100,
+        maxSequenceLength: 50
+      });
+      
+      await emotionModel.loadModel();
+      
+      // Use the model to predict emotion from text
+      const prediction = await emotionModel.predictEmotion(scenario.text || '');
+      
+      // Compare predicted emotion with expected emotion
+      const expectedEmotion = scenario.emotion || scenario.expectedEmotion;
+      const success = prediction.emotion === expectedEmotion;
+      
+      return {
+        scenarioId: scenario.id || 'test_scenario',
+        success,
+        actualResponse: prediction.emotion,
+        expectedResponse: expectedEmotion,
+        accuracy: prediction.confidence
+      };
+    } catch (error) {
+      logger.error('Error validating scenario:', error);
+      return {
+        scenarioId: scenario.id || 'test_scenario',
+        success: false,
+        actualResponse: 'Error during validation',
+        expectedResponse: scenario.expectedResponse || 'unknown',
+        accuracy: 0
+      };
+    }
   }
 }
 

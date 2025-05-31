@@ -1,7 +1,9 @@
 import VoiceAIService, { VoicePersonality, EmotionAnalysis, AdaptiveResponse } from './voiceAIService';
 import EnhancedVoiceAIService from './enhancedVoiceAIService';
 import SpeechAnalysisService, { SpeechAnalysis, ConversationContext } from './speechAnalysisService';
-import { logger } from '../index';
+import LLMService, { LLMProvider, Message } from './llmService';
+import { logger, getErrorMessage } from '../index';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface ConversationTurn {
   id: string;
@@ -35,16 +37,98 @@ export interface CallSession {
     personalityChanges: number;
     adaptiveResponses: number;
   };
+  llmProvider?: LLMProvider;
 }
 
 export class ConversationEngineService {
   private voiceAI: EnhancedVoiceAIService;
   private speechAnalysis: SpeechAnalysisService;
+  private llmService: LLMService;
   private activeSessions: Map<string, CallSession> = new Map();
 
-  constructor(elevenLabsApiKey: string, openAIApiKey: string, googleSpeechKey?: string) {
+  constructor(elevenLabsApiKey: string, openAIApiKey: string, anthropicApiKey?: string, googleSpeechKey?: string) {
     this.voiceAI = new EnhancedVoiceAIService(elevenLabsApiKey, openAIApiKey);
     this.speechAnalysis = new SpeechAnalysisService(openAIApiKey, googleSpeechKey);
+    this.llmService = new LLMService(openAIApiKey, anthropicApiKey);
+  }
+  
+  /**
+   * Update API keys for all integrated services
+   */
+  public updateApiKeys(elevenLabsApiKey?: string, openAIApiKey?: string, anthropicApiKey?: string, googleSpeechKey?: string): void {
+    try {
+      if (elevenLabsApiKey || openAIApiKey) {
+        // Reinitialize voice AI service with new API keys
+        this.voiceAI = new EnhancedVoiceAIService(
+          elevenLabsApiKey || '',
+          openAIApiKey || ''
+        );
+        logger.info('Voice AI service updated with new API keys');
+      }
+      
+      if (openAIApiKey || googleSpeechKey) {
+        // Reinitialize speech analysis service with new API keys
+        this.speechAnalysis = new SpeechAnalysisService(
+          openAIApiKey || '',
+          googleSpeechKey || ''
+        );
+        logger.info('Speech analysis service updated with new API keys');
+      }
+      
+      if (openAIApiKey || anthropicApiKey) {
+        // Update LLM service with new API keys
+        if (typeof this.llmService.updateApiKeys === 'function') {
+          this.llmService.updateApiKeys(
+            openAIApiKey,
+            anthropicApiKey
+          );
+        } else {
+          this.llmService = new LLMService(
+            openAIApiKey || '',
+            anthropicApiKey || ''
+          );
+        }
+        logger.info('LLM service updated with new API keys');
+      }
+    } catch (error) {
+      logger.error(`Error updating API keys: ${getErrorMessage(error)}`);
+    }
+  }
+  
+  /**
+   * Update API keys for all integrated services
+   */
+  public updateApiKeys(elevenLabsApiKey?: string, openAIApiKey?: string, anthropicApiKey?: string, googleSpeechKey?: string): void {
+    if (elevenLabsApiKey || openAIApiKey) {
+      // Reinitialize voice AI service
+      this.voiceAI = new EnhancedVoiceAIService(
+        elevenLabsApiKey || this.voiceAI.getElevenLabsApiKey() || '',
+        openAIApiKey || this.voiceAI.getOpenAIApiKey() || ''
+      );
+      logger.info('Voice AI service updated with new API keys');
+    }
+    
+    if (openAIApiKey || googleSpeechKey) {
+      // Update or reinitialize speech analysis service
+      if (typeof this.speechAnalysis.updateApiKeys === 'function') {
+        this.speechAnalysis.updateApiKeys(openAIApiKey, googleSpeechKey);
+      } else {
+        this.speechAnalysis = new SpeechAnalysisService(
+          openAIApiKey || '',
+          googleSpeechKey || this.speechAnalysis.getGoogleSpeechKey() || ''
+        );
+      }
+      logger.info('Speech analysis service updated with new API keys');
+    }
+    
+    if (openAIApiKey || anthropicApiKey) {
+      // Update LLM service
+      this.llmService.updateApiKeys(
+        openAIApiKey || '',
+        anthropicApiKey || ''
+      );
+      logger.info('LLM service updated with new API keys');
+    }
   }
 
   // Initialize a new conversation session
@@ -166,17 +250,31 @@ export class ConversationEngineService {
         session.metrics.personalityChanges++;
       }
 
-      // Generate adaptive response using enhanced conversation flow
-      const conversationFlow = await this.voiceAI.manageAdvancedConversationFlow(
-        session.conversationHistory,
+      // Update conversation history with customer turn
+      const customerTurn: ConversationTurn = {
+        id: `turn-${session.conversationHistory.length + 1}`,
+        timestamp: new Date(),
+        speaker: 'customer',
+        content: transcript,
+        analysis: speechAnalysis,
+        emotions: emotions
+      };
+      
+      session.conversationHistory.push(customerTurn);
+      
+      // Generate response using real LLM integration
+      const llmResponse = await this.generateLLMResponse(
+        sessionId,
+        transcript,
         emotions,
-        session.currentPersonality,
-        session.language
+        session.context,
+        session.currentPersonality
       );
 
+      // Generate adaptive response details based on LLM response
       const adaptiveResponse = await this.voiceAI.generateCulturallyAdaptedResponse(
         emotions,
-        conversationFlow.contextAwareness,
+        llmResponse,
         session.currentPersonality,
         session.language
       );
@@ -189,38 +287,33 @@ export class ConversationEngineService {
         session.language
       );
 
-      // Update conversation history
-      const customerTurn: ConversationTurn = {
-        id: `turn-${session.conversationHistory.length + 1}`,
-        timestamp: new Date(),
-        speaker: 'customer',
-        content: transcript,
-        analysis: speechAnalysis,
-        emotions
-      };
-
+      // Add agent response to conversation history
       const agentTurn: ConversationTurn = {
-        id: `turn-${session.conversationHistory.length + 2}`,
+        id: `turn-${session.conversationHistory.length + 1}`,
         timestamp: new Date(),
         speaker: 'agent',
         content: adaptiveResponse.script,
         voicePersonality: session.currentPersonality,
-        adaptiveResponse
+        adaptiveResponse: adaptiveResponse
       };
-
-      session.conversationHistory.push(customerTurn, agentTurn);
-
+      
+      session.conversationHistory.push(agentTurn);
+      
       // Update conversation context
       session.context = await this.speechAnalysis.updateConversationContext(
         session.context,
         speechAnalysis,
         adaptiveResponse.script
       );
-
-      // Update metrics
+      
+      // Update session metrics
       session.metrics.totalTurns += 2;
-      session.metrics.adaptiveResponses++;
-      session.metrics.avgEmotionScore = this.calculateAverageEmotionScore(session.emotionHistory);
+      session.metrics.adaptiveResponses += 1;
+      
+      // Calculate running average of emotion scores
+      const totalEmotions = session.emotionHistory.length;
+      const emotionSum = session.emotionHistory.reduce((sum, e) => sum + e.intensity, 0);
+      session.metrics.avgEmotionScore = emotionSum / totalEmotions;
 
       logger.info(`Customer input processed for session: ${sessionId}`);
 
@@ -235,7 +328,7 @@ export class ConversationEngineService {
       };
     } catch (error) {
       logger.error('Error processing customer input:', error);
-      throw new Error('Failed to process customer input');
+      throw new Error(`Failed to process customer input: ${getErrorMessage(error)}`);
     }
   }
 
@@ -350,6 +443,148 @@ export class ConversationEngineService {
   // Get all available voice personalities
   getVoicePersonalities(): VoicePersonality[] {
     return VoiceAIService.getVoicePersonalities();
+  }
+
+  // Generate response using real LLM integration
+  async generateLLMResponse(
+    sessionId: string,
+    transcript: string,
+    emotions: EmotionAnalysis,
+    context: ConversationContext,
+    personality: VoicePersonality
+  ): Promise<string> {
+    try {
+      const session = this.activeSessions.get(sessionId);
+      if (!session) {
+        throw new Error('Session not found');
+      }
+
+      // Create message history for the LLM
+      const messages: Message[] = [
+        {
+          role: 'system',
+          content: this.createSystemPrompt(personality, context, session.language)
+        }
+      ];
+
+      // Add conversation history
+      for (const turn of session.conversationHistory.slice(-10)) { // Last 10 turns only
+        const role = turn.speaker === 'agent' ? 'assistant' : 'user';
+        messages.push({
+          role,
+          content: turn.content
+        });
+      }
+
+      // Add the latest user message if not already in history
+      if (!session.conversationHistory.length || 
+          session.conversationHistory[session.conversationHistory.length - 1].speaker !== 'customer') {
+        messages.push({
+          role: 'user',
+          content: transcript
+        });
+      }
+
+      // Append emotional context to the user's message
+      const emotionContext = `[Customer appears ${emotions.primary.toLowerCase()}, with intensity ${emotions.intensity.toFixed(1)}/10]`;
+      if (messages[messages.length - 1].role === 'user') {
+        messages[messages.length - 1].content += `\n${emotionContext}`;
+      }
+
+      // Generate response using the LLM service
+      const llmResponse = await this.llmService.generateResponse(
+        messages,
+        session.llmProvider || 'auto',
+        {
+          temperature: this.getTemperatureForPersonality(personality),
+          maxTokens: 500
+        }
+      );
+
+      // Save the provider used for future reference
+      session.llmProvider = llmResponse.provider;
+
+      logger.info(`Generated response using ${llmResponse.provider} for session ${sessionId}`);
+      return llmResponse.text;
+    } catch (error) {
+      logger.error(`Error generating LLM response: ${getErrorMessage(error)}`);
+      // Fallback to a safe response
+      return this.getFallbackResponse(emotions.primary);
+    }
+  }
+
+  // Create a detailed system prompt based on personality and context
+  private createSystemPrompt(
+    personality: VoicePersonality,
+    context: ConversationContext,
+    language: 'English' | 'Hindi'
+  ): string {
+    let prompt = `You are an AI sales agent with a ${personality.name} personality. `;
+    
+    // Add personality traits
+    prompt += `Your style is ${personality.style}. `;
+    prompt += `Your emotional range includes ${personality.emotionalRange.join(', ')}. `;
+    
+    // Add language instructions
+    if (language === 'Hindi') {
+      prompt += 'Respond in Hindi, using Devanagari script. Mix in English terms where appropriate for tech or business concepts. ';
+      
+      // Add cultural adaptations if available
+      if (personality.culturalAdaptations && personality.culturalAdaptations['Hindi']) {
+        const cultural = personality.culturalAdaptations['Hindi'];
+        prompt += `Use a ${cultural.persuasionStyle} persuasion style and ${cultural.communicationPattern} communication pattern. `;
+      }
+    } else {
+      prompt += 'Respond in English. ';
+      
+      // Add cultural adaptations if available
+      if (personality.culturalAdaptations && personality.culturalAdaptations['English']) {
+        const cultural = personality.culturalAdaptations['English'];
+        prompt += `Use a ${cultural.persuasionStyle} persuasion style and ${cultural.communicationPattern} communication pattern. `;
+      }
+    }
+    
+    // Add contextual information
+    prompt += `The current call stage is: ${context.progress.stage}. `;
+    prompt += `Your objective is: ${context.callObjective}. `;
+    
+    if (context.customerProfile.objections.length > 0) {
+      prompt += `The customer has raised these objections: ${context.customerProfile.objections.join(', ')}. `;
+    }
+    
+    // Add response guidelines
+    prompt += 'Keep responses conversational, concise (1-3 sentences), and focused on moving the call forward. ';
+    prompt += 'Address customer emotions appropriately. ';
+    prompt += 'Never mention that you are an AI. Act as a human sales representative. ';
+    
+    return prompt;
+  }
+
+  // Get appropriate temperature setting based on personality
+  private getTemperatureForPersonality(personality: VoicePersonality): number {
+    switch (personality.id) {
+      case 'professional':
+        return 0.3; // More conservative/predictable
+      case 'friendly':
+        return 0.7; // More creative
+      case 'empathetic':
+        return 0.5; // Balanced
+      default:
+        return 0.5;
+    }
+  }
+
+  // Provide fallback responses when LLM fails
+  private getFallbackResponse(emotion: string): string {
+    const fallbacks = {
+      frustrated: "I understand this is frustrating. Let's take a step back and address your concerns. What specifically would you like me to help with?",
+      interested: "That's great to hear. I'd be happy to provide more details about what we offer.",
+      skeptical: "I appreciate your careful consideration. Let me address your concerns with some specific information.",
+      confused: "Let me clarify that for you. I'll explain it more simply.",
+      neutral: "Thank you for sharing that. Is there anything specific you'd like to know more about?"
+    };
+    
+    return fallbacks[emotion.toLowerCase()] || "I understand. Could you tell me more about what you're looking for?";
   }
 
   // Private helper methods

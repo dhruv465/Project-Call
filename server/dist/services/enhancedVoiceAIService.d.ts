@@ -62,7 +62,7 @@ export declare class EnhancedVoiceAIService {
     private openAIApiKey;
     private isModelTrained;
     private trainingMetrics;
-    private productionEmotionService;
+    private emotionService;
     constructor(elevenLabsApiKey: string, openAIApiKey: string);
     static getEnhancedVoicePersonalities(): VoicePersonality[];
     detectEmotionWithCulturalContext(audioText: string, language?: Language, culturalContext?: string): Promise<EmotionAnalysis>;

@@ -3,7 +3,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.logger = exports.io = exports.app = void 0;
+exports.logger = exports.io = exports.app = exports.leadService = exports.campaignService = exports.conversationEngine = exports.modelRegistry = exports.speechService = void 0;
+exports.getErrorMessage = getErrorMessage;
 const express_1 = __importDefault(require("express"));
 const http_1 = __importDefault(require("http"));
 const socket_io_1 = require("socket.io");
@@ -14,6 +15,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const winston_1 = __importDefault(require("winston"));
+const path_1 = __importDefault(require("path"));
 // Routes
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
 const leadRoutes_1 = __importDefault(require("./routes/leadRoutes"));
@@ -23,6 +25,13 @@ const dashboardRoutes_1 = __importDefault(require("./routes/dashboardRoutes"));
 const configurationRoutes_1 = __importDefault(require("./routes/configurationRoutes"));
 const notificationRoutes_1 = __importDefault(require("./routes/notificationRoutes"));
 const voiceAIRoutes_1 = __importDefault(require("./routes/voiceAIRoutes"));
+// Services initialization
+const realSpeechService_1 = require("./services/realSpeechService");
+const conversationEngineService_1 = __importDefault(require("./services/conversationEngineService"));
+const campaignService_1 = __importDefault(require("./services/campaignService"));
+const leadService_1 = __importDefault(require("./services/leadService"));
+exports.leadService = leadService_1.default;
+const model_registry_1 = require("./ml/pipeline/model_registry");
 // Load environment variables
 dotenv_1.default.config();
 // Create logger
@@ -132,4 +141,34 @@ process.on('unhandledRejection', (err) => {
     // Close server & exit process
     server.close(() => process.exit(1));
 });
+// Initialize services
+const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY || '';
+const openAIApiKey = process.env.OPENAI_API_KEY || '';
+const anthropicApiKey = process.env.ANTHROPIC_API_KEY || '';
+const googleSpeechApiKey = process.env.GOOGLE_SPEECH_API_KEY || '';
+// Speech synthesis service
+const speechService = (0, realSpeechService_1.initializeSpeechService)(elevenLabsApiKey, path_1.default.join(__dirname, '../uploads/audio'));
+exports.speechService = speechService;
+// Model registry
+const modelRegistry = new model_registry_1.ModelRegistry();
+exports.modelRegistry = modelRegistry;
+// Conversation engine
+const conversationEngine = new conversationEngineService_1.default(elevenLabsApiKey, openAIApiKey, anthropicApiKey, googleSpeechApiKey);
+exports.conversationEngine = conversationEngine;
+// Campaign service
+const campaignService = new campaignService_1.default(elevenLabsApiKey, openAIApiKey, anthropicApiKey, googleSpeechApiKey);
+exports.campaignService = campaignService;
+// Create helper for error handling
+function getErrorMessage(error) {
+    if (error instanceof Error) {
+        return error.message;
+    }
+    if (typeof error === 'string') {
+        return error;
+    }
+    if (error && typeof error === 'object' && 'message' in error) {
+        return String(error.message);
+    }
+    return 'Unknown error occurred';
+}
 //# sourceMappingURL=index.js.map

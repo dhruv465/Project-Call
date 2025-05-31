@@ -2,16 +2,15 @@
  * Error handling utility functions for consistent error handling across controllers
  */
 
+import { getErrorMessage } from '../index';
+
 /**
  * Handle unknown error types safely
  * @param error Unknown error object
  * @returns Formatted error message string
  */
 export const handleError = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
+  return getErrorMessage(error);
 };
 
 /**
@@ -30,7 +29,7 @@ export const isErrorWithResponse = (error: unknown): error is Error & { response
  */
 export const extractApiErrorMessage = (error: unknown): string => {
   if (isErrorWithResponse(error) && error.response?.data) {
-    return error.response.data.message || error.response.data || error.message;
+    return error.response.data.message || error.response.data || getErrorMessage(error);
   }
   return handleError(error);
 };

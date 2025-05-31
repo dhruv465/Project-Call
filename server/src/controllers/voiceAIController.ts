@@ -2,7 +2,8 @@
 import { Request, Response } from 'express';
 import EnhancedVoiceAIService from '../services/enhancedVoiceAIService';
 import VoiceTrainingService from '../services/voiceTrainingService';
-import { logger } from '../index';
+import { logger, getErrorMessage } from '../index';
+import Configuration from '../models/Configuration';
 
 interface VoiceAIRequest extends Request {
   body: {
@@ -24,11 +25,53 @@ export class VoiceAIController {
   private activeSessions: Map<string, any> = new Map();
 
   constructor() {
-    const elevenLabsKey = process.env.ELEVENLABS_API_KEY || '';
-    const openAIKey = process.env.OPENAI_API_KEY || '';
+    // We'll initialize with empty values first, then update with getCredentials
+    this.voiceAIService = new EnhancedVoiceAIService('', '');
+    this.trainingService = new VoiceTrainingService('');
     
-    this.voiceAIService = new EnhancedVoiceAIService(elevenLabsKey, openAIKey);
-    this.trainingService = new VoiceTrainingService(openAIKey);
+    // Initialize with credentials asynchronously
+    this.initializeWithCredentials().catch(error => {
+      logger.error(`Error initializing VoiceAIController with credentials: ${getErrorMessage(error)}`);
+    });
+  }
+  
+  // Get credentials from database configuration
+  private async initializeWithCredentials(): Promise<void> {
+    try {
+      // Get configuration from database
+      const config = await Configuration.findOne();
+      
+      let elevenLabsKey = '';
+      let openAIKey = '';
+      
+      if (config) {
+        // Use credentials from database
+        elevenLabsKey = config.elevenLabsConfig?.apiKey || '';
+        
+        const openAIProvider = config.llmConfig?.providers?.find((p: any) => p.name === 'openai');
+        openAIKey = openAIProvider?.apiKey || '';
+      } else {
+        // Fall back to environment variables if necessary
+        elevenLabsKey = process.env.ELEVENLABS_API_KEY || '';
+        openAIKey = process.env.OPENAI_API_KEY || '';
+        logger.warn('No configuration found in database, using environment variables as fallback');
+      }
+      
+      // Update services with credentials
+      this.voiceAIService = new EnhancedVoiceAIService(elevenLabsKey, openAIKey);
+      this.trainingService = new VoiceTrainingService(openAIKey);
+      
+      logger.info('VoiceAIController initialized with credentials from configuration');
+    } catch (error) {
+      logger.error(`Failed to initialize with credentials: ${getErrorMessage(error)}`);
+      
+      // Fall back to environment variables if there's an error
+      const elevenLabsKey = process.env.ELEVENLABS_API_KEY || '';
+      const openAIKey = process.env.OPENAI_API_KEY || '';
+      
+      this.voiceAIService = new EnhancedVoiceAIService(elevenLabsKey, openAIKey);
+      this.trainingService = new VoiceTrainingService(openAIKey);
+    }
   }
 
   // Initialize and train the voice AI model
@@ -61,7 +104,7 @@ export class VoiceAIController {
       res.status(500).json({
         success: false,
         message: 'Failed to train voice AI model',
-        error: error.message
+        error: getErrorMessage(error)
       });
     }
   };
@@ -82,7 +125,7 @@ export class VoiceAIController {
       res.status(500).json({
         success: false,
         message: 'Failed to get voice personalities',
-        error: error.message
+        error: getErrorMessage(error)
       });
     }
   };
@@ -115,7 +158,7 @@ export class VoiceAIController {
       res.status(500).json({
         success: false,
         message: 'Failed to analyze emotion',
-        error: error.message
+        error: getErrorMessage(error)
       });
     }
   };
@@ -171,7 +214,7 @@ export class VoiceAIController {
       res.status(500).json({
         success: false,
         message: 'Failed to generate adaptive response',
-        error: error.message
+        error: getErrorMessage(error)
       });
     }
   };
@@ -218,7 +261,7 @@ export class VoiceAIController {
       res.status(500).json({
         success: false,
         message: 'Failed to synthesize speech',
-        error: error.message
+        error: getErrorMessage(error)
       });
     }
   };
@@ -306,7 +349,7 @@ export class VoiceAIController {
       res.status(500).json({
         success: false,
         message: 'Failed to manage conversation flow',
-        error: error.message
+        error: getErrorMessage(error)
       });
     }
   };
@@ -345,7 +388,7 @@ export class VoiceAIController {
       res.status(500).json({
         success: false,
         message: 'Failed to get conversation analytics',
-        error: error.message
+        error: getErrorMessage(error)
       });
     }
   };
@@ -380,7 +423,7 @@ export class VoiceAIController {
       res.status(500).json({
         success: false,
         message: 'Failed to validate model performance',
-        error: error.message
+        error: getErrorMessage(error)
       });
     }
   };

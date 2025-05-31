@@ -1,7 +1,45 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VoiceTrainingService = void 0;
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
 const index_1 = require("../index");
+const emotionDetectionModel_1 = require("./emotionDetectionModel");
+const training_pipeline_1 = require("../ml/pipeline/training_pipeline");
+const model_registry_1 = require("../ml/pipeline/model_registry");
 class VoiceTrainingService {
     constructor(openAIApiKey) {
         this.openAIApiKey = openAIApiKey;
@@ -316,12 +354,12 @@ class VoiceTrainingService {
             }
         ];
     }
-    // Train emotion recognition model
+    // Train emotion recognition model - real implementation
     async trainEmotionRecognition() {
         try {
             index_1.logger.info('Starting emotion recognition training...');
-            // Simulate training with actual training data
-            const trainingResults = await this.simulateModelTraining('emotion', this.trainingData.emotions);
+            // Use real training instead of simulation
+            const trainingResults = await this.trainModel('emotion', this.trainingData.emotions);
             index_1.logger.info('Emotion recognition training completed', trainingResults);
             return trainingResults;
         }
@@ -330,11 +368,11 @@ class VoiceTrainingService {
             throw error;
         }
     }
-    // Train personality adaptation model
+    // Train personality adaptation model - real implementation
     async trainPersonalityAdaptation() {
         try {
             index_1.logger.info('Starting personality adaptation training...');
-            const trainingResults = await this.simulateModelTraining('personality', this.trainingData.personalities);
+            const trainingResults = await this.trainModel('personality', this.trainingData.personalities);
             index_1.logger.info('Personality adaptation training completed', trainingResults);
             return trainingResults;
         }
@@ -343,11 +381,11 @@ class VoiceTrainingService {
             throw error;
         }
     }
-    // Train bilingual conversation model
+    // Train bilingual conversation model - real implementation
     async trainBilingualConversation() {
         try {
             index_1.logger.info('Starting bilingual conversation training...');
-            const trainingResults = await this.simulateModelTraining('bilingual', this.trainingData.bilingual);
+            const trainingResults = await this.trainModel('bilingual', this.trainingData.bilingual);
             index_1.logger.info('Bilingual conversation training completed', trainingResults);
             return trainingResults;
         }
@@ -356,7 +394,7 @@ class VoiceTrainingService {
             throw error;
         }
     }
-    // Train complete voice model
+    // Train complete voice model - real implementation
     async trainCompleteVoiceModel() {
         try {
             index_1.logger.info('Starting complete voice model training...');
@@ -364,12 +402,14 @@ class VoiceTrainingService {
                 this.trainEmotionRecognition(),
                 this.trainPersonalityAdaptation(),
                 this.trainBilingualConversation(),
-                this.simulateModelTraining('conversational', this.trainingData.conversational)
+                this.trainModel('conversational', this.trainingData.conversational)
             ]);
             const overallAccuracy = (emotionResults.accuracy +
                 personalityResults.accuracy +
                 bilingualResults.accuracy +
                 conversationResults.accuracy) / 4;
+            // Promote models to production in the registry
+            await this.promoteModelsToProd([emotionResults, personalityResults, bilingualResults, conversationResults]);
             const result = {
                 emotionAccuracy: emotionResults.accuracy,
                 personalityAccuracy: personalityResults.accuracy,
@@ -384,6 +424,30 @@ class VoiceTrainingService {
         }
         catch (error) {
             index_1.logger.error('Error training complete voice model:', error);
+            throw error;
+        }
+    }
+    // Promote trained models to production
+    async promoteModelsToProd(modelResults) {
+        try {
+            const modelRegistry = new model_registry_1.ModelRegistry();
+            const models = await modelRegistry.listModels({ status: 'staging' });
+            // Find the latest models for each type and promote to production
+            const latestModels = new Map(); // modelType -> modelId
+            for (const model of models) {
+                if (!latestModels.has(model.modelType) ||
+                    new Date(model.createdAt) > new Date(latestModels.get(model.modelType))) {
+                    latestModels.set(model.modelType, model.modelId);
+                }
+            }
+            // Promote each model to production
+            for (const [modelType, modelId] of latestModels.entries()) {
+                await modelRegistry.promoteModelToProduction(modelId);
+                index_1.logger.info(`Model ${modelId} (${modelType}) promoted to production`);
+            }
+        }
+        catch (error) {
+            index_1.logger.error('Error promoting models to production:', error);
             throw error;
         }
     }
@@ -417,30 +481,96 @@ class VoiceTrainingService {
             throw error;
         }
     }
-    // Private helper methods
-    async simulateModelTraining(modelType, trainingData) {
-        // Simulate training time
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        // Simulate high accuracy based on comprehensive training data
-        const baseAccuracy = 0.85;
-        const dataQualityBonus = Math.min(0.1, trainingData.length * 0.01);
-        const accuracy = Math.min(0.98, baseAccuracy + dataQualityBonus);
-        return {
-            accuracy,
-            trainingComplete: true,
-            modelVersion: `${modelType}_v${Date.now()}`
-        };
+    // Real model training with TensorFlow.js
+    async trainModel(modelType, trainingData) {
+        index_1.logger.info(`Starting real ${modelType} model training with ${trainingData.length} samples`);
+        try {
+            // Map modelType to valid TrainingConfig modelType
+            const getValidModelType = (type) => {
+                switch (type) {
+                    case 'emotion':
+                        return 'text';
+                    case 'personality':
+                        return 'text';
+                    case 'bilingual':
+                        return 'multimodal';
+                    case 'conversational':
+                        return 'multimodal';
+                    default:
+                        return 'text';
+                }
+            };
+            // Prepare training configuration
+            const trainingConfig = {
+                modelType: getValidModelType(modelType),
+                datasetPath: path.resolve(__dirname, '../../../../training/data/processed_data.json'),
+                epochs: 20,
+                batchSize: 32,
+                learningRate: 0.001,
+                validationSplit: 0.2,
+                outputDir: path.resolve(__dirname, '../../../../training/models')
+            };
+            // Save training data for the pipeline
+            const jsonData = JSON.stringify(trainingData);
+            fs.writeFileSync(trainingConfig.datasetPath, jsonData);
+            // Initialize and use training pipeline
+            const pipeline = new training_pipeline_1.ModelTrainingPipeline();
+            const result = await pipeline.trainModel(trainingConfig);
+            // Register model in registry
+            const modelRegistry = new model_registry_1.ModelRegistry();
+            const modelMeta = await modelRegistry.registerModel({
+                modelId: result.modelId,
+                modelType: result.modelType,
+                version: result.version,
+                accuracy: result.accuracy,
+                loss: result.loss,
+                path: result.modelPath
+            });
+            index_1.logger.info(`Model training completed. ID: ${result.modelId}, Accuracy: ${result.accuracy}`);
+            return {
+                accuracy: result.accuracy,
+                trainingComplete: true,
+                modelVersion: modelMeta.version
+            };
+        }
+        catch (error) {
+            index_1.logger.error('Error during model training:', error);
+            throw new Error(`Model training failed: ${(0, index_1.getErrorMessage)(error)}`);
+        }
     }
     async testScenario(scenario) {
-        // Simulate scenario testing
-        await new Promise(resolve => setTimeout(resolve, 100));
-        return {
-            scenarioId: scenario.id || 'test_scenario',
-            success: Math.random() > 0.1, // 90% success rate for well-trained model
-            actualResponse: 'Generated response based on training',
-            expectedResponse: scenario.expectedResponse || 'Expected response',
-            accuracy: 0.9 + Math.random() * 0.08 // 90-98% accuracy range
-        };
+        try {
+            // Load emotion detection model for validation
+            const emotionModel = new emotionDetectionModel_1.EmotionDetectionModel({
+                modelPath: path.resolve(__dirname, '../../../../training/deployment/text/latest/model.json'),
+                vocabPath: path.resolve(__dirname, '../../../../training/deployment/text/latest/vocab.json'),
+                embeddingDim: 100,
+                maxSequenceLength: 50
+            });
+            await emotionModel.loadModel();
+            // Use the model to predict emotion from text
+            const prediction = await emotionModel.predictEmotion(scenario.text || '');
+            // Compare predicted emotion with expected emotion
+            const expectedEmotion = scenario.emotion || scenario.expectedEmotion;
+            const success = prediction.emotion === expectedEmotion;
+            return {
+                scenarioId: scenario.id || 'test_scenario',
+                success,
+                actualResponse: prediction.emotion,
+                expectedResponse: expectedEmotion,
+                accuracy: prediction.confidence
+            };
+        }
+        catch (error) {
+            index_1.logger.error('Error validating scenario:', error);
+            return {
+                scenarioId: scenario.id || 'test_scenario',
+                success: false,
+                actualResponse: 'Error during validation',
+                expectedResponse: scenario.expectedResponse || 'unknown',
+                accuracy: 0
+            };
+        }
     }
 }
 exports.VoiceTrainingService = VoiceTrainingService;

@@ -56,7 +56,7 @@ class EnhancedVoiceAIController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to analyze emotion',
-                error: error instanceof Error ? error.message : 'Unknown error'
+                error: (0, index_1.getErrorMessage)(error)
             });
         }
     }
@@ -88,7 +88,7 @@ class EnhancedVoiceAIController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to analyze emotion from audio',
-                error: error instanceof Error ? error.message : 'Unknown error'
+                error: (0, index_1.getErrorMessage)(error)
             });
         }
     }
@@ -120,7 +120,7 @@ class EnhancedVoiceAIController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to analyze emotion using multimodal approach',
-                error: error instanceof Error ? error.message : 'Unknown error'
+                error: (0, index_1.getErrorMessage)(error)
             });
         }
     }
@@ -150,7 +150,7 @@ class EnhancedVoiceAIController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to get model status',
-                error: error instanceof Error ? error.message : 'Unknown error'
+                error: (0, index_1.getErrorMessage)(error)
             });
         }
     }

@@ -1,15 +1,66 @@
 import { Request, Response } from 'express';
 import Configuration from '../models/Configuration';
-import { logger } from '../index';
+import { logger, getErrorMessage } from '../index';
 import axios from 'axios';
 import twilio from 'twilio';
 
 // Helper function to handle unknown errors
 const handleError = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message;
+  return getErrorMessage(error);
+};
+
+/**
+ * Update all services with new API keys from configuration
+ * @param configuration The updated configuration object
+ */
+const updateServicesWithNewConfig = async (configuration: any): Promise<void> => {
+  try {
+    const { initializeSpeechService } = require('../services/realSpeechService');
+    
+    // Get API keys from configuration
+    let elevenLabsKey = '';
+    let openAIKey = '';
+    let anthropicKey = '';
+    
+    // Update ElevenLabs API key
+    if (configuration.elevenLabsConfig?.apiKey) {
+      elevenLabsKey = configuration.elevenLabsConfig.apiKey;
+      // Reinitialize speech service with new key
+      initializeSpeechService(
+        elevenLabsKey, 
+        require('path').join(__dirname, '../../uploads/audio')
+      );
+      logger.info('Speech service updated with new API key');
+    }
+    
+    // Get LLM provider keys
+    if (configuration.llmConfig?.providers) {
+      const openAIProvider = configuration.llmConfig.providers.find((p: any) => p.name === 'openai');
+      if (openAIProvider?.apiKey) {
+        openAIKey = openAIProvider.apiKey;
+      }
+      
+      const anthropicProvider = configuration.llmConfig.providers.find((p: any) => p.name === 'anthropic');
+      if (anthropicProvider?.apiKey) {
+        anthropicKey = anthropicProvider.apiKey;
+      }
+    }
+    
+    // Update global services via constructor if available, or try to update API keys
+    if (global.conversationEngine && typeof global.conversationEngine.updateApiKeys === 'function') {
+      global.conversationEngine.updateApiKeys(elevenLabsKey, openAIKey, anthropicKey);
+      logger.info('Conversation engine updated with new API keys');
+    }
+    
+    if (global.campaignService && typeof global.campaignService.updateApiKeys === 'function') {
+      global.campaignService.updateApiKeys(elevenLabsKey, openAIKey, anthropicKey);
+      logger.info('Campaign service updated with new API keys');
+    }
+    
+    logger.info('All services updated with new configuration');
+  } catch (error) {
+    logger.error(`Error updating services with new config: ${getErrorMessage(error)}`);
   }
-  return String(error);
 };
 
 // @desc    Get system configuration
@@ -172,6 +223,9 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
 
     await configuration.save();
 
+    // Update services with new API keys
+    await updateServicesWithNewConfig(configuration);
+    
     // Mask sensitive data before sending response
     const configToSend = configuration.toObject();
     

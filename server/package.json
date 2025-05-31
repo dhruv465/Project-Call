@@ -10,6 +10,8 @@
     "test": "jest"
   },
   "dependencies": {
+    "@tensorflow/tfjs": "^4.22.0",
+    "@types/uuid": "^10.0.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "csv-parser": "^3.2.0",
@@ -25,6 +27,7 @@
     "redis": "^4.6.6",
     "socket.io": "^4.6.1",
     "twilio": "^4.11.0",
+    "uuid": "^11.1.0",
     "winston": "^3.8.2"
   },
   "devDependencies": {

@@ -85,13 +85,14 @@ export declare class VoiceTrainingService {
         trainingComplete: boolean;
         modelVersion: string;
     }>;
+    private promoteModelsToProd;
     validateModelPerformance(testScenarios: any[]): Promise<{
         passed: number;
         failed: number;
         accuracy: number;
         detailedResults: any[];
     }>;
-    private simulateModelTraining;
+    private trainModel;
     private testScenario;
 }
 export default VoiceTrainingService;

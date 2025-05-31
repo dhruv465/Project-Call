@@ -1,5 +1,6 @@
 import { VoicePersonality, EmotionAnalysis, AdaptiveResponse } from './voiceAIService';
 import { SpeechAnalysis, ConversationContext } from './speechAnalysisService';
+import { LLMProvider } from './llmService';
 export interface ConversationTurn {
     id: string;
     timestamp: Date;
@@ -31,12 +32,14 @@ export interface CallSession {
         personalityChanges: number;
         adaptiveResponses: number;
     };
+    llmProvider?: LLMProvider;
 }
 export declare class ConversationEngineService {
     private voiceAI;
     private speechAnalysis;
+    private llmService;
     private activeSessions;
-    constructor(elevenLabsApiKey: string, openAIApiKey: string, googleSpeechKey?: string);
+    constructor(elevenLabsApiKey: string, openAIApiKey: string, anthropicApiKey?: string, googleSpeechKey?: string);
     initializeConversation(sessionId: string, leadId: string, campaignId: string, initialPersonality?: string, language?: 'English' | 'Hindi'): Promise<CallSession>;
     processCustomerInput(sessionId: string, audioBuffer?: Buffer, textInput?: string): Promise<{
         transcript: string;
@@ -58,6 +61,10 @@ export declare class ConversationEngineService {
     }>;
     getSession(sessionId: string): CallSession | undefined;
     getVoicePersonalities(): VoicePersonality[];
+    generateLLMResponse(sessionId: string, transcript: string, emotions: EmotionAnalysis, context: ConversationContext, personality: VoicePersonality): Promise<string>;
+    private createSystemPrompt;
+    private getTemperatureForPersonality;
+    private getFallbackResponse;
     private shouldChangePersonality;
     private selectOptimalPersonality;
     private calculateAverageEmotionScore;

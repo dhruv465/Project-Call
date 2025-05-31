@@ -2,18 +2,61 @@
 import { Request, Response } from 'express';
 import EnhancedVoiceAIService from '../services/enhancedVoiceAIService';
 import VoiceTrainingService from '../services/voiceTrainingService';
-import { logger } from '../index';
+import { logger, getErrorMessage } from '../index';
+import Configuration from '../models/Configuration';
 
 export class VoiceAIDemoController {
   private voiceAIService: EnhancedVoiceAIService;
   private trainingService: VoiceTrainingService;
 
   constructor() {
-    const elevenLabsKey = process.env.ELEVENLABS_API_KEY || '';
-    const openAIKey = process.env.OPENAI_API_KEY || '';
+    // Initialize with empty keys first, will update with proper credentials
+    this.voiceAIService = new EnhancedVoiceAIService('', '');
+    this.trainingService = new VoiceTrainingService('');
     
-    this.voiceAIService = new EnhancedVoiceAIService(elevenLabsKey, openAIKey);
-    this.trainingService = new VoiceTrainingService(openAIKey);
+    // Initialize with credentials asynchronously
+    this.initializeWithCredentials().catch(error => {
+      logger.error(`Error initializing VoiceAIDemoController with credentials: ${getErrorMessage(error)}`);
+    });
+  }
+  
+  // Get credentials from database configuration
+  private async initializeWithCredentials(): Promise<void> {
+    try {
+      // Get configuration from database
+      const config = await Configuration.findOne();
+      
+      let elevenLabsKey = '';
+      let openAIKey = '';
+      
+      if (config) {
+        // Use credentials from database
+        elevenLabsKey = config.elevenLabsConfig?.apiKey || '';
+        
+        const openAIProvider = config.llmConfig?.providers?.find((p: any) => p.name === 'openai');
+        openAIKey = openAIProvider?.apiKey || '';
+      } else {
+        // Fall back to environment variables if necessary
+        elevenLabsKey = process.env.ELEVENLABS_API_KEY || '';
+        openAIKey = process.env.OPENAI_API_KEY || '';
+        logger.warn('No configuration found in database, using environment variables as fallback');
+      }
+      
+      // Update services with credentials
+      this.voiceAIService = new EnhancedVoiceAIService(elevenLabsKey, openAIKey);
+      this.trainingService = new VoiceTrainingService(openAIKey);
+      
+      logger.info('VoiceAIDemoController initialized with credentials from configuration');
+    } catch (error) {
+      logger.error(`Failed to initialize with credentials: ${getErrorMessage(error)}`);
+      
+      // Fall back to environment variables if there's an error
+      const elevenLabsKey = process.env.ELEVENLABS_API_KEY || '';
+      const openAIKey = process.env.OPENAI_API_KEY || '';
+      
+      this.voiceAIService = new EnhancedVoiceAIService(elevenLabsKey, openAIKey);
+      this.trainingService = new VoiceTrainingService(openAIKey);
+    }
   }
 
   // Run comprehensive demo of all voice AI capabilities
@@ -152,7 +195,7 @@ export class VoiceAIDemoController {
       res.status(500).json({
         success: false,
         message: 'Failed to run Voice AI demo',
-        error: error.message
+        error: getErrorMessage(error)
       });
     }
   };
@@ -193,7 +236,7 @@ export class VoiceAIDemoController {
       logger.error(`Error testing personality ${personality.id}:`, error);
       return {
         personalityId: personality.id,
-        error: error.message
+        error: getErrorMessage(error)
       };
     }
   }
@@ -212,7 +255,7 @@ export class VoiceAIDemoController {
         primary: 'error',
         confidence: 0,
         intensity: 0,
-        context: error.message,
+        context: getErrorMessage(error),
         adaptationNeeded: false
       };
     }
@@ -248,7 +291,7 @@ export class VoiceAIDemoController {
       logger.error(`Error testing bilingual response for ${language}:`, error);
       return {
         language,
-        error: error.message
+        error: getErrorMessage(error)
       };
     }
   }
@@ -323,7 +366,7 @@ export class VoiceAIDemoController {
       logger.error(`Error testing conversation flow for ${scenario.name}:`, error);
       return {
         scenarioName: scenario.name,
-        error: error.message
+        error: getErrorMessage(error)
       };
     }
   }
@@ -365,7 +408,7 @@ export class VoiceAIDemoController {
       res.status(500).json({
         success: false,
         message: 'Failed to get Voice AI status',
-        error: error.message
+        error: getErrorMessage(error)
       });
     }
   };

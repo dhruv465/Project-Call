@@ -130,7 +130,7 @@ class VoiceAIDemoController {
                 res.status(500).json({
                     success: false,
                     message: 'Failed to run Voice AI demo',
-                    error: error.message
+                    error: (0, index_1.getErrorMessage)(error)
                 });
             }
         };
@@ -171,7 +171,7 @@ class VoiceAIDemoController {
                 res.status(500).json({
                     success: false,
                     message: 'Failed to get Voice AI status',
-                    error: error.message
+                    error: (0, index_1.getErrorMessage)(error)
                 });
             }
         };
@@ -206,7 +206,7 @@ class VoiceAIDemoController {
             index_1.logger.error(`Error testing personality ${personality.id}:`, error);
             return {
                 personalityId: personality.id,
-                error: error.message
+                error: (0, index_1.getErrorMessage)(error)
             };
         }
     }
@@ -222,7 +222,7 @@ class VoiceAIDemoController {
                 primary: 'error',
                 confidence: 0,
                 intensity: 0,
-                context: error.message,
+                context: (0, index_1.getErrorMessage)(error),
                 adaptationNeeded: false
             };
         }
@@ -247,7 +247,7 @@ class VoiceAIDemoController {
             index_1.logger.error(`Error testing bilingual response for ${language}:`, error);
             return {
                 language,
-                error: error.message
+                error: (0, index_1.getErrorMessage)(error)
             };
         }
     }
@@ -304,7 +304,7 @@ class VoiceAIDemoController {
             index_1.logger.error(`Error testing conversation flow for ${scenario.name}:`, error);
             return {
                 scenarioName: scenario.name,
-                error: error.message
+                error: (0, index_1.getErrorMessage)(error)
             };
         }
     }

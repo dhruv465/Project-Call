@@ -8,6 +8,7 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import winston from 'winston';
+import path from 'path';
 
 // Routes
 import userRoutes from './routes/userRoutes';
@@ -18,6 +19,13 @@ import dashboardRoutes from './routes/dashboardRoutes';
 import configurationRoutes from './routes/configurationRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import voiceAIRoutes from './routes/voiceAIRoutes';
+
+// Services initialization
+import { initializeSpeechService } from './services/realSpeechService';
+import ConversationEngineService from './services/conversationEngineService';
+import CampaignService from './services/campaignService';
+import leadService from './services/leadService';
+import { ModelRegistry } from './ml/pipeline/model_registry';
 
 // Load environment variables
 dotenv.config();
@@ -131,12 +139,100 @@ const connectDB = async () => {
   }
 };
 
+// Initialize services with configuration from database
+const initializeServices = async () => {
+  try {
+    // Get configuration from database
+    const Configuration = require('./models/Configuration').default;
+    const config = await Configuration.findOne();
+    
+    let elevenLabsApiKey = '';
+    let openAIApiKey = '';
+    let anthropicApiKey = '';
+    let googleSpeechApiKey = '';
+    
+    // If configuration exists, use it; otherwise fall back to env vars as temporary measure
+    if (config) {
+      logger.info('Using API configuration from database');
+      
+      // ElevenLabs
+      elevenLabsApiKey = config.elevenLabsConfig?.apiKey || process.env.ELEVENLABS_API_KEY || '';
+      
+      // LLM providers
+      const openAIProvider = config.llmConfig?.providers?.find((p: any) => p.name === 'openai');
+      openAIApiKey = openAIProvider?.apiKey || process.env.OPENAI_API_KEY || '';
+      
+      const anthropicProvider = config.llmConfig?.providers?.find((p: any) => p.name === 'anthropic');
+      anthropicApiKey = anthropicProvider?.apiKey || process.env.ANTHROPIC_API_KEY || '';
+      
+      // Google (if configured)
+      const googleProvider = config.llmConfig?.providers?.find((p: any) => p.name === 'google');
+      googleSpeechApiKey = googleProvider?.apiKey || process.env.GOOGLE_SPEECH_API_KEY || '';
+    } else {
+      logger.warn('No configuration found in database, using environment variables as fallback');
+      elevenLabsApiKey = process.env.ELEVENLABS_API_KEY || '';
+      openAIApiKey = process.env.OPENAI_API_KEY || '';
+      anthropicApiKey = process.env.ANTHROPIC_API_KEY || '';
+      googleSpeechApiKey = process.env.GOOGLE_SPEECH_API_KEY || '';
+    }
+
+    // Speech synthesis service
+    const speechService = initializeSpeechService(
+      elevenLabsApiKey,
+      path.join(__dirname, '../uploads/audio')
+    );
+
+    // Model registry
+    const modelRegistry = new ModelRegistry();
+
+    // Conversation engine
+    const conversationEngine = new ConversationEngineService(
+      elevenLabsApiKey,
+      openAIApiKey,
+      anthropicApiKey,
+      googleSpeechApiKey
+    );
+
+    // Campaign service
+    const campaignService = new CampaignService(
+      elevenLabsApiKey,
+      openAIApiKey,
+      anthropicApiKey,
+      googleSpeechApiKey
+    );
+    
+    // Export services
+    global.speechService = speechService;
+    global.modelRegistry = modelRegistry;
+    global.conversationEngine = conversationEngine;
+    global.campaignService = campaignService;
+    
+    return {
+      speechService,
+      modelRegistry,
+      conversationEngine,
+      campaignService
+    };
+  } catch (error) {
+    logger.error('Error initializing services:', error);
+    throw error;
+  }
+};
+
 // Start server
 const PORT = process.env.PORT || 8000;
-connectDB().then(() => {
-  server.listen(PORT, () => {
-    logger.info(`Server running on port ${PORT}`);
-  });
+connectDB().then(async () => {
+  try {
+    // Initialize services before starting the server
+    await initializeServices();
+    
+    server.listen(PORT, () => {
+      logger.info(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    logger.error('Failed to initialize services:', error);
+    process.exit(1);
+  }
 });
 
 // Handle unhandled promise rejections
@@ -146,4 +242,35 @@ process.on('unhandledRejection', (err: Error) => {
   server.close(() => process.exit(1));
 });
 
-export { app, io, logger };
+// Create helper for error handling
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as any).message);
+  }
+  return 'Unknown error occurred';
+}
+
+// Define global namespace for TypeScript
+declare global {
+  var speechService: any;
+  var modelRegistry: any;
+  var conversationEngine: any;
+  var campaignService: any;
+}
+
+export {
+  getErrorMessage
+};
+  campaignService,
+  leadService,
+  app,
+  io,
+  logger,
+  getErrorMessage
+};

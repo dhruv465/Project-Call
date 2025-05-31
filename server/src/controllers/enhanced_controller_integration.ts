@@ -2,7 +2,7 @@
 // This file provides the integration points for the new emotion detection models
 
 import ProductionEmotionService from '../services/productionEmotionService';
-import { logger } from '../index';
+import { logger, getErrorMessage } from '../index';
 import { Request, Response } from 'express';
 
 interface AudioFeatures {
@@ -69,7 +69,7 @@ export class EnhancedVoiceAIController {
       res.status(500).json({
         success: false,
         message: 'Failed to analyze emotion',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: getErrorMessage(error)
       });
     }
   }
@@ -106,7 +106,7 @@ export class EnhancedVoiceAIController {
       res.status(500).json({
         success: false,
         message: 'Failed to analyze emotion from audio',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: getErrorMessage(error)
       });
     }
   }
@@ -143,7 +143,7 @@ export class EnhancedVoiceAIController {
       res.status(500).json({
         success: false,
         message: 'Failed to analyze emotion using multimodal approach',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: getErrorMessage(error)
       });
     }
   }
@@ -177,7 +177,7 @@ export class EnhancedVoiceAIController {
       res.status(500).json({
         success: false,
         message: 'Failed to get model status',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: getErrorMessage(error)
       });
     }
   }

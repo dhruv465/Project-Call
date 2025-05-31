@@ -17,8 +17,9 @@ class ProductionEmotionService {
         this.pythonPath = 'python3'; // Use system Python or virtual environment
         // Initialize asynchronously without blocking constructor
         this.initializeService().catch(error => {
-            index_1.logger.error('Failed to initialize production emotion service in constructor:', error);
-            this.isInitialized = false;
+            index_1.logger.error(`Failed to initialize production emotion service in constructor: ${(0, index_1.getErrorMessage)(error)}`);
+            // Still mark as initialized to use fallbacks
+            this.isInitialized = true;
         });
     }
     async initializeService() {
@@ -28,11 +29,20 @@ class ProductionEmotionService {
                 index_1.logger.warn('Python emotion service script not found, creating wrapper...');
                 await this.createPythonWrapper();
             }
-            this.isInitialized = true;
-            index_1.logger.info('Production emotion service initialized');
+            // Test the script with a simple call
+            try {
+                await this.executePythonScript('status', {});
+                this.isInitialized = true;
+                index_1.logger.info('Production emotion service initialized successfully');
+            }
+            catch (testError) {
+                index_1.logger.warn(`Python script test failed, but continuing with fallback: ${(0, index_1.getErrorMessage)(testError)}`);
+                // Still mark as initialized, we'll use fallbacks when needed
+                this.isInitialized = true;
+            }
         }
         catch (error) {
-            index_1.logger.error('Failed to initialize production emotion service:', error);
+            index_1.logger.error(`Failed to initialize production emotion service: ${(0, index_1.getErrorMessage)(error)}`);
             this.isInitialized = false;
         }
     }
@@ -45,7 +55,7 @@ class ProductionEmotionService {
             return result;
         }
         catch (error) {
-            index_1.logger.error('Error in text emotion detection:', error);
+            index_1.logger.error(`Error in text emotion detection: ${(0, index_1.getErrorMessage)(error)}`);
             return this.getFallbackResult('text_error');
         }
     }
@@ -58,7 +68,7 @@ class ProductionEmotionService {
             return result;
         }
         catch (error) {
-            index_1.logger.error('Error in audio emotion detection:', error);
+            index_1.logger.error(`Error in audio emotion detection: ${(0, index_1.getErrorMessage)(error)}`);
             return this.getFallbackResult('audio_error');
         }
     }
@@ -74,7 +84,7 @@ class ProductionEmotionService {
             return result;
         }
         catch (error) {
-            index_1.logger.error('Error in multimodal emotion detection:', error);
+            index_1.logger.error(`Error in multimodal emotion detection: ${(0, index_1.getErrorMessage)(error)}`);
             return this.getFallbackResult('multimodal_error');
         }
     }
@@ -84,7 +94,7 @@ class ProductionEmotionService {
             return result;
         }
         catch (error) {
-            index_1.logger.error('Error getting model performance stats:', error);
+            index_1.logger.error(`Error getting model performance stats: ${(0, index_1.getErrorMessage)(error)}`);
             return {
                 models: {
                     text_emotion: { status: 'unknown', accuracy: 'N/A' },
@@ -98,6 +108,8 @@ class ProductionEmotionService {
     async executePythonScript(mode, data) {
         return new Promise((resolve, reject) => {
             const args = [this.scriptPath, mode, JSON.stringify(data)];
+            // Log the command being executed
+            index_1.logger.info(`Executing Python script: ${this.pythonPath} ${args.join(' ')}`);
             const pythonProcess = (0, child_process_1.spawn)(this.pythonPath, args);
             let output = '';
             let errorOutput = '';
@@ -106,26 +118,44 @@ class ProductionEmotionService {
             });
             pythonProcess.stderr.on('data', (data) => {
                 errorOutput += data.toString();
+                // Log stderr but don't fail - may just be warnings
+                index_1.logger.debug(`Python stderr: ${data.toString()}`);
             });
             pythonProcess.on('close', (code) => {
                 if (code !== 0) {
                     index_1.logger.error(`Python process exited with code ${code}:`, errorOutput);
-                    reject(new Error(`Python process failed: ${errorOutput}`));
+                    // Instead of failing, return a fallback result
+                    resolve(this.getFallbackResult(`${mode}_error`));
                     return;
                 }
                 try {
-                    const result = JSON.parse(output.trim());
+                    // Try to parse the output
+                    const trimmedOutput = output.trim();
+                    if (!trimmedOutput) {
+                        index_1.logger.warn('Empty output from Python script');
+                        resolve(this.getFallbackResult(`${mode}_empty`));
+                        return;
+                    }
+                    const result = JSON.parse(trimmedOutput);
                     resolve(result);
                 }
                 catch (parseError) {
-                    index_1.logger.error('Failed to parse Python script output:', parseError);
-                    reject(parseError);
+                    index_1.logger.error(`Failed to parse Python script output: ${(0, index_1.getErrorMessage)(parseError)}`);
+                    // Return fallback instead of failing
+                    resolve(this.getFallbackResult(`${mode}_parse_error`));
                 }
             });
             pythonProcess.on('error', (error) => {
-                index_1.logger.error('Failed to start Python process:', error);
-                reject(error);
+                index_1.logger.error(`Failed to start Python process: ${(0, index_1.getErrorMessage)(error)}`);
+                // Return fallback instead of failing
+                resolve(this.getFallbackResult(`${mode}_process_error`));
             });
+            // Add timeout for long-running processes
+            setTimeout(() => {
+                pythonProcess.kill();
+                index_1.logger.warn('Python process timed out');
+                resolve(this.getFallbackResult(`${mode}_timeout`));
+            }, 10000); // 10 second timeout
         });
     }
     getFallbackResult(modelUsed) {

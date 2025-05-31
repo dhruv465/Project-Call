@@ -50,6 +50,33 @@ export class SpeechAnalysisService {
     this.googleSpeechKey = googleSpeechKey;
   }
 
+  /**
+   * Update API keys for the service
+   */
+  public updateApiKeys(openAIApiKey?: string, googleSpeechKey?: string): void {
+    if (openAIApiKey) {
+      this.openAIApiKey = openAIApiKey;
+    }
+    if (googleSpeechKey !== undefined) {
+      this.googleSpeechKey = googleSpeechKey;
+    }
+    logger.info('SpeechAnalysisService API keys updated');
+  }
+
+  /**
+   * Get current OpenAI API key
+   */
+  public getOpenAIApiKey(): string {
+    return this.openAIApiKey;
+  }
+
+  /**
+   * Get current Google Speech API key
+   */
+  public getGoogleSpeechKey(): string | undefined {
+    return this.googleSpeechKey;
+  }
+
   // Speech-to-Text with Language Detection
   async transcribeAudio(
     audioBuffer: Buffer,
