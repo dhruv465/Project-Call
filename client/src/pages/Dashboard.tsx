@@ -164,11 +164,11 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
         
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant={timeframe === 'week' ? 'default' : 'outline'}
             size="sm"
@@ -243,55 +243,57 @@ const Dashboard = () => {
       </div>
 
       {/* Charts and Data Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
         {/* Main Chart */}
-        <Card className="col-span-2 p-4">
+        <Card className="xl:col-span-2 p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium">Call Volume Trends</h3>
+            <h3 className="text-base sm:text-lg font-medium">Call Volume Trends</h3>
             <LineChart className="h-5 w-5 text-muted-foreground" />
           </div>
-          <div className="h-[300px] flex items-center justify-center border-t pt-4">
+          <div className="h-[250px] sm:h-[300px] flex items-center justify-center border-t pt-4">
             {!dashboardData ? (
-              <p className="text-muted-foreground text-sm">No data available for chart visualization</p>
+              <p className="text-muted-foreground text-xs sm:text-sm text-center px-4">No data available for chart visualization</p>
             ) : (
-              <p className="text-muted-foreground text-sm">Chart visualization will be implemented with Chart.js</p>
+              <p className="text-muted-foreground text-xs sm:text-sm text-center px-4">Chart visualization will be implemented with Chart.js</p>
             )}
           </div>
         </Card>
 
         {/* Call Outcomes */}
-        <Card className="p-4">
+        <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium">Call Outcomes</h3>
+            <h3 className="text-base sm:text-lg font-medium">Call Outcomes</h3>
             <PieChart className="h-5 w-5 text-muted-foreground" />
           </div>
-          <div className="h-[300px] flex items-center justify-center border-t pt-4">
+          <div className="h-[250px] sm:h-[300px] flex items-center justify-center border-t pt-4">
             {!dashboardData ? (
-              <p className="text-muted-foreground text-sm">No data available for chart visualization</p>
+              <p className="text-muted-foreground text-xs sm:text-sm text-center px-4">No data available for chart visualization</p>
             ) : (
-              <p className="text-muted-foreground text-sm">Pie chart visualization will be implemented with Chart.js</p>
+              <p className="text-muted-foreground text-xs sm:text-sm text-center px-4">Pie chart visualization will be implemented with Chart.js</p>
             )}
           </div>
         </Card>
       </div>
 
       {/* Recent Activity and Callbacks */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Recent Calls */}
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium">Recent Calls</h3>
-            <Button variant="outline" size="sm">View All</Button>
+        <Card className="p-4 sm:p-6">
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <h3 className="text-base sm:text-lg font-medium">Recent Calls</h3>
+            <div className="flex-shrink-0">
+              <Button variant="outline" size="sm">View All</Button>
+            </div>
           </div>
           {displayData.recentCalls && displayData.recentCalls.length > 0 ? (
             <div className="divide-y">
               {displayData.recentCalls.map((call: RecentCall) => (
-                <div key={call.id} className="py-3 flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">{call.leadName}</p>
+                <div key={call.id} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate">{call.leadName}</p>
                     <p className="text-sm text-muted-foreground">{call.time} • {call.duration}</p>
                   </div>
-                  <div>
+                  <div className="flex-shrink-0">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       call.outcome === 'Interested' 
                         ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' 
@@ -307,38 +309,38 @@ const Dashboard = () => {
             </div>
           ) : (
             <div className="py-8 text-center border-t">
-              <p className="text-muted-foreground">No recent calls to display</p>
+              <p className="text-muted-foreground text-sm">No recent calls to display</p>
             </div>
           )}
         </Card>
 
         {/* Upcoming Callbacks */}
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium">Upcoming Callbacks</h3>
+        <Card className="p-4 sm:p-6">
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <h3 className="text-base sm:text-lg font-medium">Upcoming Callbacks</h3>
             <Button variant="outline" size="sm">View All</Button>
           </div>
           {displayData.upcomingCallbacks && displayData.upcomingCallbacks.length > 0 ? (
             <div className="divide-y">
               {displayData.upcomingCallbacks.map((callback: UpcomingCallback) => (
                 <div key={callback.id} className="py-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{callback.leadName}</p>
-                      <p className="text-sm text-muted-foreground">{callback.company}</p>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium truncate">{callback.leadName}</p>
+                      <p className="text-sm text-muted-foreground truncate">{callback.company}</p>
                     </div>
                     <Button variant="outline" size="sm">Call Now</Button>
                   </div>
                   <div className="flex items-center mt-2 text-sm text-muted-foreground">
-                    <Calendar className="h-4 w-4 mr-1" />
-                    {callback.date}, {callback.time}
+                    <Calendar className="h-4 w-4 mr-1 flex-shrink-0" />
+                    <span className="truncate">{callback.date}, {callback.time}</span>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
             <div className="py-8 text-center border-t">
-              <p className="text-muted-foreground">No upcoming callbacks scheduled</p>
+              <p className="text-muted-foreground text-sm">No upcoming callbacks scheduled</p>
             </div>
           )}
         </Card>

@@ -12,6 +12,8 @@ import {
   ChevronDown,
   AlertTriangle,
   RefreshCw,
+  Info,
+  CheckCircle,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +23,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card';
 import api from '@/services/api';
 
 interface AnalyticsData {
@@ -118,11 +125,17 @@ const Analytics = () => {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Analytics</h1>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="h-8 bg-muted rounded w-48 animate-pulse"></div>
+          <div className="flex gap-2">
+            <div className="h-10 bg-muted rounded w-32 animate-pulse"></div>
+            <div className="h-10 bg-muted rounded w-24 animate-pulse"></div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="p-6">
+            <Card key={i} className="p-4 sm:p-6">
               <div className="animate-pulse">
                 <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
                 <div className="h-8 bg-muted rounded w-1/2"></div>
@@ -136,9 +149,9 @@ const Analytics = () => {
 
   if (error) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Analytics Dashboard</h1>
-        <Card className="p-8 text-center">
+      <div className="space-y-4 sm:space-y-6">
+        <h1 className="text-2xl sm:text-3xl font-bold">Analytics Dashboard</h1>
+        <Card className="p-6 sm:p-8 text-center">
           <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
           <h3 className="text-lg font-semibold mb-2">Failed to load analytics data</h3>
           <p className="text-muted-foreground mb-4">
@@ -170,16 +183,18 @@ const Analytics = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">Analytics Dashboard</h1>
-        <div className="flex gap-2">
+        <h1 className="text-2xl sm:text-3xl font-bold">Analytics Dashboard</h1>
+        <div className="flex flex-col sm:flex-row gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="flex items-center gap-1">
-                <Calendar className="h-4 w-4" />
-                Last {dateRange} days
+              <Button variant="outline" className="flex items-center gap-1 justify-between sm:justify-center">
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  <span className="truncate">Last {dateRange} days</span>
+                </div>
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -199,77 +214,141 @@ const Analytics = () => {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="p-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+        <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Total Calls</p>
-              <p className="text-2xl font-bold">{formatNumber(displayData.summary.totalCalls)}</p>
+            <div className="flex items-center gap-2 min-w-0">
+              <Phone className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+              <h3 className="font-medium truncate">Total Calls</h3>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 p-0 flex-shrink-0">
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                    <span className="sr-only">Info</span>
+                  </Button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Total Calls</h4>
+                    <p className="text-sm text-muted-foreground">
+                      The total number of outbound calls made in the selected time period, including completed and failed calls.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
             </div>
-            <Phone className="h-8 w-8 text-primary" />
+            <p className="text-xl sm:text-2xl font-bold">{formatNumber(displayData.summary.totalCalls)}</p>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
+          <div className="text-xs text-muted-foreground">
             {displayData.summary.completedCalls} completed, {displayData.summary.failedCalls} failed
-          </p>
+          </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Success Rate</p>
-              <p className="text-2xl font-bold">{displayData.summary.successRate.toFixed(1)}%</p>
+            <div className="flex items-center gap-2 min-w-0">
+              <CheckCircle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+              <h3 className="font-medium truncate">Success Rate</h3>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 p-0 flex-shrink-0">
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                    <span className="sr-only">Info</span>
+                  </Button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Success Rate</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Percentage of calls that were successfully completed with a positive outcome.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
             </div>
-            <TrendingUp className="h-8 w-8 text-green-500" />
+            <p className="text-xl sm:text-2xl font-bold">{displayData.summary.successRate.toFixed(1)}%</p>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            Based on completed calls
-          </p>
+          <div className="text-xs text-muted-foreground">
+            Based on {displayData.summary.completedCalls} completed calls
+          </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Conversion Rate</p>
-              <p className="text-2xl font-bold">{displayData.summary.conversionRate.toFixed(1)}%</p>
+            <div className="flex items-center gap-2 min-w-0">
+              <Target className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+              <h3 className="font-medium truncate">Conversion Rate</h3>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 p-0 flex-shrink-0">
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                    <span className="sr-only">Info</span>
+                  </Button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Conversion Rate</h4>
+                    <p className="text-sm text-muted-foreground">
+                      The percentage of calls that resulted in a positive outcome, such as a sale or appointment.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
             </div>
-            <Target className="h-8 w-8 text-blue-500" />
+            <p className="text-xl sm:text-2xl font-bold">{displayData.summary.conversionRate.toFixed(1)}%</p>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
+          <div className="text-xs text-muted-foreground">
             Positive outcomes
-          </p>
+          </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Avg Duration</p>
-              <p className="text-2xl font-bold">{formatDuration(displayData.summary.averageDuration)}</p>
+            <div className="flex items-center gap-2 min-w-0">
+              <Clock className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+              <h3 className="font-medium truncate">Avg Duration</h3>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 p-0 flex-shrink-0">
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                    <span className="sr-only">Info</span>
+                  </Button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Average Duration</h4>
+                    <p className="text-sm text-muted-foreground">
+                      The average length of time that calls lasted, including talk time and hold time.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
             </div>
-            <Clock className="h-8 w-8 text-purple-500" />
+            <p className="text-xl sm:text-2xl font-bold">{formatDuration(displayData.summary.averageDuration)}</p>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
+          <div className="text-xs text-muted-foreground">
             Per completed call
-          </p>
+          </div>
         </Card>
       </div>
 
       {/* Call Volume Chart */}
-      <Card className="p-6">
+      <Card className="p-4 sm:p-6">
         <h3 className="text-lg font-semibold mb-4">Call Volume Trends</h3>
-        <div className="h-64 flex items-end justify-center gap-1">
+        <div className="h-48 sm:h-64 flex items-end justify-center gap-1 overflow-x-auto">
           {displayData.callsByDay.length > 0 ? (
             displayData.callsByDay.slice(-14).map((day: { _id: string; count: number; completed: number; successful: number }) => {
               const maxCount = Math.max(...displayData.callsByDay.map((d: { _id: string; count: number; completed: number; successful: number }) => d.count));
               return (
-                <div key={day._id} className="flex flex-col items-center gap-1">
+                <div key={day._id} className="flex flex-col items-center gap-1 flex-shrink-0">
                   <div
-                    className="w-6 bg-primary rounded-t"
+                    className="w-4 sm:w-6 bg-primary rounded-t"
                     style={{
-                      height: `${Math.max(maxCount > 0 ? (day.count / maxCount) * 200 : 4, 4)}px`,
+                      height: `${Math.max(maxCount > 0 ? (day.count / maxCount) * 150 : 4, 4)}px`,
                     }}
                     title={`${day.count} calls on ${new Date(day._id).toLocaleDateString()}`}
                   />
-                  <span className="text-xs text-muted-foreground transform -rotate-45 origin-left">
+                  <span className="text-xs text-muted-foreground transform -rotate-45 origin-left whitespace-nowrap">
                     {new Date(day._id).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </span>
                 </div>
@@ -278,8 +357,8 @@ const Analytics = () => {
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <div className="text-center">
-                <BarChart3 className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>No call data available</p>
+                <BarChart3 className="h-8 sm:h-12 w-8 sm:w-12 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No call data available</p>
               </div>
             </div>
           )}
@@ -288,15 +367,15 @@ const Analytics = () => {
 
       {/* Outcome Distribution */}
       {displayData.summary.outcomes && Object.keys(displayData.summary.outcomes).length > 0 ? (
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <h3 className="text-lg font-semibold mb-4">Call Outcomes</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
             {Object.entries(displayData.summary.outcomes).map(([outcome, count]) => (
               <div key={outcome} className="text-center">
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getOutcomeColor(outcome)}`}>
+                <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${getOutcomeColor(outcome)}`}>
                   {outcome.replace('-', ' ')}
                 </span>
-                <p className="text-2xl font-bold mt-2">{String(count)}</p>
+                <p className="text-xl sm:text-2xl font-bold mt-2">{String(count)}</p>
                 <p className="text-xs text-muted-foreground">
                   {displayData.summary.completedCalls > 0 
                     ? (((count as number) / displayData.summary.completedCalls) * 100).toFixed(1)
@@ -307,20 +386,20 @@ const Analytics = () => {
           </div>
         </Card>
       ) : (
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <h3 className="text-lg font-semibold mb-4">Call Outcomes</h3>
           <div className="flex items-center justify-center h-32 text-muted-foreground">
             <div className="text-center">
-              <Target className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p>No outcome data available</p>
+              <Target className="h-8 sm:h-12 w-8 sm:w-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No outcome data available</p>
             </div>
           </div>
         </Card>
       )}
 
       {/* Performance Insights */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        <Card className="p-4 sm:p-6">
           <h3 className="text-lg font-semibold mb-4">Performance Summary</h3>
           <div className="space-y-4">
             <div className="flex justify-between items-center">
@@ -350,16 +429,16 @@ const Analytics = () => {
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <h3 className="text-lg font-semibold mb-4">Quick Stats</h3>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 dark:bg-green-800 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-green-100 dark:bg-green-800 rounded-xl flex items-center justify-center flex-shrink-0">
                 <TrendingUp className="h-5 w-5 text-green-600 dark:text-green-300" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm text-muted-foreground">Best performing day</p>
-                <p className="font-semibold">
+                <p className="font-semibold truncate">
                   {displayData.callsByDay.length > 0 
                     ? new Date(displayData.callsByDay.reduce((best: any, day: any) => 
                         day.successful > best.successful ? day : best
@@ -369,10 +448,10 @@ const Analytics = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-800 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-800 rounded-xl flex items-center justify-center flex-shrink-0">
                 <Users className="h-5 w-5 text-blue-600 dark:text-blue-300" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm text-muted-foreground">Total contacts reached</p>
                 <p className="font-semibold">{formatNumber(displayData.summary.completedCalls)}</p>
               </div>

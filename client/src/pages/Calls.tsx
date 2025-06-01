@@ -4,6 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Phone, 
   PhoneCall, 
   Search, 
@@ -13,9 +20,20 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  ChevronDown,
 } from 'lucide-react';
 import { callsApi } from '@/services/callsApi';
 import { useToast } from '@/components/ui/use-toast';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from '@/components/ui/resizable';
 
 interface Call {
   id: string;
@@ -198,16 +216,16 @@ const Calls = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Call History</h1>
-          <p className="text-muted-foreground">
+      <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
+        <div className="min-w-0 flex-shrink-0">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight truncate">Call History</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">
             View and manage all your AI-generated calls
           </p>
         </div>
-        <div className="flex space-x-2">
+        <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
           <Button
             variant="outline"
             onClick={() => handleExportCalls('csv')}
@@ -227,7 +245,7 @@ const Calls = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Calls</CardTitle>
@@ -273,39 +291,55 @@ const Calls = () => {
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search calls..."
-                  value={searchTerm}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
+      <Collapsible className="w-full">
+        <Card>
+          <CardHeader className="p-3 sm:p-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base sm:text-lg">Filters</CardTitle>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="p-0 h-8 w-8">
+                  <ChevronDown className="h-4 w-4" />
+                  <span className="sr-only">Toggle filters</span>
+                </Button>
+              </CollapsibleTrigger>
+            </div>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="pt-0 px-3 sm:px-4">
+              <div className="flex flex-col space-y-4 sm:flex-row sm:gap-4 sm:space-y-0">
+                <div className="flex-1 min-w-0">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search calls..."
+                      value={searchTerm}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
+                </div>
+                <div className="w-full sm:w-48">
+                  <Select
+                    value={statusFilter}
+                    onValueChange={setStatusFilter}
+                  >
+                    <SelectTrigger className="w-full h-10 rounded-xl">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="failed">Failed</SelectItem>
+                      <SelectItem value="in-progress">In Progress</SelectItem>
+                      <SelectItem value="scheduled">Scheduled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
-            <div className="w-48">
-              <select
-                className="w-full h-10 px-3 rounded-xl border border-input bg-background"
-                value={statusFilter}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStatusFilter(e.target.value)}
-              >
-                <option value="all">All Status</option>
-                <option value="completed">Completed</option>
-                <option value="failed">Failed</option>
-                <option value="in-progress">In Progress</option>
-                <option value="scheduled">Scheduled</option>
-              </select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Calls List */}
       <Card>
@@ -315,43 +349,104 @@ const Calls = () => {
             {filteredCalls.length} call{filteredCalls.length !== 1 ? 's' : ''} found
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-3 sm:p-6">
           <div className="space-y-4">
             {filteredCalls.map((call: Call) => (
-              <div
-                key={call.id}
-                className="flex items-center justify-between p-4 border rounded-xl hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-2">
-                    {getStatusIcon(call.status)}
-                    <div>
-                      <p className="font-medium">{call.leadName}</p>
-                      <p className="text-sm text-muted-foreground">{call.leadPhone}</p>
-                    </div>
-                  </div>
-                  <div className="hidden md:block">
-                    <p className="text-sm font-medium">{call.campaignName}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {call.callDate.toLocaleDateString()} at {call.callDate.toLocaleTimeString()}
-                    </p>
-                  </div>
+              <div key={call.id}>
+                {/* Desktop Layout - Hidden on mobile */}
+                <div className="hidden lg:block">
+                  <ResizablePanelGroup
+                    direction="horizontal"
+                    className="border rounded-xl hover:bg-muted/50 transition-colors"
+                  >
+                    <ResizablePanel defaultSize={70}>
+                      <div className="flex items-center space-x-4 p-4 h-full">
+                        <div className="flex items-center space-x-2">
+                          {getStatusIcon(call.status)}
+                          <div>
+                            <p className="font-medium">{call.leadName}</p>
+                            <p className="text-sm text-muted-foreground">{call.leadPhone}</p>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{call.campaignName}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {call.callDate.toLocaleDateString()} at {call.callDate.toLocaleTimeString()}
+                          </p>
+                        </div>
+                      </div>
+                    </ResizablePanel>
+                    
+                    <ResizableHandle withHandle />
+                    
+                    <ResizablePanel defaultSize={30}>
+                      <div className="flex items-center justify-end space-x-4 p-4 h-full">
+                        <div className="text-right">
+                          <p className="text-sm font-medium">{formatDuration(call.duration)}</p>
+                          {getOutcomeBadge(call.outcome)}
+                        </div>
+                        {call.recordingUrl && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handlePlayRecording(call.id, call.recordingUrl)}
+                          >
+                            <Volume2 className="h-4 w-4 mr-1" />
+                            {currentPlayingId === call.id ? 'Pause' : 'Play'}
+                          </Button>
+                        )}
+                      </div>
+                    </ResizablePanel>
+                  </ResizablePanelGroup>
                 </div>
-                <div className="flex items-center space-x-4">
-                  <div className="text-right hidden sm:block">
-                    <p className="text-sm font-medium">{formatDuration(call.duration)}</p>
-                    {getOutcomeBadge(call.outcome)}
-                  </div>
-                  {call.recordingUrl && (
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handlePlayRecording(call.id, call.recordingUrl)}
-                    >
-                      <Volume2 className="h-4 w-4 mr-1" />
-                      {currentPlayingId === call.id ? 'Pause' : 'Play'}
-                    </Button>
-                  )}
+
+                {/* Mobile Layout - Hidden on desktop */}
+                <div className="lg:hidden">
+                  <Card className="hover:bg-muted/50 transition-colors">
+                    <CardContent className="p-4">
+                      <div className="space-y-3">
+                        {/* Header row */}
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center space-x-2 min-w-0 flex-1">
+                            {getStatusIcon(call.status)}
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium truncate">{call.leadName}</p>
+                              <p className="text-sm text-muted-foreground truncate">{call.leadPhone}</p>
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0 ml-2">
+                            {getOutcomeBadge(call.outcome)}
+                          </div>
+                        </div>
+
+                        {/* Campaign and date row */}
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium truncate">{call.campaignName}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {call.callDate.toLocaleDateString()} at {call.callDate.toLocaleTimeString()}
+                          </p>
+                        </div>
+
+                        {/* Duration and actions row */}
+                        <div className="flex items-center justify-between pt-2 border-t">
+                          <div className="text-sm font-medium">
+                            Duration: {formatDuration(call.duration)}
+                          </div>
+                          {call.recordingUrl && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handlePlayRecording(call.id, call.recordingUrl)}
+                              className="flex-shrink-0"
+                            >
+                              <Volume2 className="h-4 w-4 mr-1" />
+                              {currentPlayingId === call.id ? 'Pause' : 'Play'}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
             ))}

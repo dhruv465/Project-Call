@@ -289,10 +289,10 @@ const Leads = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">Lead Management</h1>
-        <div className="flex items-center gap-2">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl sm:text-3xl font-bold">Lead Management</h1>
+        <div className="flex flex-col sm:flex-row gap-2">
           <Button onClick={() => setIsImportDialogOpen(true)} variant="outline" size="sm">
             <Upload className="h-4 w-4 mr-2" />
             Import
@@ -324,7 +324,7 @@ const Leads = () => {
       </div>
 
       {/* Filters and Search */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row">
         <div className="relative flex-grow">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
@@ -336,12 +336,14 @@ const Leads = () => {
           />
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="flex items-center gap-1">
-                <Filter className="h-4 w-4" />
-                Status: {statusFilter}
+              <Button variant="outline" className="flex items-center gap-1 justify-between sm:justify-center">
+                <div className="flex items-center gap-1">
+                  <Filter className="h-4 w-4" />
+                  <span className="truncate">Status: {statusFilter}</span>
+                </div>
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -358,9 +360,11 @@ const Leads = () => {
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="flex items-center gap-1">
-                <Filter className="h-4 w-4" />
-                Source: {sourceFilter}
+              <Button variant="outline" className="flex items-center gap-1 justify-between sm:justify-center">
+                <div className="flex items-center gap-1">
+                  <Filter className="h-4 w-4" />
+                  <span className="truncate">Source: {sourceFilter}</span>
+                </div>
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -376,8 +380,8 @@ const Leads = () => {
         </div>
       </div>
 
-      {/* Leads Table */}
-      <Card>
+      {/* Leads Table - Desktop */}
+      <Card className="hidden lg:block">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -403,8 +407,148 @@ const Leads = () => {
                     </td>
                     <td className="p-4">{lead.phoneNumber}</td>
                     <td className="p-4">{lead.source}</td>
-                  <td className="p-4">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    <td className="p-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        lead.status === 'New' 
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100' 
+                          : lead.status === 'Contacted'
+                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-100'
+                          : lead.status === 'Qualified'
+                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-800 dark:text-amber-100'
+                          : lead.status === 'Not Interested'
+                          ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
+                          : lead.status === 'Converted'
+                          ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
+                          : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100'
+                      }`}>
+                        {lead.status}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      {lead.lastContacted 
+                        ? new Date(lead.lastContacted).toLocaleDateString() 
+                        : 'Never'}
+                    </td>
+                    <td className="p-4">{lead.languagePreference}</td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCallLead(lead.id)}
+                          title="Call"
+                        >
+                          <Phone className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditLead(lead.id)}
+                          title="Edit"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleEditLead(lead.id)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit Lead
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleCallLead(lead.id)}>
+                              <Phone className="h-4 w-4 mr-2" />
+                              Call Lead
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleDeleteLead(lead.id)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete Lead
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                    No leads found. Add your first lead to get started.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Leads Cards - Mobile/Tablet */}
+      <div className="lg:hidden space-y-4">
+        {(leadsData?.leads || []).length > 0 ? (
+          (leadsData?.leads || []).map((lead: Lead) => (
+            <Card key={lead.id} className="p-4">
+              <div className="flex flex-col space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-base truncate">{lead.name}</h3>
+                    {lead.company && (
+                      <p className="text-sm text-muted-foreground truncate">{lead.company}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 ml-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCallLead(lead.id)}
+                      title="Call"
+                    >
+                      <Phone className="h-4 w-4" />
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleEditLead(lead.id)}>
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit Lead
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleCallLead(lead.id)}>
+                          <Phone className="h-4 w-4 mr-2" />
+                          Call Lead
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => handleDeleteLead(lead.id)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete Lead
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Phone:</span>
+                    <p className="font-medium truncate">{lead.phoneNumber}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Source:</span>
+                    <p className="font-medium truncate">{lead.source}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Status:</span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mt-1 ${
                       lead.status === 'New' 
                         ? 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100' 
                         : lead.status === 'Contacted'
@@ -419,97 +563,60 @@ const Leads = () => {
                     }`}>
                       {lead.status}
                     </span>
-                  </td>
-                  <td className="p-4">
-                    {lead.lastContacted 
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Language:</span>
+                    <p className="font-medium truncate">{lead.languagePreference}</p>
+                  </div>
+                </div>
+                
+                <div className="pt-2 border-t">
+                  <span className="text-xs text-muted-foreground">
+                    Last contacted: {lead.lastContacted 
                       ? new Date(lead.lastContacted).toLocaleDateString() 
                       : 'Never'}
-                  </td>
-                  <td className="p-4">{lead.languagePreference}</td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleCallLead(lead.id)}
-                        title="Call"
-                      >
-                        <Phone className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEditLead(lead.id)}
-                        title="Edit"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleEditLead(lead.id)}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit Lead
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleCallLead(lead.id)}>
-                            <Phone className="h-4 w-4 mr-2" />
-                            Call Lead
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => handleDeleteLead(lead.id)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete Lead
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </td>
-                </tr>
-              ))
-              ) : (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                    No leads found. Add your first lead to get started.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {leadsData && leadsData.pagination && (
-          <div className="flex items-center justify-between p-4 border-t">
-            <p className="text-sm text-muted-foreground">
-              Showing {((leadsData.pagination.page - 1) * leadsData.pagination.limit) + 1} to {Math.min(leadsData.pagination.page * leadsData.pagination.limit, leadsData.pagination.total)} of {leadsData.pagination.total} leads
+                  </span>
+                </div>
+              </div>
+            </Card>
+          ))
+        ) : (
+          <Card className="p-8 text-center">
+            <p className="text-muted-foreground">
+              No leads found. Add your first lead to get started.
             </p>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, leadsData.pagination.pages))}
-                disabled={currentPage === leadsData.pagination.pages}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+          </Card>
         )}
-      </Card>
+      </div>
+
+      {/* Pagination */}
+      {leadsData && leadsData.pagination && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border rounded-xl bg-card">
+          <p className="text-sm text-muted-foreground text-center sm:text-left">
+            Showing {((leadsData.pagination.page - 1) * leadsData.pagination.limit) + 1} to {Math.min(leadsData.pagination.page * leadsData.pagination.limit, leadsData.pagination.total)} of {leadsData.pagination.total} leads
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-3"
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, leadsData.pagination.pages))}
+              disabled={currentPage === leadsData.pagination.pages}
+              className="px-3"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Import Dialog */}
       <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>

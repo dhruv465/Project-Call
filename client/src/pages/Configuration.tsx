@@ -6,6 +6,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { 
   Settings, 
   Save, 
@@ -293,16 +300,16 @@ Keep the conversation natural and engaging. If they're not interested, politely 
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Configuration</h1>
-          <p className="text-muted-foreground">
+      <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
+        <div className="min-w-0 flex-shrink-0">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight truncate">Configuration</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">
             Configure your AI calling system settings
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:gap-2">
           <Button variant="outline" onClick={handleTestConnection} disabled={testingConnection}>
             {testingConnection ? (
               <TestTube className="h-4 w-4 mr-2 animate-spin" />
@@ -323,7 +330,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
       </div>
 
       {/* Status Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Voice Provider</CardTitle>
@@ -386,19 +393,22 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="voiceProvider">Voice Provider</Label>
-              <select
-                id="voiceProvider"
-                className="w-full h-10 px-3 rounded-xl border border-input bg-background"
+              <Select
                 value={config.voiceProvider}
-                onChange={(e) => updateConfig('voiceProvider', e.target.value)}
+                onValueChange={(value) => updateConfig('voiceProvider', value)}
               >
-                <option value="elevenlabs">ElevenLabs</option>
-                <option value="openai">OpenAI</option>
-                <option value="google">Google Cloud</option>
-              </select>
+                <SelectTrigger id="voiceProvider" className="w-full h-10 rounded-xl">
+                  <SelectValue placeholder="Select voice provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                  <SelectItem value="google">Google Cloud</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="voiceId">Voice ID</Label>
@@ -457,7 +467,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="twilioAccountSid">Twilio Account SID</Label>
               <Input
@@ -478,7 +488,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                 placeholder="your-auth-token"
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 lg:col-span-1">
               <Label htmlFor="twilioPhoneNumber">Twilio Phone Number</Label>
               <Input
                 id="twilioPhoneNumber"
@@ -503,19 +513,22 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="llmProvider">LLM Provider</Label>
-              <select
-                id="llmProvider"
-                className="w-full h-10 px-3 rounded-xl border border-input bg-background"
+              <Select
                 value={config.llmProvider}
-                onChange={(e) => updateConfig('llmProvider', e.target.value)}
+                onValueChange={(value) => updateConfig('llmProvider', value)}
               >
-                <option value="openai">OpenAI</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="gemini">Google Gemini</option>
-              </select>
+                <SelectTrigger id="llmProvider" className="w-full h-10 rounded-xl">
+                  <SelectValue placeholder="Select LLM provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                  <SelectItem value="anthropic">Anthropic</SelectItem>
+                  <SelectItem value="gemini">Google Gemini</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="llmModel">Model</Label>
@@ -557,6 +570,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               onChange={(e) => updateConfig('systemPrompt', e.target.value)}
               rows={8}
               placeholder="Enter the system prompt for your AI assistant..."
+              className="min-h-[120px] sm:min-h-[200px]"
             />
           </div>
         </CardContent>
@@ -574,7 +588,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="maxCallDuration">Max Call Duration (seconds)</Label>
               <Input
@@ -604,18 +618,21 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             </div>
             <div className="space-y-2">
               <Label htmlFor="timeZone">Time Zone</Label>
-              <select
-                id="timeZone"
-                className="w-full h-10 px-3 rounded-xl border border-input bg-background"
+              <Select
                 value={config.timeZone}
-                onChange={(e) => updateConfig('timeZone', e.target.value)}
+                onValueChange={(value) => updateConfig('timeZone', value)}
               >
-                <option value="America/New_York">Eastern Time</option>
-                <option value="America/Chicago">Central Time</option>
-                <option value="America/Denver">Mountain Time</option>
-                <option value="America/Los_Angeles">Pacific Time</option>
-                <option value="UTC">UTC</option>
-              </select>
+                <SelectTrigger id="timeZone" className="w-full h-10 rounded-xl">
+                  <SelectValue placeholder="Select time zone" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="America/New_York">Eastern Time</SelectItem>
+                  <SelectItem value="America/Chicago">Central Time</SelectItem>
+                  <SelectItem value="America/Denver">Mountain Time</SelectItem>
+                  <SelectItem value="America/Los_Angeles">Pacific Time</SelectItem>
+                  <SelectItem value="UTC">UTC</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>

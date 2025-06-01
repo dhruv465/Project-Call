@@ -11,6 +11,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Slider } from '@/components/ui/slider';
+import { DatePicker } from '@/components/ui/date-picker';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Custom styles with consistent spacing
 const inputStyles = "w-full rounded-xl border border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
@@ -34,8 +42,8 @@ interface CampaignFormData {
   leadSources: string[];
   primaryLanguage: string;
   supportedLanguages: string[];
-  startDate: string;
-  endDate: string;
+  startDate: Date | undefined;
+  endDate: Date | undefined;
   script: {
     name: string;
     content: string;
@@ -69,8 +77,8 @@ const initialFormState: CampaignFormData = {
   leadSources: [''],
   primaryLanguage: 'English',
   supportedLanguages: ['English'],
-  startDate: new Date().toISOString().split('T')[0],
-  endDate: '',
+  startDate: new Date(),
+  endDate: undefined,
   script: {
     name: 'Primary Script',
     content: '',
@@ -150,11 +158,22 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
       setIsLoading(true);
       // Mock data loading
       setTimeout(() => {
-        setFormData({
+        // Simulating data from API
+        const mockCampaignData = {
           ...initialFormState,
           name: 'Existing Campaign',
           description: 'This is an existing campaign being edited',
+          startDate: '2025-06-10T00:00:00.000Z',
+          endDate: '2025-07-15T00:00:00.000Z'
+        };
+        
+        // Convert date strings to Date objects
+        setFormData({
+          ...mockCampaignData,
+          startDate: mockCampaignData.startDate ? new Date(mockCampaignData.startDate) : undefined,
+          endDate: mockCampaignData.endDate ? new Date(mockCampaignData.endDate) : undefined
         });
+        
         setIsLoading(false);
       }, 500);
     } catch (error) {
@@ -298,7 +317,16 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
         return;
       }
       
-      // Mock API call
+      // Format dates for API submission
+      const submissionData = {
+        ...formData,
+        startDate: formData.startDate ? formData.startDate.toISOString() : null,
+        endDate: formData.endDate ? formData.endDate.toISOString() : null
+      };
+      
+      // Mock API call - In a real application, you would send submissionData to the API
+      console.log('Submitting campaign:', submissionData);
+      
       setTimeout(() => {
         showToast(
           campaignId ? 'Campaign Updated' : 'Campaign Created',
@@ -447,13 +475,10 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                         <label className="block text-sm font-medium mb-1">
                           Start Date *
                         </label>
-                        <input
-                          type="date"
-                          name="startDate"
-                          value={formData.startDate}
-                          onChange={handleChange}
-                          className={inputStyles}
-                          required
+                        <DatePicker 
+                          date={formData.startDate}
+                          setDate={(date) => setFormData(prev => ({ ...prev, startDate: date }))}
+                          placeholder="Select start date"
                         />
                       </div>
                       
@@ -461,12 +486,10 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                         <label className="block text-sm font-medium mb-1">
                           End Date (Optional)
                         </label>
-                        <input
-                          type="date"
-                          name="endDate"
-                          value={formData.endDate}
-                          onChange={handleChange}
-                          className={inputStyles}
+                        <DatePicker 
+                          date={formData.endDate}
+                          setDate={(date) => setFormData(prev => ({ ...prev, endDate: date }))}
+                          placeholder="Select end date"
                         />
                       </div>
                     </div>
@@ -515,19 +538,21 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                         <label className="block text-sm font-medium mb-1">
                           Primary Language *
                         </label>
-                        <select
-                          name="primaryLanguage"
+                        <Select
                           value={formData.primaryLanguage}
-                          onChange={handleChange}
-                          className={selectStyles}
-                          required
+                          onValueChange={(value) => setFormData(prev => ({...prev, primaryLanguage: value}))}
                         >
-                          {languages.map((language: string) => (
-                            <option key={language} value={language}>
-                              {language}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger className="w-full rounded-xl">
+                            <SelectValue placeholder="Select a language" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {languages.map((language: string) => (
+                              <SelectItem key={language} value={language}>
+                                {language}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       
                       <div>
@@ -649,18 +674,27 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                       <label className="block text-sm font-medium mb-1">
                         Time Zone
                       </label>
-                      <select
-                        name="callTiming.timeZone"
+                      <Select
                         value={formData.callTiming.timeZone}
-                        onChange={handleChange}
-                        className={selectStyles}
+                        onValueChange={(value) => setFormData(prev => ({
+                          ...prev, 
+                          callTiming: {
+                            ...prev.callTiming,
+                            timeZone: value
+                          }
+                        }))}
                       >
-                        {timeZones.map((tz: string) => (
-                          <option key={tz} value={tz}>
-                            {tz}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="w-full rounded-xl">
+                          <SelectValue placeholder="Select a time zone" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {timeZones.map((tz: string) => (
+                            <SelectItem key={tz} value={tz}>
+                              {tz}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
@@ -674,36 +708,54 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                       <label className="block text-sm font-medium mb-1">
                         LLM Model
                       </label>
-                      <select
-                        name="llmConfiguration.model"
+                      <Select
                         value={formData.llmConfiguration.model}
-                        onChange={handleChange}
-                        className={selectStyles}
+                        onValueChange={(value) => setFormData(prev => ({
+                          ...prev, 
+                          llmConfiguration: {
+                            ...prev.llmConfiguration,
+                            model: value
+                          }
+                        }))}
                       >
-                        {llmModels.map((model: string) => (
-                          <option key={model} value={model}>
-                            {model}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="w-full rounded-xl">
+                          <SelectValue placeholder="Select a model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {llmModels.map((model: string) => (
+                            <SelectItem key={model} value={model}>
+                              {model}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     
                     <div>
                       <label className="block text-sm font-medium mb-1">
                         Voice Provider
                       </label>
-                      <select
-                        name="voiceConfiguration.provider"
+                      <Select
                         value={formData.voiceConfiguration.provider}
-                        onChange={handleChange}
-                        className={selectStyles}
+                        onValueChange={(value) => setFormData(prev => ({
+                          ...prev, 
+                          voiceConfiguration: {
+                            ...prev.voiceConfiguration,
+                            provider: value
+                          }
+                        }))}
                       >
-                        {voiceProviders.map((provider: string) => (
-                          <option key={provider} value={provider}>
-                            {provider}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="w-full rounded-xl">
+                          <SelectValue placeholder="Select a voice provider" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {voiceProviders.map((provider: string) => (
+                            <SelectItem key={provider} value={provider}>
+                              {provider}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   

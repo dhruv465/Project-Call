@@ -18,13 +18,15 @@ const DashboardLayout = () => {
       </div>
 
       {/* Main content */}
-      <div className="flex flex-col flex-1 overflow-x-hidden">
+      <div className="flex flex-col flex-1 overflow-hidden">
         {/* Header */}
         <Header />
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-background">
-          <Outlet />
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4 md:p-6 bg-background">
+          <div className="max-w-full">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

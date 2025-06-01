@@ -191,18 +191,18 @@ const Campaigns = () => {
   // Handle loading state
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-between mb-6">
-          <Skeleton className="h-10 w-48 mb-2" />
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <Skeleton className="h-8 w-48" />
           <Skeleton className="h-10 w-40" />
         </div>
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row items-center gap-4">
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-32" />
         </div>
         <div className="grid grid-cols-1 gap-4">
           {[...Array(4)].map((_, i) => (
-            <Card key={i} className="p-6">
+            <Card key={i} className="p-4 sm:p-6">
               <div className="flex items-center justify-between mb-2">
                 <Skeleton className="h-6 w-40" />
                 <Skeleton className="h-6 w-20" />
@@ -224,8 +224,9 @@ const Campaigns = () => {
   // Handle error state
   if (error) {
     return (
-      <div className="p-8">
-        <Card className="p-6 border-destructive bg-destructive/10">
+      <div className="space-y-4 sm:space-y-6">
+        <h1 className="text-2xl sm:text-3xl font-bold">Campaigns</h1>
+        <Card className="p-4 sm:p-6 border-destructive bg-destructive/10">
           <div className="flex items-center space-x-2">
             <AlertTriangle className="h-5 w-5 text-destructive" />
             <h3 className="font-medium">Error Loading Campaigns</h3>
@@ -233,7 +234,7 @@ const Campaigns = () => {
           <p className="mt-2 text-sm text-muted-foreground">
             If this is a new installation, you may not have any campaigns yet. Try creating your first campaign.
           </p>
-          <div className="flex gap-2 mt-4">
+          <div className="flex flex-col sm:flex-row gap-2 mt-4">
             <Button 
               variant="outline" 
               onClick={() => refetch()}
@@ -252,12 +253,12 @@ const Campaigns = () => {
 
   if (filteredCampaigns.length === 0 && searchTerm === '' && statusFilter === 'All') {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">Campaigns</h1>
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <h1 className="text-2xl sm:text-3xl font-bold">Campaigns</h1>
         </div>
         
-        <Card className="p-8 text-center">
+        <Card className="p-6 sm:p-8 text-center">
           <AlertTriangle size={48} className="mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium mb-2">No campaigns yet</h3>
           <p className="text-muted-foreground mb-4">
@@ -286,9 +287,9 @@ const Campaigns = () => {
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">Campaigns</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <h1 className="text-2xl sm:text-3xl font-bold">Campaigns</h1>
         <Button onClick={handleCreateCampaign}>
           <Plus size={16} className="mr-2" />
           Create Campaign
@@ -296,23 +297,25 @@ const Campaigns = () => {
       </div>
 
       {/* Search and Filters */}
-      <div className="flex items-center gap-4 mb-6">
-        <div className="relative flex-grow">
+      <div className="flex flex-col sm:flex-row items-center gap-4">
+        <div className="relative flex-grow w-full">
           <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search campaigns..."
             value={searchTerm}
             onChange={handleSearchChange}
-            className="w-full pl-10 pr-4 py-2 border border-input rounded-xl bg-background"
+            className="w-full pl-10 pr-4 py-2 border border-input rounded-xl bg-background ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           />
         </div>
         
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="flex items-center gap-1">
-              <Filter size={16} />
-              Status: {statusFilter}
+            <Button variant="outline" className="flex items-center gap-1 justify-between sm:justify-center">
+              <div className="flex items-center gap-1">
+                <Filter size={16} />
+                <span className="truncate">Status: {statusFilter}</span>
+              </div>
               <ChevronDown size={16} />
             </Button>
           </DropdownMenuTrigger>
@@ -339,30 +342,30 @@ const Campaigns = () => {
       {/* Campaigns Grid */}
       <div className="grid grid-cols-1 gap-4">
         {filteredCampaigns.map((campaign: Campaign) => (
-          <Card key={campaign._id} className="p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex-grow">
-                <div className="flex items-center gap-2 mb-2">
-                  <h3 className="text-lg font-semibold">{campaign.name}</h3>
+          <Card key={campaign._id} className="p-4 sm:p-6">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+              <div className="flex-grow min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
+                  <h3 className="text-lg font-semibold truncate">{campaign.name}</h3>
                   <Badge variant={getStatusBadgeVariant(campaign.status)}>
                     {campaign.status}
                   </Badge>
                 </div>
                 
-                <p className="text-muted-foreground mb-3">{campaign.description}</p>
+                <p className="text-muted-foreground mb-3 line-clamp-2">{campaign.description}</p>
                 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
                   <div>
                     <span className="font-medium">Goal:</span>
-                    <p className="text-muted-foreground">{campaign.goal}</p>
+                    <p className="text-muted-foreground truncate">{campaign.goal}</p>
                   </div>
                   <div>
                     <span className="font-medium">Target:</span>
-                    <p className="text-muted-foreground">{campaign.targetAudience}</p>
+                    <p className="text-muted-foreground truncate">{campaign.targetAudience}</p>
                   </div>
                   <div>
                     <span className="font-medium">Language:</span>
-                    <p className="text-muted-foreground">{campaign.primaryLanguage}</p>
+                    <p className="text-muted-foreground truncate">{campaign.primaryLanguage}</p>
                   </div>
                   <div>
                     <span className="font-medium">Start Date:</span>
@@ -371,7 +374,7 @@ const Campaigns = () => {
                 </div>
                 
                 {campaign.metrics && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t text-sm">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t text-sm">
                     <div>
                       <span className="font-medium">Total Calls:</span>
                       <p className="text-muted-foreground">{campaign.metrics.totalCalls}</p>
@@ -392,7 +395,7 @@ const Campaigns = () => {
                 )}
               </div>
               
-              <div className="flex items-center gap-2 ml-4">
+              <div className="flex flex-row lg:flex-col items-center gap-2 lg:ml-4">
                 {campaign.status === 'Draft' && (
                   <Button 
                     size="sm" 
@@ -465,34 +468,38 @@ const Campaigns = () => {
 
       {/* Pagination */}
       {campaignsData?.pagination && campaignsData.pagination.pages > 1 && (
-        <div className="flex items-center justify-center gap-2 mt-6">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((prev: number) => Math.max(prev - 1, 1))}
-          >
-            Previous
-          </Button>
-          
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 p-4 border rounded-xl bg-card">
           <span className="text-sm text-muted-foreground">
             Page {currentPage} of {campaignsData?.pagination?.pages}
           </span>
           
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={currentPage === campaignsData?.pagination?.pages}
-            onClick={() => setCurrentPage((prev: number) => Math.min(prev + 1, campaignsData?.pagination?.pages || 1))}
-          >
-            Next
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((prev: number) => Math.max(prev - 1, 1))}
+              className="px-3"
+            >
+              Previous
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage === campaignsData?.pagination?.pages}
+              onClick={() => setCurrentPage((prev: number) => Math.min(prev + 1, campaignsData?.pagination?.pages || 1))}
+              className="px-3"
+            >
+              Next
+            </Button>
+          </div>
         </div>
       )}
 
       {/* Campaign Details Sheet */}
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent className="w-[600px] sm:max-w-[600px]">
+        <SheetContent className="w-full sm:w-[600px] sm:max-w-[600px] overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Info size={20} />
