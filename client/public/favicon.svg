@@ -1,126 +1,48 @@
-<?xml version="1.0" encoding="UTF-8"?<?xml version="1.0" encoding="UTF-8"<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
-  <!-- Strong Background -->
+  <!-- Background Elements (simplified for favicon) -->
   <circle cx="100" cy="100" r="90" fill="#3B82F6" opacity="0.2"/>
-  <circle cx="100" cy="100" r="75" fill="none" stroke="#3B82F6" stroke-width="8" opacity="0.6"/>
+  <circle cx="100" cy="100" r="75" fill="none" stroke="#3B82F6" stroke-width="6" opacity="0.5"/>
   
-  <!-- Bold Central Microphone -->
-  <rect x="75" y="40" width="50" height="70" rx="25" fill="#3B82F6" opacity="0.9"/>
-  <rect x="80" y="45" width="40" height="60" rx="20" fill="white" opacity="0.8"/>
-  <rect x="85" y="50" width="30" height="50" rx="15" fill="#3B82F6" opacity="0.7"/>
+  <!-- Central Microphone (bold and clear for small sizes) -->
+  <rect x="75" y="40" width="50" height="70" rx="25" fill="#3B82F6"/>
+  <rect x="80" y="45" width="40" height="60" rx="20" fill="white" opacity="0.9"/>
+  <rect x="85" y="50" width="30" height="50" rx="15" fill="#3B82F6" opacity="0.8"/>
+  <rect x="90" y="55" width="20" height="40" rx="10" fill="white" opacity="0.7"/>
   
-  <!-- Heavy Microphone Stand -->
+  <!-- Microphone Stand (thicker for visibility) -->
   <path d="M60,75 L60,115 C60,150 140,150 140,115 L140,75" 
         stroke="#3B82F6" 
         stroke-width="12" 
         fill="none"
-        opacity="0.8"
         stroke-linecap="round"/>
-  <rect x="90" y="115" width="20" height="40" rx="10" fill="#3B82F6" opacity="0.8"/>
-  <rect x="70" y="150" width="60" height="15" rx="8" fill="#3B82F6" opacity="0.8"/>
+  <rect x="90" y="115" width="20" height="40" rx="10" fill="#3B82F6"/>
+  <rect x="70" y="150" width="60" height="15" rx="8" fill="#3B82F6"/>
   
-  <!-- Bold Waveforms -->
-  <path d="M10,100 Q20,50 30,100 Q40,150 50,100 Q60,50 70,100" 
+  <!-- Bold Waveforms (simplified for clarity) -->
+  <path d="M10,100 Q20,60 30,100 Q40,140 50,100 Q60,60 70,100" 
         stroke="#3B82F6" 
-        stroke-width="10" 
+        stroke-width="12" 
         fill="none"
-        opacity="0.8"
         stroke-linecap="round"/>
-  <path d="M130,100 Q140,50 150,100 Q160,150 170,100 Q180,50 190,100" 
+  <path d="M130,100 Q140,60 150,100 Q160,140 170,100 Q180,60 190,100" 
         stroke="#3B82F6" 
-        stroke-width="10" 
+        stroke-width="12" 
         fill="none"
-        opacity="0.8"
         stroke-linecap="round"/>
   
-  <!-- AI Elements -->
-  <circle cx="40" cy="25" r="18" fill="#3B82F6" opacity="0.7"/>
-  <circle cx="160" cy="25" r="18" fill="#3B82F6" opacity="0.7"/>
+  <!-- AI Brain Elements (prominent for brand recognition) -->
+  <circle cx="40" cy="25" r="20" fill="#3B82F6"/>
+  <circle cx="160" cy="25" r="20" fill="#3B82F6"/>
+  <circle cx="40" cy="25" r="12" fill="white" opacity="0.9"/>
+  <circle cx="160" cy="25" r="12" fill="white" opacity="0.9"/>
+  <circle cx="40" cy="25" r="6" fill="#3B82F6"/>
+  <circle cx="160" cy="25" r="6" fill="#3B82F6"/>
   
-  <!-- Emotion Indicator -->
-  <path d="M40,175 Q100,200 160,175" 
+  <!-- Emotion/Smile Indicator -->
+  <path d="M50,175 Q100,195 150,175" 
         stroke="#3B82F6" 
         stroke-width="10" 
         stroke-linecap="round"
-        fill="none"
-        opacity="0.7"/>
-</svg>xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
-  <!-- Background Circle -->
-  <circle cx="100" cy="100" r="90" fill="#1e293b" opacity="0.1"/>
-  
-  <!-- Main Waveform (representing audio analysis) -->
-  <path d="M20,100 Q35,60 50,100 Q65,140 80,100 Q95,60 110,100 Q125,140 140,100 Q155,60 170,100 Q185,140 200,100" 
-        stroke="#1e293b" 
-        stroke-width="6" 
-        fill="none"
-        stroke-linecap="round"/>
-  
-  <!-- Microphone (bold design) -->
-  <rect x="85" y="50" width="30" height="50" rx="15" fill="#1e293b"/>
-  <rect x="90" y="55" width="20" height="40" rx="10" fill="white"/>
-  
-  <!-- Microphone stand -->
-  <path d="M70,85 L70,105 C70,130 130,130 130,105 L130,85" 
-        stroke="#1e293b" 
-        stroke-width="6" 
-        fill="none"
-        stroke-linecap="round"/>
-  <line x1="100" y1="105" x2="100" y2="140" stroke="#1e293b" stroke-width="6" stroke-linecap="round"/>
-  <line x1="80" y1="140" x2="120" y2="140" stroke="#1e293b" stroke-width="6" stroke-linecap="round"/>
-  
-  <!-- Emotion Indicators -->
-  <circle cx="65" cy="45" r="12" fill="#1e293b"/>
-  <circle cx="135" cy="45" r="12" fill="#1e293b"/>
-  <circle cx="68" cy="42" r="4" fill="white"/>
-  <circle cx="138" cy="42" r="4" fill="white"/>
-  
-  <!-- Smile indicator -->
-  <path d="M65,160 Q100,185 135,160" 
-        stroke="#1e293b" 
-        stroke-width="6" 
-        fill="none"
-        stroke-linecap="round"/>
-</svg>mlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
-  <!-- Background Circle -->
-  <circle cx="100" cy="100" r="90" fill="#3B82F6" opacity="0.1"/>
-  
-  <!-- Waveform (representing audio) -->
-  <path d="M30,100 Q45,70 60,100 Q75,130 90,100 Q105,70 120,100 Q135,130 150,100 Q165,70 180,100" 
-        stroke="#3B82F6" 
-        stroke-width="4" 
         fill="none"/>
-  
-  <!-- Microphone -->
-  <rect x="90" y="60" width="20" height="40" rx="10" fill="#3B82F6"/>
-  <path d="M75,90 L75,100 C75,120 125,120 125,100 L125,90" 
-        stroke="#3B82F6" 
-        stroke-width="4" 
-        fill="none"/>
-  <line x1="100" y1="100" x2="100" y2="130" stroke="#3B82F6" stroke-width="4"/>
-  <line x1="85" y1="130" x2="115" y2="130" stroke="#3B82F6" stroke-width="4"/>
-  
-  <!-- Emotion Elements (simplified face) -->
-  <circle cx="70" cy="50" r="8" fill="#3B82F6" opacity="0.7"/>
-  <circle cx="130" cy="50" r="8" fill="#3B82F6" opacity="0.7"/>
-  <path d="M70,150 Q100,170 130,150" 
-        stroke="#3B82F6" 
-        stroke-width="4" 
-        fill="none"/>
-        
-  <!-- Brain Patterns (representing AI analysis) -->
-  <path d="M40,30 C50,35 45,45 55,40 C65,35 60,25 70,30" 
-        stroke="#3B82F6" 
-        stroke-width="2" 
-        fill="none"/>
-  <path d="M130,30 C140,35 135,45 145,40 C155,35 150,25 160,30" 
-        stroke="#3B82F6" 
-        stroke-width="2" 
-        fill="none"/>
-</svg>rsion="1.0" encoding="utf-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-  <path d="M14.5 2v4"></path>
-  <path d="M11.5 2v4"></path>
-  <path d="M17.5 6L15 8.5"></path>
-  <path d="M9 11c0 1.657 1.343 3 3 3s3-1.343 3-3-1.343-3-3-3"></path>
 </svg>
