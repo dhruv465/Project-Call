@@ -292,7 +292,7 @@ const Calls = () => {
             </div>
             <div className="w-48">
               <select
-                className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                className="w-full h-10 px-3 rounded-xl border border-input bg-background"
                 value={statusFilter}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStatusFilter(e.target.value)}
               >
@@ -320,7 +320,7 @@ const Calls = () => {
             {filteredCalls.map((call: Call) => (
               <div
                 key={call.id}
-                className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                className="flex items-center justify-between p-4 border rounded-xl hover:bg-muted/50 transition-colors"
               >
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center space-x-2">

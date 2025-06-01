@@ -390,7 +390,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               <Label htmlFor="voiceProvider">Voice Provider</Label>
               <select
                 id="voiceProvider"
-                className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                className="w-full h-10 px-3 rounded-xl border border-input bg-background"
                 value={config.voiceProvider}
                 onChange={(e) => updateConfig('voiceProvider', e.target.value)}
               >
@@ -509,7 +509,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               <Label htmlFor="llmProvider">LLM Provider</Label>
               <select
                 id="llmProvider"
-                className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                className="w-full h-10 px-3 rounded-xl border border-input bg-background"
                 value={config.llmProvider}
                 onChange={(e) => updateConfig('llmProvider', e.target.value)}
               >
@@ -608,7 +608,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               <Label htmlFor="timeZone">Time Zone</Label>
               <select
                 id="timeZone"
-                className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                className="w-full h-10 px-3 rounded-xl border border-input bg-background"
                 value={config.timeZone}
                 onChange={(e) => updateConfig('timeZone', e.target.value)}
               >

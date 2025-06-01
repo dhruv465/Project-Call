@@ -125,7 +125,7 @@ export const SelectTrigger: React.FC<SelectTriggerProps> = ({
       aria-expanded={open}
       aria-disabled={disabled}
       disabled={disabled}
-      className={`flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       {...props}
     >
       <span className="flex-1 text-left truncate">
@@ -142,7 +142,7 @@ export const SelectContent: React.FC<SelectContentProps> = ({ children }) => {
   if (!open) return null;
 
   return (
-    <div className="absolute top-full left-0 w-full z-50 mt-1 max-h-60 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95">
+    <div className="absolute top-full left-0 w-full z-50 mt-1 max-h-60 overflow-auto rounded-xl border bg-popover text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95">
       <div className="p-1">
         {children}
       </div>

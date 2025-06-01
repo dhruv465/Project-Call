@@ -335,7 +335,7 @@ const VoiceAIManagement: React.FC = () => {
             {personalities.map((personality) => (
               <div
                 key={personality.id}
-                className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                className={`p-4 border rounded-xl cursor-pointer transition-colors ${
                   selectedPersonality === personality.id
                     ? 'border-blue-500 bg-blue-50'
                     : 'border-gray-200 hover:border-gray-300'
@@ -468,7 +468,7 @@ const VoiceAIManagement: React.FC = () => {
 
             {/* Emotion Analysis Results */}
             {emotionAnalysis && (
-              <div className="p-4 border rounded-lg bg-gray-50">
+              <div className="p-4 border rounded-xl bg-gray-50">
                 <h3 className="font-semibold mb-3">Emotion Analysis Results</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -515,7 +515,7 @@ const VoiceAIManagement: React.FC = () => {
 
             {/* Audio Player */}
             {audioUrl && (
-              <div className="p-4 border rounded-lg bg-blue-50">
+              <div className="p-4 border rounded-xl bg-blue-50">
                 <h3 className="font-semibold mb-3">Generated Speech</h3>
                 <audio controls className="w-full" src={audioUrl}>
                   Your browser does not support the audio element.
@@ -543,25 +543,25 @@ const VoiceAIManagement: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 border rounded-lg">
+              <div className="text-center p-4 border rounded-xl">
                 <div className="text-2xl font-bold text-blue-600">
                   {Math.round(selectedPersonalityData.trainingMetrics.emotionAccuracy * 100)}%
                 </div>
                 <div className="text-sm text-gray-600">Emotion Detection</div>
               </div>
-              <div className="text-center p-4 border rounded-lg">
+              <div className="text-center p-4 border rounded-xl">
                 <div className="text-2xl font-bold text-green-600">
                   {Math.round(selectedPersonalityData.trainingMetrics.adaptationAccuracy * 100)}%
                 </div>
                 <div className="text-sm text-gray-600">Adaptation Success</div>
               </div>
-              <div className="text-center p-4 border rounded-lg">
+              <div className="text-center p-4 border rounded-xl">
                 <div className="text-2xl font-bold text-purple-600">
                   {Math.round(selectedPersonalityData.trainingMetrics.customerSatisfactionScore * 100)}%
                 </div>
                 <div className="text-sm text-gray-600">Customer Satisfaction</div>
               </div>
-              <div className="text-center p-4 border rounded-lg">
+              <div className="text-center p-4 border rounded-xl">
                 <div className="text-2xl font-bold text-orange-600">
                   {Math.round(selectedPersonalityData.trainingMetrics.conversionRate * 100)}%
                 </div>

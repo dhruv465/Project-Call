@@ -33,7 +33,7 @@ export const Dialog: React.FC<DialogProps> = ({ open = false, onOpenChange: _onO
   
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-      <div className="bg-background rounded-lg shadow-lg max-w-lg w-full max-h-[90vh] overflow-auto">
+      <div className="bg-background rounded-xl shadow-lg max-w-lg w-full max-h-[90vh] overflow-auto">
         {children}
       </div>
     </div>

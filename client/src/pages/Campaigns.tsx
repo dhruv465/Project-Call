@@ -304,7 +304,7 @@ const Campaigns = () => {
             placeholder="Search campaigns..."
             value={searchTerm}
             onChange={handleSearchChange}
-            className="w-full pl-10 pr-4 py-2 border border-input rounded-md bg-background"
+            className="w-full pl-10 pr-4 py-2 border border-input rounded-xl bg-background"
           />
         </div>
         
@@ -563,7 +563,7 @@ const Campaigns = () => {
                     </div>
                     <div className="mt-2">
                       <span className="font-medium">Content:</span>
-                      <div className="mt-1 p-3 bg-muted rounded-md text-sm">
+                      <div className="mt-1 p-3 bg-muted rounded-xl text-sm">
                         {selectedCampaign.script.content}
                       </div>
                     </div>

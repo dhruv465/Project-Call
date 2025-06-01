@@ -11,9 +11,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 
 // Custom styles with consistent spacing
-const inputStyles = "w-full rounded-md border border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
-const selectStyles = "w-full rounded-md border border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
-const textareaStyles = "w-full rounded-md border border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 min-h-[100px]";
+const inputStyles = "w-full rounded-xl border border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
+const selectStyles = "w-full rounded-xl border border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
+const textareaStyles = "w-full rounded-xl border border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 min-h-[100px]";
 const labelStyles = "block text-sm font-medium mb-2";
 
 // Define Props
@@ -532,7 +532,7 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                         <label className="block text-sm font-medium mb-1">
                           Supported Languages
                         </label>
-                        <div className="bg-muted/50 p-3 rounded-md max-h-[120px] overflow-y-auto">
+                        <div className="bg-muted/50 p-3 rounded-xl max-h-[120px] overflow-y-auto">
                           <div className="flex flex-wrap gap-2">
                             {languages.map((language: string) => {
                               const isSelected = formData.supportedLanguages.includes(language);
@@ -598,7 +598,7 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                     <label className="block text-sm font-medium mb-1">
                       Days of Week
                     </label>
-                    <div className="bg-muted/50 p-3 rounded-md">
+                    <div className="bg-muted/50 p-3 rounded-xl">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                         {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day: string) => (
                           <label key={day} className="flex items-center gap-2">

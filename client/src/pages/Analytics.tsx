@@ -354,7 +354,7 @@ const Analytics = () => {
           <h3 className="text-lg font-semibold mb-4">Quick Stats</h3>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 dark:bg-green-800 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-green-100 dark:bg-green-800 rounded-xl flex items-center justify-center">
                 <TrendingUp className="h-5 w-5 text-green-600 dark:text-green-300" />
               </div>
               <div>
@@ -369,7 +369,7 @@ const Analytics = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-800 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-800 rounded-xl flex items-center justify-center">
                 <Users className="h-5 w-5 text-blue-600 dark:text-blue-300" />
               </div>
               <div>
