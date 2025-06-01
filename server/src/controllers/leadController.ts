@@ -5,32 +5,64 @@ import Lead from '../models/Lead';
 import { logger } from '../index';
 import { handleError } from '../utils/errorHandling';
 
-// @desc    Upload multiple leads
+// @desc    Create single lead or upload multiple leads
 // @route   POST /api/leads
 // @access  Private
 export const uploadLeads = async (req: Request & { user?: any }, res: Response) => {
   try {
+    // Check if it's a bulk upload (with leads array) or single lead creation
     const leads = req.body.leads;
+    
+    if (leads && Array.isArray(leads)) {
+      // Bulk upload - multiple leads
+      if (leads.length === 0) {
+        return res.status(400).json({ message: 'No leads provided' });
+      }
 
-    if (!leads || !Array.isArray(leads) || leads.length === 0) {
-      return res.status(400).json({ message: 'No leads provided' });
+      // Validate each lead
+      const validatedLeads = leads.map(lead => ({
+        ...lead,
+        // Add validation here if needed
+      }));
+
+      // Create multiple leads
+      const createdLeads = await Lead.create(validatedLeads);
+
+      return res.status(201).json({
+        message: `Successfully created ${createdLeads.length} leads`,
+        leads: createdLeads,
+      });
+    } else {
+      // Single lead creation - expect lead data directly in request body
+      const { name, phoneNumber, email, company, title, source, languagePreference, status, notes, tags } = req.body;
+
+      if (!name || !phoneNumber || !source) {
+        return res.status(400).json({ message: 'Name, phone number, and source are required' });
+      }
+
+      // Create single lead
+      const leadData = {
+        name,
+        phoneNumber,
+        email,
+        company,
+        title,
+        source,
+        languagePreference: languagePreference || 'English',
+        status: status || 'New',
+        notes,
+        tags,
+      };
+
+      const createdLead = await Lead.create(leadData);
+
+      return res.status(201).json({
+        message: 'Lead created successfully',
+        lead: createdLead,
+      });
     }
-
-    // Validate each lead
-    const validatedLeads = leads.map(lead => ({
-      ...lead,
-      // Add validation here if needed
-    }));
-
-    // Create multiple leads
-    const createdLeads = await Lead.create(validatedLeads);
-
-    return res.status(201).json({
-      message: `Successfully created ${createdLeads.length} leads`,
-      leads: createdLeads,
-    });
   } catch (error) {
-    logger.error('Error uploading leads:', error);
+    logger.error('Error creating/uploading leads:', error);
     return res.status(500).json({ message: 'Server error', error: handleError(error) });
   }
 };

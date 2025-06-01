@@ -57,6 +57,17 @@ const updateServicesWithNewConfig = async (configuration: any): Promise<void> =>
       logger.info('Campaign service updated with new API keys');
     }
     
+    // Update the emotion service with new configuration
+    try {
+      const { default: resilientEmotionService } = require('../services/resilientEmotionService');
+      if (resilientEmotionService && typeof resilientEmotionService.updateConfig === 'function') {
+        await resilientEmotionService.updateConfig();
+        logger.info('Emotion service updated with new configuration from database');
+      }
+    } catch (error) {
+      logger.warn(`Could not update emotion service: ${getErrorMessage(error)}`);
+    }
+    
     logger.info('All services updated with new configuration');
   } catch (error) {
     logger.error(`Error updating services with new config: ${getErrorMessage(error)}`);

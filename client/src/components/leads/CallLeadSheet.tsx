@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Phone, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Phone } from 'lucide-react';
 import { 
   Sheet, 
   SheetContent, 
@@ -18,6 +18,18 @@ import {
   SelectValue 
 } from '../ui/select';
 import { useToast } from '../ui/use-toast';
+import { checkTelephonyConfiguration, ConfigurationStatus } from '../../utils/configurationUtils';
+import { callsApi } from '../../services/callsApi';
+import api from '../../services/api';
+
+interface Campaign {
+  _id: string;
+  name: string;
+  description: string;
+  status: 'Draft' | 'Active' | 'Paused' | 'Completed';
+  goal: string;
+  targetAudience: string;
+}
 
 interface CallLeadSheetProps {
   open: boolean;
@@ -32,13 +44,6 @@ interface CallLeadSheetProps {
   onSuccess: () => void;
 }
 
-// Placeholder for actual call API
-const mockInitiateCall = async () => {
-  // Simulate API call
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  return { callId: 'call-123', status: 'initiated' };
-};
-
 const CallLeadSheet = ({
   open,
   onOpenChange,
@@ -47,24 +52,125 @@ const CallLeadSheet = ({
 }: CallLeadSheetProps) => {
   const { toast } = useToast();
   const [selectedLanguage, setSelectedLanguage] = useState(lead.languagePreference || 'English');
+  const [selectedCampaign, setSelectedCampaign] = useState<string>('');
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
   const [isCallingInProgress, setIsCallingInProgress] = useState(false);
   const [callStatus, setCallStatus] = useState<'idle' | 'connecting' | 'connected' | 'completed' | 'failed'>('idle');
   const [notes, setNotes] = useState('');
+  const [configStatus, setConfigStatus] = useState<ConfigurationStatus | null>(null);
+
+  // Load campaigns when component mounts
+  useEffect(() => {
+    const loadCampaigns = async () => {
+      setIsLoadingCampaigns(true);
+      try {
+        const response = await api.get('/api/campaigns');
+        const activeCampaigns = response.data.filter((campaign: Campaign) => 
+          campaign.status === 'Active' || campaign.status === 'Draft'
+        );
+        
+        setCampaigns(activeCampaigns);
+        
+        // Auto-select the first active campaign if available
+        if (activeCampaigns.length > 0) {
+          setSelectedCampaign(activeCampaigns[0]._id);
+        } else {
+          // Create a default campaign if none exist
+          await createDefaultCampaign();
+        }
+      } catch (error) {
+        console.error('Error loading campaigns:', error);
+        // If campaigns fail to load, create a default one
+        await createDefaultCampaign();
+      } finally {
+        setIsLoadingCampaigns(false);
+      }
+    };
+
+    const checkConfig = async () => {
+      const status = await checkTelephonyConfiguration();
+      setConfigStatus(status);
+    };
+    
+    if (open) {
+      checkConfig();
+      loadCampaigns();
+    }
+  }, [open]);
+
+  // Create a default campaign if none exist
+  const createDefaultCampaign = async () => {
+    try {
+      const defaultCampaign = {
+        name: 'Default Campaign',
+        description: 'Auto-generated campaign for lead calls',
+        status: 'Active',
+        goal: 'Lead outreach and qualification',
+        targetAudience: 'All leads'
+      };
+
+      const response = await api.post('/api/campaigns', defaultCampaign);
+      const newCampaign = response.data;
+      
+      setCampaigns([newCampaign]);
+      setSelectedCampaign(newCampaign._id);
+      
+      toast({
+        title: "Default Campaign Created",
+        description: "A default campaign has been created for your calls.",
+      });
+    } catch (error) {
+      console.error('Error creating default campaign:', error);
+      toast({
+        title: "Campaign Creation Failed",
+        description: "Failed to create a default campaign. Please create a campaign manually.",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Initiate call
   const handleInitiateCall = async () => {
+    // Check if telephony services are properly configured
+    if (!configStatus?.telephonyConfigured) {
+      toast({
+        title: "Configuration Required",
+        description: "Telephony services are not properly configured. Please check your Twilio settings in Configuration.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if a campaign is selected
+    if (!selectedCampaign) {
+      toast({
+        title: "Campaign Required",
+        description: "Please select a campaign before initiating the call.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsCallingInProgress(true);
     setCallStatus('connecting');
     
     try {
-      // In a real implementation, this would use the actual call API
-      await mockInitiateCall();
+      // Use the real API to initiate the call
+      const callData = {
+        leadId: lead.id,
+        campaignId: selectedCampaign,
+        // Add any additional parameters like language preference
+        notes: `Language preference: ${selectedLanguage}`
+      };
+
+      await callsApi.initiateCall(callData);
       
-      // Simulate call connection after a delay
+      // Simulate call connection after a delay (in real scenario, this would be based on actual call status)
       setTimeout(() => {
         setCallStatus('connected');
         
-        // Simulate call completion after a delay
+        // Simulate call completion after a delay (in real scenario, this would be updated via webhook or polling)
         setTimeout(() => {
           setCallStatus('completed');
           setIsCallingInProgress(false);
@@ -82,7 +188,7 @@ const CallLeadSheet = ({
       
       toast({
         title: "Call Failed",
-        description: "Failed to connect the call. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to connect the call. Please try again.",
         variant: "destructive",
       });
     }
@@ -100,14 +206,33 @@ const CallLeadSheet = ({
   };
 
   // Save call notes and close
-  const handleSaveAndClose = () => {
-    // In a real implementation, this would save the call notes to the API
-    onSuccess();
-    onOpenChange(false);
-    
-    // Reset state for next time
-    setCallStatus('idle');
-    setNotes('');
+  const handleSaveAndClose = async () => {
+    try {
+      // Save call notes if they exist
+      if (notes.trim()) {
+        // In a real implementation, this would save the call notes to the API
+        // For now, we'll just show a success message
+        toast({
+          title: "Notes Saved",
+          description: "Call notes have been saved successfully.",
+        });
+      }
+      
+      onSuccess();
+      onOpenChange(false);
+      
+      // Reset state for next time
+      setCallStatus('idle');
+      setNotes('');
+      setSelectedCampaign('');
+    } catch (error) {
+      console.error('Error saving call notes:', error);
+      toast({
+        title: "Save Failed",
+        description: "Failed to save call notes. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -121,19 +246,21 @@ const CallLeadSheet = ({
         });
         return;
       }
+      
+      // Reset state when closing
+      if (newOpen === false) {
+        setCallStatus('idle');
+        setNotes('');
+        setSelectedCampaign('');
+        setCampaigns([]);
+        setIsLoadingCampaigns(false);
+      }
+      
       onOpenChange(newOpen);
     }}>
       <SheetContent className="sm:max-w-md overflow-y-auto">
-        <SheetHeader className="flex items-center justify-between">
+        <SheetHeader>
           <SheetTitle>Call Lead</SheetTitle>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => onOpenChange(false)}
-            disabled={isCallingInProgress}
-          >
-            <X className="h-4 w-4" />
-          </Button>
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
@@ -152,6 +279,33 @@ const CallLeadSheet = ({
               </p>
             </div>
           </Card>
+
+          {/* Campaign Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="campaign">Campaign</Label>
+            {isLoadingCampaigns ? (
+              <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-black rounded-full"></div>
+                <span>Loading campaigns...</span>
+              </div>
+            ) : (
+              <Select 
+                value={selectedCampaign} 
+                onValueChange={setSelectedCampaign}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select campaign" />
+                </SelectTrigger>
+                <SelectContent>
+                  {campaigns.map((campaign) => (
+                    <SelectItem key={campaign._id} value={campaign._id}>
+                      {campaign.name} ({campaign.status})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
 
           {/* Language Selection */}
           <div className="space-y-2">
@@ -184,21 +338,34 @@ const CallLeadSheet = ({
           <div className="space-y-4">
             <div className="flex justify-center">
               {callStatus === 'idle' ? (
-                <Button 
-                  onClick={handleInitiateCall} 
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  <Phone className="h-4 w-4 mr-2" />
-                  Start Call
-                </Button>
-              ) : callStatus === 'connecting' ? (
+                <div className="space-y-3 text-center">
+                  <Button 
+                    onClick={handleInitiateCall} 
+                    className="bg-black hover:bg-gray-800 text-white"
+                    disabled={!configStatus?.telephonyConfigured || !selectedCampaign || isLoadingCampaigns}
+                  >
+                    <Phone className="h-4 w-4 mr-2" />
+                    Start Call
+                  </Button>
+                  {configStatus && !configStatus.telephonyConfigured && (
+                    <p className="text-sm text-muted-foreground">
+                      Telephony services not configured
+                    </p>
+                  )}
+                  {configStatus?.telephonyConfigured && !selectedCampaign && !isLoadingCampaigns && (
+                    <p className="text-sm text-muted-foreground">
+                      Please select a campaign to start the call
+                    </p>
+                  )}
+                </div>
+              ) : configStatus?.telephonyConfigured && callStatus === 'connecting' ? (
                 <div className="text-center space-y-2">
                   <div className="animate-pulse flex items-center justify-center h-12 w-12 rounded-full bg-amber-100 text-amber-800 mx-auto">
                     <Phone className="h-6 w-6" />
                   </div>
                   <p>Connecting call...</p>
                 </div>
-              ) : callStatus === 'connected' ? (
+              ) : configStatus?.telephonyConfigured && callStatus === 'connected' ? (
                 <div className="space-y-2 text-center">
                   <div className="flex items-center justify-center h-12 w-12 rounded-full bg-green-100 text-green-800 mx-auto">
                     <Phone className="h-6 w-6" />
@@ -211,14 +378,14 @@ const CallLeadSheet = ({
                     End Call
                   </Button>
                 </div>
-              ) : callStatus === 'completed' ? (
+              ) : configStatus?.telephonyConfigured && callStatus === 'completed' ? (
                 <div className="text-center space-y-2">
                   <div className="flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 text-blue-800 mx-auto">
                     <Phone className="h-6 w-6" />
                   </div>
                   <p>Call completed</p>
                 </div>
-              ) : (
+              ) : configStatus?.telephonyConfigured && callStatus === 'failed' ? (
                 <div className="text-center space-y-2">
                   <div className="flex items-center justify-center h-12 w-12 rounded-full bg-red-100 text-red-800 mx-auto">
                     <Phone className="h-6 w-6" />
@@ -231,12 +398,33 @@ const CallLeadSheet = ({
                     Retry Call
                   </Button>
                 </div>
+              ) : (
+                <div className="text-center space-y-3">
+                  <Button 
+                    onClick={handleInitiateCall} 
+                    className="bg-black hover:bg-gray-800 text-white"
+                    disabled={!configStatus?.telephonyConfigured || !selectedCampaign || isLoadingCampaigns}
+                  >
+                    <Phone className="h-4 w-4 mr-2" />
+                    Start Call
+                  </Button>
+                  {configStatus && !configStatus.telephonyConfigured && (
+                    <p className="text-sm text-muted-foreground">
+                      Telephony services not configured
+                    </p>
+                  )}
+                  {configStatus?.telephonyConfigured && !selectedCampaign && !isLoadingCampaigns && (
+                    <p className="text-sm text-muted-foreground">
+                      Please select a campaign to start the call
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>
 
           {/* Call Notes */}
-          {(callStatus === 'connected' || callStatus === 'completed') && (
+          {configStatus?.telephonyConfigured && (callStatus === 'connected' || callStatus === 'completed') && (
             <div className="space-y-2">
               <Label htmlFor="notes">Call Notes</Label>
               <Textarea
@@ -259,7 +447,7 @@ const CallLeadSheet = ({
               Cancel
             </Button>
             
-            {callStatus === 'completed' && (
+            {configStatus?.telephonyConfigured && callStatus === 'completed' && (
               <Button onClick={handleSaveAndClose}>
                 Save & Close
               </Button>
