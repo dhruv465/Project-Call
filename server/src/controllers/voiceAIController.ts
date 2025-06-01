@@ -8,7 +8,7 @@ import {
 } from '../services';
 
 // @desc    Analyze emotion from text/audio
-// @route   POST /api/voice-ai/analyze-emotion
+// @route   POST /api/lumina-outreach/analyze-emotion
 // @access  Private
 export const analyzeEmotion = async (req: Request, res: Response) => {
   try {
@@ -43,7 +43,7 @@ export const analyzeEmotion = async (req: Request, res: Response) => {
 };
 
 // @desc    Get voice personalities
-// @route   GET /api/voice-ai/personalities
+// @route   GET /api/lumina-outreach/personalities
 // @access  Private
 export const getVoicePersonalities = async (req: Request, res: Response) => {
   try {
@@ -59,7 +59,7 @@ export const getVoicePersonalities = async (req: Request, res: Response) => {
 };
 
 // @desc    Synthesize adaptive voice response
-// @route   POST /api/voice-ai/synthesize
+// @route   POST /api/lumina-outreach/synthesize
 // @access  Private
 export const synthesizeVoice = async (req: Request, res: Response) => {
   try {
@@ -98,7 +98,7 @@ export const synthesizeVoice = async (req: Request, res: Response) => {
 };
 
 // @desc    Real-time conversation adaptation
-// @route   POST /api/voice-ai/adapt-conversation
+// @route   POST /api/lumina-outreach/adapt-conversation
 // @access  Private
 export const adaptConversation = async (req: Request, res: Response) => {
   try {
@@ -134,7 +134,7 @@ export const adaptConversation = async (req: Request, res: Response) => {
 };
 
 // @desc    Train voice personality
-// @route   POST /api/voice-ai/train-personality
+// @route   POST /api/lumina-outreach/train-personality
 // @access  Private
 export const trainVoicePersonality = async (req: Request, res: Response) => {
   try {
@@ -166,7 +166,7 @@ export const trainVoicePersonality = async (req: Request, res: Response) => {
 };
 
 // @desc    Get emotion detection metrics
-// @route   GET /api/voice-ai/metrics
+// @route   GET /api/lumina-outreach/metrics
 // @access  Private
 export const getEmotionMetrics = async (req: Request, res: Response) => {
   try {
@@ -188,7 +188,7 @@ export const getEmotionMetrics = async (req: Request, res: Response) => {
 };
 
 // @desc    Test voice AI capabilities
-// @route   POST /api/voice-ai/test
+// @route   POST /api/lumina-outreach/test
 // @access  Private
 export const testVoiceAI = async (req: Request, res: Response) => {
   try {

@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import Sidebar from './Sidebar';
+import Logo from '@/components/Logo';
 
 const Header = () => {
   const { user, logout } = useAuth();
@@ -44,7 +45,10 @@ const Header = () => {
           </Sheet>
 
           {/* Page title - can be dynamically set based on current route */}
-          <h1 className="text-lg font-semibold lg:hidden">Lumina Outreach</h1>
+          <div className="flex items-center gap-2 lg:hidden">
+            <Logo width={24} height={24} />
+            <h1 className="text-lg font-semibold">Lumina Outreach</h1>
+          </div>
         </div>
 
         {/* Right side actions - moved to absolute right */}

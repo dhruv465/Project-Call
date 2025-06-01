@@ -14,18 +14,18 @@ NC='\033[0m' # No Color
 
 # Configuration
 NODE_VERSION="16.14.0"
-APP_DIR="/opt/voice-ai"
+APP_DIR="/opt/lumina-outreach"
 LOG_DIR="${APP_DIR}/logs"
 DATA_DIR="${APP_DIR}/data"
 BACKUP_DIR="${APP_DIR}/backups"
 ENV_FILE="${APP_DIR}/.env.production"
-USER="voice-ai"
-GROUP="voice-ai"
+USER="lumina-outreach"
+GROUP="lumina-outreach"
 
 # Banner
 echo -e "${GREEN}"
 echo "=========================================================="
-echo "  Voice AI Production Setup"
+echo "  Lumina Outreach Production Setup"
 echo "  $(date)"
 echo "=========================================================="
 echo -e "${NC}"
@@ -86,10 +86,10 @@ fi
 
 # Configure Nginx
 echo -e "${YELLOW}Setting up Nginx configuration...${NC}"
-cat > /etc/nginx/sites-available/voice-ai << EOF
+cat > /etc/nginx/sites-available/lumina-outreach << EOF
 server {
     listen 80;
-    server_name voice-ai.example.com;
+    server_name lumina-outreach.example.com;
 
     location / {
         proxy_pass http://localhost:3000;
@@ -113,12 +113,12 @@ server {
 EOF
 
 # Enable the site
-ln -sf /etc/nginx/sites-available/voice-ai /etc/nginx/sites-enabled/
+ln -sf /etc/nginx/sites-available/lumina-outreach /etc/nginx/sites-enabled/
 
 # Setup Supervisor to manage the Node process
 echo -e "${YELLOW}Setting up Supervisor configuration...${NC}"
-cat > /etc/supervisor/conf.d/voice-ai.conf << EOF
-[program:voice-ai-server]
+cat > /etc/supervisor/conf.d/lumina-outreach.conf << EOF
+[program:lumina-outreach-server]
 command=node dist/index.js
 directory=${APP_DIR}/server
 user=${USER}
@@ -137,7 +137,7 @@ PORT=3000
 HOST=0.0.0.0
 NODE_ENV=production
 API_PREFIX=/api
-CORS_ORIGIN=https://voice-ai.example.com
+CORS_ORIGIN=https://lumina-outreach.example.com
 TRUST_PROXY=true
 UPLOAD_DIR=${APP_DIR}/uploads
 TEMP_DIR=${APP_DIR}/tmp
@@ -154,7 +154,7 @@ AUDIT_ENABLED=true
 AUDIT_LOG_DIR=${LOG_DIR}/audit
 
 # Database Configuration
-DATABASE_URL=postgresql://user:password@localhost:5432/voice_ai
+DATABASE_URL=postgresql://user:password@localhost:5432/lumina_outreach
 DATABASE_SSL=false
 DATABASE_POOL_SIZE=10
 DATABASE_TIMEOUT=30000
@@ -165,7 +165,7 @@ TWILIO_ACCOUNT_SID=your_account_sid
 TWILIO_AUTH_TOKEN=your_auth_token
 TWILIO_PHONE_NUMBERS=+15551234567,+15557654321
 TWILIO_DEFAULT_NUMBER=+15551234567
-WEBHOOK_BASE_URL=https://voice-ai.example.com/api/webhooks
+WEBHOOK_BASE_URL=https://lumina-outreach.example.com/api/webhooks
 RECORD_CALLS=true
 TELEPHONY_FALLBACK_ENABLED=true
 
@@ -227,7 +227,7 @@ chmod -R 770 ${LOG_DIR} ${DATA_DIR} ${APP_DIR}/tmp ${APP_DIR}/uploads
 echo -e "${YELLOW}Creating backup script...${NC}"
 cat > ${APP_DIR}/backup.sh << EOF
 #!/bin/bash
-# Backup script for Voice AI
+# Backup script for Lumina Outreach
 
 TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
 BACKUP_DIR=${BACKUP_DIR}/\${TIMESTAMP}
@@ -235,7 +235,7 @@ BACKUP_DIR=${BACKUP_DIR}/\${TIMESTAMP}
 mkdir -p \${BACKUP_DIR}
 
 # Backup database
-pg_dump voice_ai > \${BACKUP_DIR}/database.sql
+pg_dump lumina_outreach > \${BACKUP_DIR}/database.sql
 
 # Backup models
 tar -czf \${BACKUP_DIR}/models.tar.gz ${APP_DIR}/../training/models
@@ -247,7 +247,7 @@ cp ${ENV_FILE} \${BACKUP_DIR}/
 # tar -czf \${BACKUP_DIR}/logs.tar.gz ${LOG_DIR}
 
 # Create manifest
-echo "Voice AI Backup - \${TIMESTAMP}" > \${BACKUP_DIR}/manifest.txt
+echo "Lumina Outreach Backup - \${TIMESTAMP}" > \${BACKUP_DIR}/manifest.txt
 echo "===========================================" >> \${BACKUP_DIR}/manifest.txt
 echo "Database: database.sql" >> \${BACKUP_DIR}/manifest.txt
 echo "Models: models.tar.gz" >> \${BACKUP_DIR}/manifest.txt
@@ -275,16 +275,16 @@ echo "1. Edit ${ENV_FILE}.template with your actual values"
 echo "2. Rename to ${ENV_FILE} when ready"
 echo "3. Deploy your application code to ${APP_DIR}"
 echo "4. Run: supervisorctl reload"
-echo "5. Set up SSL with: certbot --nginx -d voice-ai.example.com"
+echo "5. Set up SSL with: certbot --nginx -d lumina-outreach.example.com"
 echo ""
 echo "For manual startup:"
-echo "supervisorctl start voice-ai-server"
+echo "supervisorctl start lumina-outreach-server"
 echo -e "${NC}"
 
 # Ask to configure SSL now
 read -p "Would you like to configure SSL now? (y/n): " configure_ssl
 if [[ "$configure_ssl" =~ ^[Yy]$ ]]; then
-  read -p "Enter your domain name (e.g., voice-ai.example.com): " domain_name
+  read -p "Enter your domain name (e.g., lumina-outreach.example.com): " domain_name
   certbot --nginx -d ${domain_name}
 else
   echo -e "${YELLOW}Remember to configure SSL later for production security${NC}"

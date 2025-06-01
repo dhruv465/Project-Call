@@ -152,15 +152,15 @@ const Dashboard = () => {
   }
   
   // Create a display data object with default values when data is not available
-  const displayData: DashboardData = dashboardData || {
-    totalCalls: 0,
-    connectedCalls: 0,
-    activeLeads: 0,
-    callsToday: 0,
-    averageCallDuration: "0",
-    conversionRate: 0,
-    recentCalls: [],
-    upcomingCallbacks: []
+  const displayData: DashboardData = {
+    totalCalls: dashboardData?.totalCalls || 0,
+    connectedCalls: dashboardData?.connectedCalls || 0,
+    activeLeads: dashboardData?.activeLeads || 0,
+    callsToday: dashboardData?.callsToday || 0,
+    averageCallDuration: dashboardData?.averageCallDuration || "0",
+    conversionRate: dashboardData?.conversionRate || 0,
+    recentCalls: dashboardData?.recentCalls || [],
+    upcomingCallbacks: dashboardData?.upcomingCallbacks || []
   };
 
   return (
@@ -283,7 +283,7 @@ const Dashboard = () => {
             <h3 className="text-lg font-medium">Recent Calls</h3>
             <Button variant="outline" size="sm">View All</Button>
           </div>
-          {displayData.recentCalls.length > 0 ? (
+          {displayData.recentCalls && displayData.recentCalls.length > 0 ? (
             <div className="divide-y">
               {displayData.recentCalls.map((call: RecentCall) => (
                 <div key={call.id} className="py-3 flex items-center justify-between">
@@ -318,7 +318,7 @@ const Dashboard = () => {
             <h3 className="text-lg font-medium">Upcoming Callbacks</h3>
             <Button variant="outline" size="sm">View All</Button>
           </div>
-          {displayData.upcomingCallbacks.length > 0 ? (
+          {displayData.upcomingCallbacks && displayData.upcomingCallbacks.length > 0 ? (
             <div className="divide-y">
               {displayData.upcomingCallbacks.map((callback: UpcomingCallback) => (
                 <div key={callback.id} className="py-3">

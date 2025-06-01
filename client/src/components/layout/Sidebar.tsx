@@ -13,6 +13,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import Logo from '@/components/Logo';
 
 interface SidebarItemProps {
   href: string;
@@ -56,7 +57,10 @@ const Sidebar: React.FC<SidebarProps> = ({ onNavigate }) => {
     <div className="flex flex-col w-64 border-r bg-card lg:w-64">
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b">
-        <h1 className="text-xl font-bold">Lumina Outreach</h1>
+        <div className="flex items-center gap-2">
+          <Logo width={32} height={32} />
+          <h1 className="text-xl font-bold">Lumina Outreach</h1>
+        </div>
       </div>
 
       {/* Navigation */}

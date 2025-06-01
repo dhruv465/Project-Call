@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" className="project-call-logo">
+  <!-- Strong Background Elements -->
+  <circle cx="100" cy="100" r="90" fill="currentColor" opacity="0.15"/>
+  <circle cx="100" cy="100" r="75" fill="none" stroke="currentColor" stroke-width="6" opacity="0.4"/>
+  <circle cx="100" cy="100" r="60" fill="none" stroke="currentColor" stroke-width="3" opacity="0.2"/>
+  
+  <!-- Super Bold Central Microphone -->
+  <rect x="75" y="40" width="50" height="70" rx="25" fill="currentColor" opacity="0.95"/>
+  <rect x="80" y="45" width="40" height="60" rx="20" fill="var(--background)" opacity="0.9"/>
+  <rect x="85" y="50" width="30" height="50" rx="15" fill="currentColor" opacity="0.8"/>
+  <rect x="90" y="55" width="20" height="40" rx="10" fill="var(--background)" opacity="0.6"/>
+  
+  <!-- Heavy Microphone Stand -->
+  <path d="M60,75 L60,115 C60,150 140,150 140,115 L140,75" 
+        stroke="currentColor" 
+        stroke-width="12" 
+        fill="none"
+        opacity="0.9"
+        stroke-linecap="round"/>
+  <rect x="90" y="115" width="20" height="40" rx="10" fill="currentColor" opacity="0.9"/>
+  <rect x="70" y="150" width="60" height="15" rx="8" fill="currentColor" opacity="0.9"/>
+  
+  <!-- Ultra Bold Waveforms -->
+  <path d="M10,100 Q20,50 30,100 Q40,150 50,100 Q60,50 70,100" 
+        stroke="currentColor" 
+        stroke-width="12" 
+        fill="none"
+        opacity="0.9"
+        stroke-linecap="round"/>
+  <path d="M130,100 Q140,50 150,100 Q160,150 170,100 Q180,50 190,100" 
+        stroke="currentColor" 
+        stroke-width="12" 
+        fill="none"
+        opacity="0.9"
+        stroke-linecap="round"/>
+        
+  <!-- Secondary Bold Waveforms -->
+  <path d="M15,100 Q25,70 35,100 Q45,130 55,100 Q65,70 75,100" 
+        stroke="currentColor" 
+        stroke-width="8" 
+        fill="none"
+        opacity="0.6"
+        stroke-linecap="round"/>
+  <path d="M125,100 Q135,70 145,100 Q155,130 165,100 Q175,70 185,100" 
+        stroke="currentColor" 
+        stroke-width="8" 
+        fill="none"
+        opacity="0.6"
+        stroke-linecap="round"/>
+  
+  <!-- Massive AI/Brain Elements -->
+  <circle cx="40" cy="25" r="22" fill="currentColor" opacity="0.8"/>
+  <circle cx="160" cy="25" r="22" fill="currentColor" opacity="0.8"/>
+  <circle cx="40" cy="25" r="15" fill="var(--background)" opacity="0.9"/>
+  <circle cx="160" cy="25" r="15" fill="var(--background)" opacity="0.9"/>
+  <circle cx="40" cy="25" r="8" fill="currentColor" opacity="0.9"/>
+  <circle cx="160" cy="25" r="8" fill="currentColor" opacity="0.9"/>
+  
+  <!-- Bold Emotion Indicator -->
+  <path d="M40,175 Q100,205 160,175" 
+        stroke="currentColor" 
+        stroke-width="12" 
+        stroke-linecap="round"
+        fill="none"
+        opacity="0.8"/>
+        
+  <!-- Heavy Neural Network Connections -->
+  <path d="M15,15 C30,25 40,35 55,30 C70,25 80,15 95,20" 
+        stroke="currentColor" 
+        stroke-width="6" 
+        fill="none"
+        opacity="0.7"
+        stroke-linecap="round"/>
+  <path d="M105,20 C120,15 130,25 145,30 C160,35 170,25 185,15" 
+        stroke="currentColor" 
+        stroke-width="6" 
+        fill="none"
+        opacity="0.7"
+        stroke-linecap="round"/>
+        
+  <!-- Prominent Data Points -->
+  <circle cx="20" cy="60" r="8" fill="currentColor" opacity="0.8"/>
+  <circle cx="180" cy="60" r="8" fill="currentColor" opacity="0.8"/>
+  <circle cx="20" cy="140" r="8" fill="currentColor" opacity="0.8"/>
+  <circle cx="180" cy="140" r="8" fill="currentColor" opacity="0.8"/>
+  
+  <!-- Bold Corner Elements -->
+  <rect x="10" y="90" width="20" height="20" rx="10" fill="currentColor" opacity="0.6"/>
+  <rect x="170" y="90" width="20" height="20" rx="10" fill="currentColor" opacity="0.6"/>
+  
+  <!-- Additional Weight Elements -->
+  <path d="M50,180 Q70,185 90,180" stroke="currentColor" stroke-width="6" opacity="0.5" stroke-linecap="round"/>
+  <path d="M110,180 Q130,185 150,180" stroke="currentColor" stroke-width="6" opacity="0.5" stroke-linecap="round"/>
+</svg>

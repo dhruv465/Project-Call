@@ -71,7 +71,7 @@ const VoiceAIManagement: React.FC = () => {
 
   const loadVoicePersonalities = async () => {
     try {
-      const response = await fetch('/api/voice-ai/personalities', {
+      const response = await fetch('/api/lumina-outreach/personalities', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -104,7 +104,7 @@ const VoiceAIManagement: React.FC = () => {
         });
       }, 500);
 
-      const response = await fetch('/api/voice-ai/train-model', {
+      const response = await fetch('/api/lumina-outreach/train-model', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -140,7 +140,7 @@ const VoiceAIManagement: React.FC = () => {
 
     setIsAnalyzing(true);
     try {
-      const response = await fetch('/api/voice-ai/analyze-emotion', {
+      const response = await fetch('/api/lumina-outreach/analyze-emotion', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -175,7 +175,7 @@ const VoiceAIManagement: React.FC = () => {
 
     setIsSynthesizing(true);
     try {
-      const response = await fetch('/api/voice-ai/synthesize-speech', {
+      const response = await fetch('/api/lumina-outreach/synthesize-speech', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,

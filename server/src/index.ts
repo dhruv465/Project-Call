@@ -19,6 +19,7 @@ import dashboardRoutes from './routes/dashboardRoutes';
 import configurationRoutes from './routes/configurationRoutes';
 import voiceAIRoutes from './routes/voiceAIRoutes';
 import telephonyRoutes from './routes/telephonyRoutes';
+import analyticsRoutes from './routes/analyticsRoutes';
 
 // Services initialization
 import { initializeSpeechService } from './services/realSpeechService';
@@ -106,8 +107,9 @@ app.use('/api/campaigns', campaignRoutes);
 app.use('/api/calls', callRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/configuration', configurationRoutes);
-app.use('/api/voice-ai', voiceAIRoutes);
+app.use('/api/lumina-outreach', voiceAIRoutes);
 app.use('/api/telephony', telephonyRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Global error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

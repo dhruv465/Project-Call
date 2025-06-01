@@ -1,5 +1,5 @@
 groups:
-- name: voice-ai-alerts
+- name: lumina-outreach-alerts
   rules:
   - alert: HighCPUUsage
     expr: (100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
@@ -38,7 +38,7 @@ groups:
       description: "{{ $labels.job }} on {{ $labels.instance }} has been down for more than 1 minute"
 
   - alert: SlowAPIResponse
-    expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service="voice-ai-api"}[5m])) by (le, route)) > 1
+    expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service="lumina-outreach-api"}[5m])) by (le, route)) > 1
     for: 5m
     labels:
       severity: warning

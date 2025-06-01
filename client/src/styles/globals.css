@@ -94,3 +94,68 @@ html, body {
 .form-input-enhanced {
   @apply px-4 py-3 !important;
 }
+
+/* Logo enhancements */
+.logo-container {
+  @apply flex items-center justify-center;
+}
+
+.logo-container svg {
+  @apply transition-all duration-300 ease-in-out;
+}
+
+.logo-container:hover svg {
+  @apply scale-105;
+  filter: drop-shadow(0 0 12px hsl(var(--primary) / 0.3));
+}
+
+/* Enhanced Logo Styles */
+.project-call-logo {
+  transition: all 0.3s ease-in-out;
+}
+
+.project-call-logo:hover {
+  transform: scale(1.05);
+  filter: brightness(1.1);
+}
+
+.logo-container {
+  position: relative;
+}
+
+.logo-container::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, transparent, rgba(59, 130, 246, 0.1), transparent);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: -1;
+}
+
+.logo-container:hover::before {
+  opacity: 1;
+}
+
+/* Theme-aware logo styles */
+.dark .logo-container svg {
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.1));
+}
+
+.light .logo-container svg {
+  filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.1));
+}
+
+/* Dark theme enhancements */
+.dark .project-call-logo {
+  filter: brightness(1.1) contrast(1.1);
+}
+
+/* Light theme enhancements */
+.light .project-call-logo {
+  filter: contrast(1.2) saturate(1.1);
+}

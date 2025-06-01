@@ -16,20 +16,20 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  - job_name: "voice-ai-server"
+  - job_name: "lumina-outreach-server"
     metrics_path: /metrics
     static_configs:
       - targets: ["server:3000"]
         labels:
-          service: "voice-ai-api"
+          service: "lumina-outreach-api"
           environment: "production"
 
-  - job_name: "voice-ai-ml"
+  - job_name: "lumina-outreach-ml"
     metrics_path: /metrics
     static_configs:
       - targets: ["ml-service:5000"]
         labels:
-          service: "voice-ai-ml"
+          service: "lumina-outreach-ml"
           environment: "production"
 
   - job_name: "node-exporter"

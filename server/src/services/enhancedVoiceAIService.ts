@@ -1070,6 +1070,109 @@ export class EnhancedVoiceAIService {
   async analyzeCustomerEmotion(speechResult: string): Promise<EmotionAnalysis> {
     return this.detectEmotionWithCulturalContext(speechResult);
   }
+
+  /**
+   * Generate AI response based on user input and conversation context
+   */
+  async generateResponse(params: {
+    userInput: string;
+    conversationLog: any[];
+    leadId: string;
+    campaignId: string;
+    detectedEmotion?: string;
+    detectedIntent?: string;
+    objections?: string[];
+    callContext: {
+      complianceComplete: boolean;
+      disclosureComplete: boolean;
+      currentPhase: string;
+      language: string;
+      culturalContext?: string;
+    };
+  }): Promise<{
+    text: string;
+    emotion: string;
+    intent: string;
+    adaptationApplied: boolean;
+  }> {
+    try {
+      const { userInput, conversationLog, detectedEmotion, callContext } = params;
+      
+      // Create emotional context for better response generation
+      const emotion: EmotionAnalysis = {
+        primary: detectedEmotion || 'neutral',
+        confidence: 0.8,
+        intensity: 0.6,
+        context: `User said: ${userInput}`,
+        culturalContext: callContext.culturalContext,
+        adaptationNeeded: true
+      };
+      
+      // Create conversation context from history
+      const conversationContext = conversationLog
+        .slice(-5)
+        .map(entry => `${entry.role}: ${entry.content}`)
+        .join('\n');
+      
+      // Get default personality
+      const personality: VoicePersonality = {
+        id: 'default',
+        name: 'Professional',
+        description: 'A professional and friendly sales agent',
+        voiceId: 'default',
+        personality: 'professional',
+        style: 'conversational',
+        emotionalRange: ['neutral', 'happy', 'sympathetic'],
+        languageSupport: ['English'],
+        culturalAdaptations: {
+          'English': {
+            greetings: ['Hello', 'Hi there'],
+            closings: ['Thank you', 'Have a great day'],
+            persuasionStyle: 'logical',
+            communicationPattern: 'direct'
+          }
+        },
+        settings: {
+          stability: 0.7,
+          similarityBoost: 0.7,
+          style: 0.5,
+          useSpeakerBoost: true
+        },
+        trainingMetrics: {
+          emotionAccuracy: 0.85,
+          adaptationAccuracy: 0.8,
+          customerSatisfactionScore: 0.9,
+          conversionRate: 0.75
+        }
+      };
+      
+      const language = callContext.language === 'en-US' ? 'English' : 'English';
+      
+      // Get the appropriate response based on cultural context and emotion
+      const adaptedResponse = await this.generateCulturallyAdaptedResponse(
+        emotion,
+        conversationContext,
+        personality,
+        language as Language
+      );
+      
+      return {
+        text: adaptedResponse.script,
+        emotion: adaptedResponse.tone,
+        intent: adaptedResponse.approach,
+        adaptationApplied: adaptedResponse.culturallyAdapted
+      };
+    } catch (error) {
+      logger.error('Error generating AI response:', error);
+      // Fallback response in case of errors
+      return {
+        text: "I'm sorry, I didn't quite catch that. Could you please repeat?",
+        emotion: "neutral",
+        intent: "clarification",
+        adaptationApplied: false
+      };
+    }
+  }
 }
 
 export default EnhancedVoiceAIService;

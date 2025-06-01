@@ -17,8 +17,8 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-APP_NAME="voice-ai"
-APP_DIR="/opt/voice-ai"
+APP_NAME="lumina-outreach"
+APP_DIR="/opt/lumina-outreach"
 MODELS_DIR="${APP_DIR}/models"
 LOG_DIR="${APP_DIR}/logs"
 MONITORING_DIR="${APP_DIR}/monitoring"
@@ -186,11 +186,11 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: 'voice-ai-server'
+  - job_name: 'lumina-outreach-server'
     static_configs:
       - targets: ['server:3000']
         labels:
-          service: 'voice-ai-api'
+          service: 'lumina-outreach-api'
           environment: 'production'
 EOF
 
@@ -550,7 +550,7 @@ cat > ${MONITORING_DIR}/grafana/dashboards/voice_ai_performance.json << EOF
   "timepicker": {},
   "timezone": "",
   "title": "Voice AI Performance Dashboard",
-  "uid": "voice-ai-performance",
+  "uid": "lumina-outreach-performance",
   "version": 1,
   "weekStart": ""
 }

@@ -1,146 +1,339 @@
 import mongoose from 'mongoose';
 
 export interface ICall extends mongoose.Document {
-  campaign: mongoose.Schema.Types.ObjectId;
-  lead: mongoose.Schema.Types.ObjectId;
-  twilioCallSid: string;
-  status: string;
-  outcome: string;
-  startTime: Date;
+  _id: string;
+  leadId: string;
+  campaignId: string;
+  phoneNumber: string;
+  status: 'queued' | 'dialing' | 'in-progress' | 'completed' | 'failed' | 'no-answer' | 'busy' | 'voicemail';
+  priority: 'low' | 'medium' | 'high';
+  scheduledAt: Date;
+  twilioSid?: string;
+  startTime?: Date;
   endTime?: Date;
-  duration: number;
+  duration?: number;
   recordingUrl?: string;
   transcript?: string;
-  conversationLog: {
+  personalityId?: string;
+  abTestVariantId?: string;
+  maxRetries: number;
+  retryCount: number;
+  callbackUrl: string;
+  createdAt: Date;
+  updatedAt: Date;
+  recordCall: boolean;
+  complianceScriptId?: string;
+  callReasons?: string[];
+  outcome?: string;
+  notes?: string;
+  failureCode?: string;
+  providerData?: {
+    provider: 'twilio' | 'nexmo' | 'plivo';
+    callId: string;
+    cost?: number;
+    diagnostics?: Record<string, any>;
+  };
+  complianceChecks?: {
+    disclosureProvided: boolean;
+    withinPermittedHours: boolean;
+    consentReceived: boolean;
+    doNotCallChecked: boolean;
+    recordingDisclosureProvided?: boolean;
+    timeZone?: string;
+  };
+  networkInfo?: {
+    callQuality: number;
+    latency: number;
+    packetLoss: number;
+    jitter: number;
+    codec: string;
+  };
+  customerInteraction?: {
+    totalSpeakingTime: number;
+    speakingTimeRatio: number; // AI speaking time / customer speaking time
+    interruptions: Array<{
+      timestamp: Date;
+      duration: number;
+      interrupter: 'ai' | 'customer';
+    }>;
+    silencePeriods: Array<{
+      timestamp: Date;
+      duration: number;
+    }>;
+    engagementScore: number;
+  };
+  metrics?: {
+    duration: number;
+    outcome: string;
+    conversationMetrics: {
+      customerEngagement: number;
+      emotionalTone: string[];
+      objectionCount: number;
+      interruptionCount: number;
+      conversionIndicators: string[];
+    };
+    qualityScore: number;
+    complianceScore?: number;
+    intentDetection?: {
+      primaryIntent: string;
+      confidence: number;
+      secondaryIntents: Array<{intent: string, confidence: number}>;
+    };
+    callRecordingUrl?: string;
+    transcriptionAnalysis?: {
+      keyPhrases: string[];
+      sentimentBySegment: Array<{segment: string, sentiment: number}>;
+      followUpRecommendations: string[];
+    };
+    emotionalJourney?: Array<{
+      timestamp: Date;
+      emotion: string;
+      confidence: number;
+      trigger?: string;
+    }>;
+    conversionProbability?: number;
+    followUpRecommendation?: 'immediate' | 'next-day' | '3-day' | 'week' | 'none';
+    agentPerformance?: {
+      scriptAdherence: number;
+      objectionHandling: number;
+      personalityAlignment: number;
+      overallScore: number;
+    };
+  };
+  conversationLog?: Array<{
     role: string;
     content: string;
     timestamp: Date;
-  }[];
-  customerIntents: string[];
-  sentiment: string;
-  callback?: {
-    scheduled: boolean;
-    dateTime: Date;
-    notes: string;
-  };
-  notes?: string;
-  createdBy: mongoose.Schema.Types.ObjectId;
-  createdAt: Date;
-  updatedAt: Date;
+    emotion?: string;
+    intent?: string;
+    confidence?: number;
+    processingTime?: number;
+  }>;
+  followUpTasks?: Array<{
+    type: 'email' | 'call' | 'sms' | 'task';
+    scheduledFor: Date;
+    completed: boolean;
+    notes?: string;
+    priority: 'low' | 'medium' | 'high';
+  }>;
+  webhookEvents?: Array<{
+    event: string;
+    timestamp: Date;
+    payload: Record<string, any>;
+    status: 'sent' | 'failed' | 'received';
+  }>;
 }
 
-const CallSchema = new mongoose.Schema(
-  {
-    campaign: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Campaign',
-      required: true,
-    },
-    lead: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Lead',
-      required: true,
-    },
-    twilioCallSid: {
-      type: String,
-      required: true,
-    },
-    status: {
-      type: String,
-      enum: ['Initiated', 'Ringing', 'In-Progress', 'Completed', 'Failed', 'No-Answer', 'Busy'],
-      default: 'Initiated',
-    },
-    outcome: {
-      type: String,
-      enum: ['Interested', 'Not Interested', 'Call Back', 'Wrong Number', 'Disconnected', 'No Outcome'],
-      default: 'No Outcome',
-    },
-    startTime: {
-      type: Date,
-      required: true,
-    },
-    endTime: {
-      type: Date,
-    },
-    duration: {
-      type: Number,
-      default: 0, // in seconds
-    },
-    recordingUrl: {
-      type: String,
-    },
-    transcript: {
-      type: String,
-    },
-    conversationLog: [
-      {
-        role: {
-          type: String,
-          enum: ['system', 'assistant', 'customer'],
-          required: true,
-        },
-        content: {
-          type: String,
-          required: true,
-        },
-        timestamp: {
-          type: Date,
-          default: Date.now,
-        },
-      },
-    ],
-    customerIntents: {
-      type: [String],
-    },
-    sentiment: {
-      type: String,
-      enum: ['Positive', 'Neutral', 'Negative', 'Unknown'],
-      default: 'Unknown',
-    },
-    callback: {
-      scheduled: {
-        type: Boolean,
-        default: false,
-      },
-      dateTime: {
-        type: Date,
-      },
-      notes: {
-        type: String,
-      },
-    },
-    notes: {
-      type: String,
-    },
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
+const CallSchema = new mongoose.Schema({
+  _id: String,
+  leadId: { type: String, required: true, index: true },
+  campaignId: { type: String, required: true, index: true },
+  phoneNumber: { type: String, required: true },
+  status: { 
+    type: String, 
+    enum: ['queued', 'dialing', 'in-progress', 'completed', 'failed', 'no-answer', 'busy', 'voicemail'],
+    default: 'queued',
+    index: true
   },
-  { timestamps: true }
-);
-
-// Index for faster queries
-CallSchema.index({ campaign: 1 });
-CallSchema.index({ lead: 1 });
-CallSchema.index({ outcome: 1 });
-CallSchema.index({ startTime: 1 });
-CallSchema.index({ twilioCallSid: 1 }, { unique: true });
-CallSchema.index({ 'callback.scheduled': 1, 'callback.dateTime': 1 });
-
-// Middleware for sending notifications when call status changes
-CallSchema.post('save', async function(doc) {
-  try {
-    // Only log call completion since notification functionality has been removed
-    if (doc.populated('campaign') && doc.populated('lead')) {
-      console.log('Call completed:', doc._id);
+  priority: { 
+    type: String, 
+    enum: ['low', 'medium', 'high'],
+    default: 'medium' 
+  },
+  scheduledAt: { type: Date, default: Date.now, index: true },
+  twilioSid: String,
+  startTime: Date,
+  endTime: Date,
+  duration: Number,
+  recordingUrl: String,
+  transcript: String,
+  personalityId: String,
+  abTestVariantId: String,
+  maxRetries: { type: Number, default: 3 },
+  retryCount: { type: Number, default: 0 },
+  callbackUrl: String,
+  recordCall: { type: Boolean, default: false },
+  complianceScriptId: String,
+  callReasons: [String],
+  outcome: String,
+  notes: String,
+  failureCode: String,
+  providerData: {
+    provider: { 
+      type: String, 
+      enum: ['twilio', 'nexmo', 'plivo'] 
+    },
+    callId: String,
+    cost: Number,
+    diagnostics: mongoose.Schema.Types.Mixed
+  },
+  complianceChecks: {
+    disclosureProvided: { type: Boolean, default: false },
+    withinPermittedHours: { type: Boolean, default: true },
+    consentReceived: { type: Boolean, default: false },
+    doNotCallChecked: { type: Boolean, default: false },
+    recordingDisclosureProvided: Boolean,
+    timeZone: String
+  },
+  networkInfo: {
+    callQuality: Number,
+    latency: Number,
+    packetLoss: Number,
+    jitter: Number,
+    codec: String
+  },
+  customerInteraction: {
+    totalSpeakingTime: Number,
+    speakingTimeRatio: Number,
+    interruptions: [{
+      timestamp: Date,
+      duration: Number,
+      interrupter: { 
+        type: String, 
+        enum: ['ai', 'customer'] 
+      }
+    }],
+    silencePeriods: [{
+      timestamp: Date,
+      duration: Number
+    }],
+    engagementScore: Number
+  },
+  metrics: {
+    duration: Number,
+    outcome: String,
+    conversationMetrics: {
+      customerEngagement: Number,
+      emotionalTone: [String],
+      objectionCount: Number,
+      interruptionCount: Number,
+      conversionIndicators: [String]
+    },
+    qualityScore: Number,
+    complianceScore: Number,
+    intentDetection: {
+      primaryIntent: String,
+      confidence: Number,
+      secondaryIntents: [{
+        intent: String,
+        confidence: Number
+      }]
+    },
+    callRecordingUrl: String,
+    transcriptionAnalysis: {
+      keyPhrases: [String],
+      sentimentBySegment: [{
+        segment: String,
+        sentiment: Number
+      }],
+      followUpRecommendations: [String]
+    },
+    emotionalJourney: [{
+      timestamp: Date,
+      emotion: String,
+      confidence: Number,
+      trigger: String
+    }],
+    conversionProbability: Number,
+    followUpRecommendation: { 
+      type: String, 
+      enum: ['immediate', 'next-day', '3-day', 'week', 'none'] 
+    },
+    agentPerformance: {
+      scriptAdherence: Number,
+      objectionHandling: Number,
+      personalityAlignment: Number,
+      overallScore: Number
     }
-  } catch (error) {
-    console.error('Error in call post-save hook:', error);
-  }
+  },
+  conversationLog: [{
+    role: { type: String, required: true },
+    content: { type: String, required: true },
+    timestamp: { type: Date, default: Date.now },
+    emotion: String,
+    intent: String,
+    confidence: Number,
+    processingTime: Number
+  }],
+  followUpTasks: [{
+    type: { 
+      type: String, 
+      enum: ['email', 'call', 'sms', 'task'],
+      required: true 
+    },
+    scheduledFor: { type: Date, required: true },
+    completed: { type: Boolean, default: false },
+    notes: String,
+    priority: { 
+      type: String, 
+      enum: ['low', 'medium', 'high'],
+      default: 'medium' 
+    }
+  }],
+  webhookEvents: [{
+    event: String,
+    timestamp: { type: Date, default: Date.now },
+    payload: mongoose.Schema.Types.Mixed,
+    status: { 
+      type: String, 
+      enum: ['sent', 'failed', 'received'],
+      default: 'sent' 
+    }
+  }],
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
 });
 
-const Call = mongoose.model<ICall>('Call', CallSchema);
+// Create compound indexes for efficient queries
+CallSchema.index({ campaignId: 1, status: 1 });
+CallSchema.index({ phoneNumber: 1, createdAt: -1 });
+CallSchema.index({ scheduledAt: 1, status: 1, priority: 1 });
+CallSchema.index({ leadId: 1, createdAt: -1 });
+CallSchema.index({ 'providerData.provider': 1, 'providerData.callId': 1 });
+CallSchema.index({ 'metrics.outcome': 1, campaignId: 1 });
+CallSchema.index({ 'complianceChecks.timeZone': 1, scheduledAt: 1 });
+CallSchema.index({ 'followUpTasks.scheduledFor': 1, 'followUpTasks.completed': 1 });
+CallSchema.index({ 'metrics.conversionProbability': -1 });
+CallSchema.index({ createdAt: -1, status: 1 });
 
-export default Call;
+// Add static methods to the Call model
+CallSchema.statics.findCallsByPhoneNumber = function(phoneNumber: string) {
+  return this.find({ phoneNumber }).sort({ createdAt: -1 });
+};
+
+CallSchema.statics.findActiveCalls = function() {
+  return this.find({ 
+    status: { $in: ['dialing', 'in-progress'] } 
+  }).sort({ startTime: -1 });
+};
+
+CallSchema.statics.findCallsDuringPeriod = function(startDate: Date, endDate: Date) {
+  return this.find({
+    startTime: { $gte: startDate },
+    endTime: { $lte: endDate }
+  });
+};
+
+CallSchema.statics.findCallsWithHighConversionProbability = function(threshold: number = 0.7) {
+  return this.find({
+    'metrics.conversionProbability': { $gte: threshold },
+    status: 'completed'
+  }).sort({ 'metrics.conversionProbability': -1 });
+};
+
+CallSchema.statics.getCallMetricsByCampaign = async function(campaignId: string) {
+  const pipeline = [
+    { $match: { campaignId } },
+    { $group: {
+      _id: '$status',
+      count: { $sum: 1 },
+      avgDuration: { $avg: '$duration' },
+      totalCalls: { $sum: 1 }
+    }},
+    { $sort: { count: -1 } }
+  ] as any[];
+  
+  return this.aggregate(pipeline);
+};
+
+export default mongoose.model<ICall>('Call', CallSchema);

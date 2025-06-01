@@ -7,6 +7,8 @@ import VoiceAIService from './voiceAIService';
 import { AdvancedTelephonyService, advancedTelephonyService } from './advancedTelephonyService';
 import { AdvancedConversationEngine } from './advancedConversationEngine';
 import { AdvancedCampaignService, advancedCampaignService } from './advancedCampaignService';
+import { conversationStateMachine } from './conversationStateMachine';
+import * as webhookHandlers from './webhookHandlers';
 
 // Create instances for services that need to be shared
 const elevenLabsApiKey = process.env.ELEVEN_LABS_API_KEY || '';
@@ -27,6 +29,16 @@ export const llmService = new LLMService(openAIApiKey, anthropicApiKey);
 
 // Create advanced service instances
 export const advancedConversationEngine = new AdvancedConversationEngine(llmService, voiceAIService);
+
+// Export the conversation state machine
+export { conversationStateMachine };
+
+// Export webhook handlers
+export { webhookHandlers };
+
+// Export analytics services
+export { callAnalyticsService } from './callAnalyticsService';
+export { callMonitoring } from '../monitoring/callMonitoring';
 
 export const emotionDetectionService = {
   analyzeAudioEmotion: async (audioData: any) => {

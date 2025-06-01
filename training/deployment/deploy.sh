@@ -31,7 +31,7 @@ fi
 
 echo "✅ Deployment completed successfully!"
 echo "📊 Production models are now integrated with the Voice AI system"
-echo "🔍 Monitor performance at: http://localhost:8000/api/voice-ai/model-status"
+echo "🔍 Monitor performance at: http://localhost:8000/api/lumina-outreach/model-status"
 
 # Run integration tests
 echo "🧪 Running integration tests..."

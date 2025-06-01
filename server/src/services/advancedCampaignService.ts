@@ -93,7 +93,7 @@ export class AdvancedCampaignService {
     `).join('\n');
 
     return `
-      Generate a ${options.tone} cold calling script for the ${options.industry} industry.
+      Generate a ${options.tone} outreach script for the ${options.industry} industry.
       
       Requirements:
       - Target Audience: ${options.targetAudience}

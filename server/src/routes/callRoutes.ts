@@ -11,21 +11,31 @@ import {
   exportCalls
 } from '../controllers/callController';
 import { updateCallStatus } from '../controllers/updateCallStatusController';
+import { webhookHandlers } from '../services';
 
 const router = express.Router();
 
-// All routes are protected
-router.use(authenticate);
+// Protected routes
+router.use('/initiate', authenticate);
+router.use('/analytics', authenticate);
+router.use('/export', authenticate);
+router.use('/history', authenticate);
+
+// Webhook routes - these should not be authenticated
+router.post('/voice-webhook', webhookHandlers.handleTwilioVoiceWebhook);
+router.post('/status-webhook', webhookHandlers.handleTwilioStatusWebhook);
+router.post('/gather', webhookHandlers.handleTwilioGatherWebhook);
+router.post('/stream', webhookHandlers.handleTwilioStreamWebhook);
 
 // Call management routes
 router.post('/initiate', initiateCall);
 router.get('/', getCallHistory);
 router.get('/analytics', getCallAnalytics);
 router.get('/export', exportCalls);
-router.get('/:id', getCallById);
-router.get('/:id/recording', getCallRecording);
-router.get('/:id/transcript', getCallTranscript);
-router.put('/:id/status', updateCallStatus);
-router.post('/:id/schedule-callback', scheduleCallback);
+router.get('/:id', authenticate, getCallById);
+router.get('/:id/recording', authenticate, getCallRecording);
+router.get('/:id/transcript', authenticate, getCallTranscript);
+router.put('/:id/status', authenticate, updateCallStatus);
+router.post('/:id/schedule-callback', authenticate, scheduleCallback);
 
 export default router;

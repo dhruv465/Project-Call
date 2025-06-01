@@ -13,29 +13,29 @@ The Voice AI system provides advanced conversational AI capabilities with emotio
 ## API Endpoints
 
 ### Training and Model Management
-- `POST /api/voice-ai/train-model`: Train the Voice AI model
-- `POST /api/voice-ai/validate-model`: Validate model performance
-- `GET /api/voice-ai/personalities`: Get available voice personalities
+- `POST /api/lumina-outreach/train-model`: Train the Voice AI model
+- `POST /api/lumina-outreach/validate-model`: Validate model performance
+- `GET /api/lumina-outreach/personalities`: Get available voice personalities
 
 ### Core Voice AI Features
-- `POST /api/voice-ai/analyze-emotion`: Analyze emotions in text input
-- `POST /api/voice-ai/generate-response`: Generate adaptive response
-- `POST /api/voice-ai/synthesize-speech`: Synthesize speech from text
+- `POST /api/lumina-outreach/analyze-emotion`: Analyze emotions in text input
+- `POST /api/lumina-outreach/generate-response`: Generate adaptive response
+- `POST /api/lumina-outreach/synthesize-speech`: Synthesize speech from text
 
 ### Advanced Conversation Management
-- `POST /api/voice-ai/manage-conversation`: Manage conversation flow
-- `POST /api/voice-ai/conversation-analytics`: Get analytics for conversations
+- `POST /api/lumina-outreach/manage-conversation`: Manage conversation flow
+- `POST /api/lumina-outreach/conversation-analytics`: Get analytics for conversations
 
 ### Demo and Testing
-- `POST /api/voice-ai/demo/run-complete`: Run comprehensive demo
-- `GET /api/voice-ai/demo/status`: Get Voice AI status and capabilities
+- `POST /api/lumina-outreach/demo/run-complete`: Run comprehensive demo
+- `GET /api/lumina-outreach/demo/status`: Get Voice AI status and capabilities
 
 ## Integration Examples
 
 ### Basic Emotion Analysis
 ```typescript
 const analyzeEmotion = async (text: string, language: 'English' | 'Hindi') => {
-  const response = await fetch('/api/voice-ai/analyze-emotion', {
+  const response = await fetch('/api/lumina-outreach/analyze-emotion', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -56,7 +56,7 @@ const handleConversation = async (
   language: 'English' | 'Hindi'
 ) => {
   // 1. Analyze emotion
-  const emotionResponse = await fetch('/api/voice-ai/analyze-emotion', {
+  const emotionResponse = await fetch('/api/lumina-outreach/analyze-emotion', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -67,7 +67,7 @@ const handleConversation = async (
   const emotionData = await emotionResponse.json();
   
   // 2. Manage conversation flow
-  const flowResponse = await fetch('/api/voice-ai/manage-conversation', {
+  const flowResponse = await fetch('/api/lumina-outreach/manage-conversation', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -84,7 +84,7 @@ const handleConversation = async (
   const flowData = await flowResponse.json();
   
   // 3. Generate response based on flow recommendation
-  const responseResponse = await fetch('/api/voice-ai/generate-response', {
+  const responseResponse = await fetch('/api/lumina-outreach/generate-response', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -101,7 +101,7 @@ const handleConversation = async (
   const responseData = await responseResponse.json();
   
   // 4. Synthesize speech
-  const speechResponse = await fetch('/api/voice-ai/synthesize-speech', {
+  const speechResponse = await fetch('/api/lumina-outreach/synthesize-speech', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${localStorage.getItem('token')}`,

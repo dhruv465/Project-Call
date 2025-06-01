@@ -58,10 +58,7 @@ export const queueCall = async (req: Request & { user?: any }, res: Response) =>
 // @access  Public (Twilio webhook)
 export const handleVoiceWebhook = async (req: Request, res: Response) => {
   try {
-    const twiml = await advancedTelephonyService.handleVoiceWebhook(req);
-    
-    res.type('text/xml');
-    res.send(twiml);
+    await advancedTelephonyService.handleVoiceWebhook(req, res);
   } catch (error) {
     logger.error('Error in handleVoiceWebhook:', error);
     res.type('text/xml');
@@ -78,8 +75,7 @@ export const handleVoiceWebhook = async (req: Request, res: Response) => {
 // @access  Public (Twilio webhook)
 export const handleStatusWebhook = async (req: Request, res: Response) => {
   try {
-    await advancedTelephonyService.handleStatusWebhook(req);
-    res.status(200).send('OK');
+    await advancedTelephonyService.handleStatusWebhook(req, res);
   } catch (error) {
     logger.error('Error in handleStatusWebhook:', error);
     res.status(500).send('Error');
@@ -91,8 +87,7 @@ export const handleStatusWebhook = async (req: Request, res: Response) => {
 // @access  Public (Twilio webhook)
 export const handleRecordingWebhook = async (req: Request, res: Response) => {
   try {
-    await advancedTelephonyService.handleRecordingWebhook(req);
-    res.status(200).send('OK');
+    await advancedTelephonyService.handleRecordingWebhook(req, res);
   } catch (error) {
     logger.error('Error in handleRecordingWebhook:', error);
     res.status(500).send('Error');

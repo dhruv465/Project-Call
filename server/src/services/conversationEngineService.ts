@@ -323,4 +323,127 @@ Keep it brief, friendly, and culturally appropriate. Include a polite greeting a
       throw error;
     }
   }
+
+  /**
+   * Start a new conversation for a call
+   */
+  public async startConversation(callId: string, leadId: string, campaignId: string): Promise<string> {
+    try {
+      const sessionId = uuidv4();
+      
+      // Get default personality
+      const defaultPersonality: VoicePersonality = {
+        id: 'default',
+        name: 'Professional',
+        description: 'A professional and friendly sales agent',
+        voiceId: 'default',
+        personality: 'professional',
+        style: 'conversational',
+        emotionalRange: ['neutral', 'happy', 'sympathetic'],
+        languageSupport: ['English'],
+        culturalAdaptations: {
+          'English': {
+            greetings: ['Hello', 'Hi there'],
+            closings: ['Thank you', 'Have a great day'],
+            persuasionStyle: 'logical',
+            communicationPattern: 'direct'
+          }
+        },
+        settings: {
+          stability: 0.7,
+          similarityBoost: 0.7,
+          style: 0.5,
+          useSpeakerBoost: true
+        },
+        trainingMetrics: {
+          emotionAccuracy: 0.85,
+          adaptationAccuracy: 0.8,
+          customerSatisfactionScore: 0.9,
+          conversionRate: 0.75
+        }
+      };
+      
+      // Initialize the conversation with default settings
+      await this.initializeConversation(
+        sessionId,
+        leadId,
+        campaignId,
+        defaultPersonality,
+        'English'
+      );
+      
+      logger.info(`Started new conversation ${sessionId} for call ${callId}`);
+      return sessionId;
+    } catch (error) {
+      logger.error(`Error starting conversation for call ${callId}:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Process user input and generate AI response
+   */
+  public async processUserInput(conversationId: string, userInput: string): Promise<{
+    text: string;
+    emotion: string;
+    intent: string;
+  }> {
+    try {
+      // Find the conversation
+      const session = this.activeSessions.get(conversationId);
+      if (!session) {
+        throw new Error(`Conversation ${conversationId} not found`);
+      }
+      
+      // Add the user input to conversation history
+      const userTurn: ConversationTurn = {
+        id: uuidv4(),
+        timestamp: new Date(),
+        speaker: 'customer',
+        content: userInput
+      };
+      
+      session.conversationHistory.push(userTurn);
+      
+      // Generate response based on the user input
+      const responseText = await this.generateResponse({
+        sessionId: conversationId,
+        userInput
+      });
+      
+      // Create the agent turn
+      const agentTurn: ConversationTurn = {
+        id: uuidv4(),
+        timestamp: new Date(),
+        speaker: 'agent',
+        content: responseText,
+        emotions: {
+          primary: 'neutral',
+          confidence: 0.9,
+          intensity: 0.8,
+          context: userInput,
+          adaptationNeeded: false
+        }
+      };
+      
+      // Add agent response to history
+      session.conversationHistory.push(agentTurn);
+      
+      // Update metrics
+      session.metrics.totalTurns += 2; // User + agent turn
+      
+      return {
+        text: responseText,
+        emotion: "neutral",
+        intent: "continue"
+      };
+    } catch (error) {
+      logger.error(`Error processing user input for conversation ${conversationId}:`, error);
+      return {
+        text: "I'm sorry, I didn't catch that. Could you please repeat?",
+        emotion: "neutral",
+        intent: "clarification"
+      };
+    }
+  }
 }
