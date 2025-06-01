@@ -9,6 +9,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Slider } from '@/components/ui/slider';
 
 // Custom styles with consistent spacing
 const inputStyles = "w-full rounded-xl border border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
@@ -601,15 +603,16 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                     <div className="bg-muted/50 p-3 rounded-xl">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                         {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day: string) => (
-                          <label key={day} className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
+                          <div key={day} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`day-${day}`}
                               checked={formData.callTiming.daysOfWeek.includes(day)}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleDayChange(day, e.target.checked)}
-                              className="rounded border-gray-300 text-primary focus:ring-primary"
+                              onCheckedChange={(checked: boolean) => handleDayChange(day, checked)}
                             />
-                            <span className="text-sm">{day}</span>
-                          </label>
+                            <label htmlFor={`day-${day}`} className="text-sm cursor-pointer">
+                              {day}
+                            </label>
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -752,14 +755,13 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                       <label className="block text-sm font-medium mb-1">
                         Temperature: {formData.llmConfiguration.temperature}
                       </label>
-                      <input
-                        type="range"
-                        value={formData.llmConfiguration.temperature}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNumberChange('llmConfiguration.temperature', e.target.value)}
-                        className="w-full"
-                        min="0"
-                        max="2"
-                        step="0.1"
+                      <Slider
+                        value={[formData.llmConfiguration.temperature]}
+                        onValueChange={(value) => handleNumberChange('llmConfiguration.temperature', value[0].toString())}
+                        min={0}
+                        max={2}
+                        step={0.1}
+                        className="py-4"
                       />
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>0 (Precise)</span>
@@ -771,18 +773,17 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                       <label className="block text-sm font-medium mb-1">
                         Voice Speed: {formData.voiceConfiguration.speed}
                       </label>
-                      <input
-                        type="range"
-                        value={formData.voiceConfiguration.speed}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNumberChange('voiceConfiguration.speed', e.target.value)}
-                        className="w-full"
-                        min="0.5"
-                        max="2"
-                        step="0.1"
+                      <Slider
+                        value={[formData.voiceConfiguration.speed]}
+                        onValueChange={(value) => handleNumberChange('voiceConfiguration.speed', value[0].toString())}
+                        min={0.25}
+                        max={4.0}
+                        step={0.05}
+                        className="py-4"
                       />
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>0.5 (Slow)</span>
-                        <span>2 (Fast)</span>
+                        <span>0.25 (Slow)</span>
+                        <span>4.0 (Fast)</span>
                       </div>
                     </div>
                     
@@ -790,18 +791,17 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                       <label className="block text-sm font-medium mb-1">
                         Voice Pitch: {formData.voiceConfiguration.pitch}
                       </label>
-                      <input
-                        type="range"
-                        value={formData.voiceConfiguration.pitch}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNumberChange('voiceConfiguration.pitch', e.target.value)}
-                        className="w-full"
-                        min="0.5"
-                        max="2"
-                        step="0.1"
+                      <Slider
+                        value={[formData.voiceConfiguration.pitch]}
+                        onValueChange={(value) => handleNumberChange('voiceConfiguration.pitch', value[0].toString())}
+                        min={-1.0}
+                        max={1.0}
+                        step={0.1}
+                        className="py-4"
                       />
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>0.5 (Low)</span>
-                        <span>2 (High)</span>
+                        <span>-1.0 (Lower)</span>
+                        <span>1.0 (Higher)</span>
                       </div>
                     </div>
                   </div>

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Slider } from '@/components/ui/slider';
 import { 
   Settings, 
   Save, 
@@ -410,28 +411,26 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             </div>
             <div className="space-y-2">
               <Label htmlFor="voiceSpeed">Voice Speed ({config.voiceSpeed}x)</Label>
-              <input
-                type="range"
+              <Slider
                 id="voiceSpeed"
-                min="0.5"
-                max="2.0"
-                step="0.1"
-                value={config.voiceSpeed}
-                onChange={(e) => updateConfig('voiceSpeed', parseFloat(e.target.value))}
-                className="w-full"
+                min={0.5}
+                max={2.0}
+                step={0.1}
+                value={[config.voiceSpeed]}
+                onValueChange={(value) => updateConfig('voiceSpeed', value[0])}
+                className="py-4"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="voiceStability">Voice Stability ({Math.round(config.voiceStability * 100)}%)</Label>
-              <input
-                type="range"
+              <Slider
                 id="voiceStability"
-                min="0"
-                max="1"
-                step="0.1"
-                value={config.voiceStability}
-                onChange={(e) => updateConfig('voiceStability', parseFloat(e.target.value))}
-                className="w-full"
+                min={0}
+                max={1}
+                step={0.1}
+                value={[config.voiceStability]}
+                onValueChange={(value) => updateConfig('voiceStability', value[0])}
+                className="py-4"
               />
             </div>
           </div>
@@ -539,15 +538,14 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             </div>
             <div className="space-y-2">
               <Label htmlFor="temperature">Temperature ({config.temperature})</Label>
-              <input
-                type="range"
+              <Slider
                 id="temperature"
-                min="0"
-                max="1"
-                step="0.1"
-                value={config.temperature}
-                onChange={(e) => updateConfig('temperature', parseFloat(e.target.value))}
-                className="w-full"
+                min={0}
+                max={1}
+                step={0.1}
+                value={[config.temperature]}
+                onValueChange={(value) => updateConfig('temperature', value[0])}
+                className="py-4"
               />
             </div>
           </div>

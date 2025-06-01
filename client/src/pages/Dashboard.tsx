@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LineChart, PieChart, Phone, Users, Calendar, Clock, CheckCircle } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import Skeleton from '@/components/ui/Skeleton';
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Type definitions
 interface RecentCall {

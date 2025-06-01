@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import CampaignForm from '@/components/campaigns/CampaignForm';
-import Skeleton from '@/components/ui/Skeleton';
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Types
 interface Campaign {
