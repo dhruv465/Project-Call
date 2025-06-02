@@ -78,6 +78,7 @@ const Login = () => {
         
         <Button
           type="submit"
+          size="sm"
           className="w-full"
           disabled={isSubmitting}
         >

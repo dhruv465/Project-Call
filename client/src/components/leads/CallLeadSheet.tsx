@@ -342,6 +342,7 @@ const CallLeadSheet = ({
                   <Button 
                     onClick={handleInitiateCall} 
                     className="bg-black hover:bg-gray-800 text-white"
+                    size="sm"
                     disabled={!configStatus?.telephonyConfigured || !selectedCampaign || isLoadingCampaigns}
                   >
                     <Phone className="h-4 w-4 mr-2" />
@@ -374,6 +375,7 @@ const CallLeadSheet = ({
                   <Button 
                     onClick={handleEndCall} 
                     variant="destructive"
+                    size="sm"
                   >
                     End Call
                   </Button>
@@ -394,6 +396,7 @@ const CallLeadSheet = ({
                   <Button 
                     onClick={handleInitiateCall} 
                     variant="outline"
+                    size="sm"
                   >
                     Retry Call
                   </Button>
@@ -403,6 +406,7 @@ const CallLeadSheet = ({
                   <Button 
                     onClick={handleInitiateCall} 
                     className="bg-black hover:bg-gray-800 text-white"
+                    size="sm"
                     disabled={!configStatus?.telephonyConfigured || !selectedCampaign || isLoadingCampaigns}
                   >
                     <Phone className="h-4 w-4 mr-2" />
@@ -438,9 +442,10 @@ const CallLeadSheet = ({
           )}
 
           {/* Action Buttons */}
-          <div className="flex justify-end space-x-2">
+          <div className="flex flex-row gap-2 flex-wrap justify-end">
             <Button
               variant="outline"
+              size="sm"
               onClick={() => onOpenChange(false)}
               disabled={isCallingInProgress}
             >
@@ -448,7 +453,7 @@ const CallLeadSheet = ({
             </Button>
             
             {configStatus?.telephonyConfigured && callStatus === 'completed' && (
-              <Button onClick={handleSaveAndClose}>
+              <Button onClick={handleSaveAndClose} size="sm">
                 Save & Close
               </Button>
             )}

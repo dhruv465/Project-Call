@@ -225,9 +225,10 @@ const Calls = () => {
             View and manage all your AI-generated calls
           </p>
         </div>
-        <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
+        <div className="flex flex-row gap-2 flex-wrap">
           <Button
             variant="outline"
+            size="sm"
             onClick={() => handleExportCalls('csv')}
             disabled={isExporting}
           >
@@ -235,6 +236,7 @@ const Calls = () => {
             {isExporting ? 'Exporting...' : 'Export CSV'}
           </Button>
           <Button
+            size="sm"
             onClick={() => handleExportCalls('xlsx')}
             disabled={isExporting}
           >

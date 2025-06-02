@@ -34,6 +34,7 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ href, icon, title, onNavigate
     <Link to={href} className="block" onClick={handleClick}>
       <Button
         variant="ghost"
+        size="sm"
         className={cn(
           'w-full justify-start gap-2',
           isActive ? 'bg-muted font-medium' : 'font-normal'
@@ -109,6 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onNavigate }) => {
       <div className="p-4 border-t">
         <Button
           variant="ghost"
+          size="sm"
           className="w-full justify-start gap-2 text-muted-foreground"
           onClick={logout}
         >

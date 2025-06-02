@@ -131,6 +131,7 @@ const Register = () => {
         
         <Button
           type="submit"
+          size="sm"
           className="w-full"
           disabled={isSubmitting}
         >

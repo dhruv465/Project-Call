@@ -23,12 +23,12 @@ import {
 } from '../components/ui/dropdown-menu';
 import { useToast } from '../components/ui/use-toast';
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '../components/ui/sheet';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Skeleton } from "@/components/ui/skeleton";
@@ -63,8 +63,8 @@ const Leads = () => {
   const [sourceFilter, setSourceFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  // Import Dialog
-  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  // Import Sheet
+  const [isImportSheetOpen, setIsImportSheetOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   
@@ -205,8 +205,8 @@ const Leads = () => {
       // Refetch leads data
       refetch();
       
-      // Close the dialog and reset state
-      setIsImportDialogOpen(false);
+      // Close the sheet and reset state
+      setIsImportSheetOpen(false);
       setImportFile(null);
     } catch (error) {
       console.error('Error importing leads:', error);
@@ -275,10 +275,11 @@ const Leads = () => {
             <Button
               onClick={() => refetch()}
               variant="outline"
+              size="sm"
             >
               Retry
             </Button>
-            <Button onClick={handleAddLeadClick}>
+            <Button onClick={handleAddLeadClick} size="sm">
               <Plus className="h-4 w-4 mr-2" />
               Add Lead
             </Button>
@@ -292,8 +293,8 @@ const Leads = () => {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl sm:text-3xl font-bold">Lead Management</h1>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <Button onClick={() => setIsImportDialogOpen(true)} variant="outline" size="sm">
+        <div className="flex flex-row gap-2 flex-wrap">
+          <Button onClick={() => setIsImportSheetOpen(true)} variant="outline" size="sm">
             <Upload className="h-4 w-4 mr-2" />
             Import
           </Button>
@@ -316,7 +317,7 @@ const Leads = () => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button onClick={handleAddLeadClick}>
+          <Button onClick={handleAddLeadClick} size="sm">
             <Plus className="h-4 w-4 mr-2" />
             Add Lead
           </Button>
@@ -336,14 +337,12 @@ const Leads = () => {
           />
         </div>
         
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex flex-row gap-2 flex-wrap">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="flex items-center gap-1 justify-between sm:justify-center">
-                <div className="flex items-center gap-1">
-                  <Filter className="h-4 w-4" />
-                  <span className="truncate">Status: {statusFilter}</span>
-                </div>
+              <Button variant="outline" size="sm" className="flex items-center gap-1">
+                <Filter className="h-4 w-4" />
+                <span className="truncate">Status: {statusFilter}</span>
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -360,11 +359,9 @@ const Leads = () => {
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="flex items-center gap-1 justify-between sm:justify-center">
-                <div className="flex items-center gap-1">
-                  <Filter className="h-4 w-4" />
-                  <span className="truncate">Source: {sourceFilter}</span>
-                </div>
+              <Button variant="outline" size="sm" className="flex items-center gap-1">
+                <Filter className="h-4 w-4" />
+                <span className="truncate">Source: {sourceFilter}</span>
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -591,8 +588,8 @@ const Leads = () => {
 
       {/* Pagination */}
       {leadsData && leadsData.pagination && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border rounded-xl bg-card">
-          <p className="text-sm text-muted-foreground text-center sm:text-left">
+        <div className="flex flex-col items-center justify-center gap-4 p-4 border rounded-xl bg-card">
+          <p className="text-sm text-muted-foreground text-center">
             Showing {((leadsData.pagination.page - 1) * leadsData.pagination.limit) + 1} to {Math.min(leadsData.pagination.page * leadsData.pagination.limit, leadsData.pagination.total)} of {leadsData.pagination.total} leads
           </p>
           <div className="flex items-center gap-1">
@@ -618,50 +615,63 @@ const Leads = () => {
         </div>
       )}
 
-      {/* Import Dialog */}
-      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Import Leads</DialogTitle>
-            <p className="text-sm text-muted-foreground">
-              Upload a CSV or Excel file to import leads. Ensure the file has columns for name, phone number, email, etc.
-            </p>
-          </DialogHeader>
+      {/* Import Sheet */}
+      <Sheet open={isImportSheetOpen} onOpenChange={setIsImportSheetOpen}>
+        <SheetContent className="w-full sm:max-w-md lg:max-w-lg p-0">
+          <div className="flex flex-col h-full">
+            <div className="px-4 sm:px-6 py-4 border-b">
+              <SheetHeader>
+                <SheetTitle>Import Leads</SheetTitle>
+                <SheetDescription>
+                  Upload a CSV or Excel file to import leads. Ensure the file has columns for name, phone number, email, etc.
+                </SheetDescription>
+              </SheetHeader>
+            </div>
 
-          <div className="grid gap-4 py-4">
-            <div>
-              <Label htmlFor="file-upload">File</Label>
-              <Input
-                id="file-upload"
-                type="file"
-                accept=".csv, .xlsx, .xls"
-                onChange={handleImportFileChange}
-              />
-              {importFile && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Selected: {importFile.name}
-                </p>
-              )}
+            <div className="flex-1 px-4 sm:px-6 py-4 sm:py-6">
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="file-upload" className="text-sm font-medium">
+                    File <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="file-upload"
+                    type="file"
+                    accept=".csv, .xlsx, .xls"
+                    onChange={handleImportFileChange}
+                    className="mt-2"
+                  />
+                  {importFile && (
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Selected: {importFile.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="px-4 sm:px-6 py-4 border-t">
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsImportSheetOpen(false)}
+                  disabled={isImporting}
+                  size="sm"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleImportSubmit}
+                  disabled={isImporting || !importFile}
+                  size="sm"
+                >
+                  {isImporting ? 'Importing...' : 'Import'}
+                </Button>
+              </div>
             </div>
           </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsImportDialogOpen(false)}
-              disabled={isImporting}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleImportSubmit}
-              disabled={isImporting || !importFile}
-            >
-              {isImporting ? 'Importing...' : 'Import'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
       {/* Lead Form (Add/Edit) */}
       <LeadForm

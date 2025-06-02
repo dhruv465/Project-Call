@@ -157,7 +157,7 @@ const Analytics = () => {
           <p className="text-muted-foreground mb-4">
             Unable to fetch analytics data. Please try again.
           </p>
-          <Button onClick={() => window.location.reload()} className="gap-2">
+          <Button onClick={() => window.location.reload()} size="sm" className="gap-2">
             <RefreshCw className="h-4 w-4" />
             Retry
           </Button>
@@ -187,10 +187,10 @@ const Analytics = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <h1 className="text-2xl sm:text-3xl font-bold">Analytics Dashboard</h1>
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex flex-row gap-2 flex-wrap">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="flex items-center gap-1 justify-between sm:justify-center">
+              <Button variant="outline" size="sm" className="flex items-center gap-1 justify-between sm:justify-center">
                 <div className="flex items-center gap-1">
                   <Calendar className="h-4 w-4" />
                   <span className="truncate">Last {dateRange} days</span>
@@ -206,7 +206,7 @@ const Analytics = () => {
             </DropdownMenuContent>
           </DropdownMenu>
           
-          <Button variant="outline">
+          <Button variant="outline" size="sm">
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>

@@ -168,7 +168,7 @@ const Dashboard = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
         
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-row gap-2 flex-wrap">
           <Button
             variant={timeframe === 'week' ? 'default' : 'outline'}
             size="sm"
@@ -281,9 +281,7 @@ const Dashboard = () => {
         <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between gap-2 mb-4">
             <h3 className="text-base sm:text-lg font-medium">Recent Calls</h3>
-            <div className="flex-shrink-0">
-              <Button variant="outline" size="sm">View All</Button>
-            </div>
+            <Button variant="outline" size="sm">View All</Button>
           </div>
           {displayData.recentCalls && displayData.recentCalls.length > 0 ? (
             <div className="divide-y">

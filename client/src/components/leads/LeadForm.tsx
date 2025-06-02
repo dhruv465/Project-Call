@@ -390,6 +390,7 @@ const LeadForm = ({
             <Button
               type="submit"
               disabled={isLoading}
+              size="sm"
               className="w-full"
             >
               {isLoading 

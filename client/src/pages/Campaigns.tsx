@@ -234,14 +234,15 @@ const Campaigns = () => {
           <p className="mt-2 text-sm text-muted-foreground">
             If this is a new installation, you may not have any campaigns yet. Try creating your first campaign.
           </p>
-          <div className="flex flex-col sm:flex-row gap-2 mt-4">
+          <div className="flex flex-row gap-2 flex-wrap mt-4">
             <Button 
               variant="outline" 
               onClick={() => refetch()}
+              size="sm"
             >
               Retry
             </Button>
-            <Button onClick={handleCreateCampaign}>
+            <Button onClick={handleCreateCampaign} size="sm">
               <Plus size={16} className="mr-2" />
               Create Campaign
             </Button>
@@ -264,7 +265,7 @@ const Campaigns = () => {
           <p className="text-muted-foreground mb-4">
             Create your first campaign to start making AI-powered cold calls.
           </p>
-          <Button onClick={handleCreateCampaign}>
+          <Button onClick={handleCreateCampaign} size="sm">
             <Plus size={16} className="mr-2" />
             Create Campaign
           </Button>
@@ -290,7 +291,7 @@ const Campaigns = () => {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <h1 className="text-2xl sm:text-3xl font-bold">Campaigns</h1>
-        <Button onClick={handleCreateCampaign}>
+        <Button onClick={handleCreateCampaign} size="sm">
           <Plus size={16} className="mr-2" />
           Create Campaign
         </Button>
@@ -311,7 +312,7 @@ const Campaigns = () => {
         
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="flex items-center gap-1 justify-between sm:justify-center">
+            <Button variant="outline" size="sm" className="flex items-center gap-1 justify-between sm:justify-center">
               <div className="flex items-center gap-1">
                 <Filter size={16} />
                 <span className="truncate">Status: {statusFilter}</span>
@@ -644,6 +645,7 @@ const Campaigns = () => {
 
                 <div className="flex gap-2 pt-4">
                   <Button 
+                    size="sm"
                     onClick={() => handleEditCampaign(selectedCampaign._id)}
                     className="flex-1"
                   >
@@ -653,6 +655,7 @@ const Campaigns = () => {
                   
                   {selectedCampaign.status === 'Draft' && (
                     <Button 
+                      size="sm"
                       onClick={() => handleChangeCampaignStatus(selectedCampaign._id, 'Active')}
                       className="flex-1"
                     >
@@ -663,6 +666,7 @@ const Campaigns = () => {
                   
                   {selectedCampaign.status === 'Active' && (
                     <Button 
+                      size="sm"
                       variant="outline"
                       onClick={() => handleChangeCampaignStatus(selectedCampaign._id, 'Paused')}
                       className="flex-1"
@@ -674,6 +678,7 @@ const Campaigns = () => {
                   
                   {selectedCampaign.status === 'Paused' && (
                     <Button 
+                      size="sm"
                       onClick={() => handleChangeCampaignStatus(selectedCampaign._id, 'Active')}
                       className="flex-1"
                     >

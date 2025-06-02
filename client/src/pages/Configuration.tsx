@@ -309,8 +309,8 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             Configure your AI calling system settings
           </p>
         </div>
-        <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:gap-2">
-          <Button variant="outline" onClick={handleTestConnection} disabled={testingConnection}>
+        <div className="flex flex-row gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={handleTestConnection} disabled={testingConnection}>
             {testingConnection ? (
               <TestTube className="h-4 w-4 mr-2 animate-spin" />
             ) : (
@@ -318,7 +318,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             )}
             Test Connection
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button size="sm" onClick={handleSave} disabled={saving}>
             {saving ? (
               <Save className="h-4 w-4 mr-2 animate-spin" />
             ) : (
@@ -444,7 +444,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               />
             </div>
           </div>
-          <Button variant="outline" onClick={handleTestVoice} disabled={testingVoice}>
+          <Button variant="outline" size="sm" onClick={handleTestVoice} disabled={testingVoice}>
             {testingVoice ? (
               <Mic className="h-4 w-4 mr-2 animate-pulse" />
             ) : (

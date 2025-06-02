@@ -22,7 +22,6 @@ import {
 
 // Custom styles with consistent spacing
 const inputStyles = "w-full rounded-xl border border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
-const selectStyles = "w-full rounded-xl border border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
 const textareaStyles = "w-full rounded-xl border border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 min-h-[100px]";
 const labelStyles = "block text-sm font-medium mb-2";
 
@@ -347,9 +346,9 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
   };
 
   return (
-    <SheetContent className="sm:max-w-3xl p-0">
+    <SheetContent className="w-full sm:max-w-2xl lg:max-w-3xl p-0">
       <div className="flex flex-col h-full">
-        <div className="px-6 py-4 border-b">
+        <div className="px-4 sm:px-6 py-4 border-b">
           <SheetHeader>
             <SheetTitle>{campaignId ? 'Edit Campaign' : 'Create New Campaign'}</SheetTitle>
             <SheetDescription>
@@ -359,7 +358,7 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
         </div>
         
         <ScrollArea className="flex-1">
-          <div className="px-6 py-6">
+          <div className="px-4 sm:px-6 py-4 sm:py-6">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="text-center">
@@ -372,31 +371,31 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
             ) : (
               <form onSubmit={handleSubmit} className="space-y-6">
             {/* Tabs Navigation */}
-            <div className="flex border-b mb-6">
+            <div className="flex border-b mb-6 -mx-2 px-2 overflow-x-auto">
               <button
                 type="button"
-                className={`px-5 py-3 text-base ${currentTab === 'basic' ? 'border-b-2 border-primary' : ''}`}
+                className={`px-3 sm:px-5 py-3 text-sm sm:text-base whitespace-nowrap ${currentTab === 'basic' ? 'border-b-2 border-primary' : ''}`}
                 onClick={() => setCurrentTab('basic')}
               >
                 Basic Info
               </button>
               <button
                 type="button"
-                className={`px-5 py-3 text-base ${currentTab === 'script' ? 'border-b-2 border-primary' : ''}`}
+                className={`px-3 sm:px-5 py-3 text-sm sm:text-base whitespace-nowrap ${currentTab === 'script' ? 'border-b-2 border-primary' : ''}`}
                 onClick={() => setCurrentTab('script')}
               >
                 Call Script
               </button>
               <button
                 type="button"
-                className={`px-5 py-3 text-base ${currentTab === 'scheduling' ? 'border-b-2 border-primary' : ''}`}
+                className={`px-3 sm:px-5 py-3 text-sm sm:text-base whitespace-nowrap ${currentTab === 'scheduling' ? 'border-b-2 border-primary' : ''}`}
                 onClick={() => setCurrentTab('scheduling')}
               >
                 Scheduling
               </button>
               <button
                 type="button"
-                className={`px-5 py-3 text-base ${currentTab === 'ai' ? 'border-b-2 border-primary' : ''}`}
+                className={`px-3 sm:px-5 py-3 text-sm sm:text-base whitespace-nowrap ${currentTab === 'ai' ? 'border-b-2 border-primary' : ''}`}
                 onClick={() => setCurrentTab('ai')}
               >
                 AI & Voice
@@ -438,7 +437,7 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                       />
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-1">
                           Campaign Goal *
@@ -470,7 +469,7 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-1">
                           Start Date *
@@ -533,7 +532,7 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-1">
                           Primary Language *
@@ -626,7 +625,7 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                       Days of Week
                     </label>
                     <div className="bg-muted/50 p-3 rounded-xl">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                         {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day: string) => (
                           <div key={day} className="flex items-center gap-2">
                             <Checkbox
@@ -643,7 +642,7 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-1">
                         Start Time
@@ -703,7 +702,7 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
               {/* AI & Voice Tab */}
               {currentTab === 'ai' && (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-1">
                         LLM Model
@@ -772,7 +771,7 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                     />
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-1">
                         Voice ID
@@ -802,7 +801,7 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-1">
                         Temperature: {formData.llmConfiguration.temperature}
@@ -862,11 +861,11 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
             </div>
               
               {/* Form Actions */}
-              <div className="flex justify-end gap-2 pt-6 border-t mt-6">
-                <Button type="button" variant="outline" onClick={onClose}>
+              <div className="flex flex-row justify-end gap-2 pt-6 border-t mt-6">
+                <Button type="button" variant="outline" size="sm" onClick={onClose}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isLoading}>
+                <Button type="submit" size="sm" disabled={isLoading}>
                   {isLoading ? 'Saving...' : campaignId ? 'Update Campaign' : 'Create Campaign'}
                 </Button>
               </div>
