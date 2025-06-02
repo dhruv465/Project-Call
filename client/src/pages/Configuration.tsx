@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +35,7 @@ interface Configuration {
   voiceSpeed: number;
   voiceStability: number;
   voiceClarity: number;
+  elevenLabsApiKey: string;
   
   // Phone Settings
   twilioAccountSid: string;
@@ -69,6 +70,7 @@ const Configuration = () => {
     voiceSpeed: 1.0,
     voiceStability: 0.8,
     voiceClarity: 0.9,
+    elevenLabsApiKey: '',
     
     // Phone Settings
     twilioAccountSid: '',
@@ -105,6 +107,91 @@ Keep the conversation natural and engaging. If they're not interested, politely 
   const [saving, setSaving] = useState(false);
   const [testingVoice, setTestingVoice] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState<{voiceId: string, name: string, previewUrl?: string}[]>([]);
+  
+  // Pre-built ElevenLabs voices
+  const prebuiltVoices = [
+    { voiceId: 'pNInz6obpgDQGcFmaJgB', name: 'Adam (Male)' },
+    { voiceId: 'yoZ06aMxZJJ28mfd3POQ', name: 'Sam (Male)' },
+    { voiceId: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella (Female)' },
+    { voiceId: 'ErXwobaYiN019PkySvjV', name: 'Antoni (Male)' },
+    { voiceId: 'MF3mGyEYCl7XYWbV9V6O', name: 'Elli (Female)' },
+    { voiceId: 'TxGEqnHWrfWFTfGW9XjX', name: 'Josh (Male)' },
+    { voiceId: 'VR6AewLTigWG4xSOukaG', name: 'Arnold (Male)' },
+    { voiceId: '21m00Tcm4TlvDq8ikWAM', name: 'Jessica (Female)' },
+    { voiceId: 'AZnzlk1XvdvUeBnXmlld', name: 'Michael (Male)' }
+  ];
+  const [availableVoices, setAvailableVoices] = useState<{voiceId: string, name: string, previewUrl?: string}[]>([]);
+  
+  // Pre-built ElevenLabs voices
+  const prebuiltVoices = [
+    { voiceId: 'pNInz6obpgDQGcFmaJgB', name: 'Adam (Male)' },
+    { voiceId: 'yoZ06aMxZJJ28mfd3POQ', name: 'Sam (Male)' },
+    { voiceId: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella (Female)' },
+    { voiceId: 'ErXwobaYiN019PkySvjV', name: 'Antoni (Male)' },
+    { voiceId: 'MF3mGyEYCl7XYWbV9V6O', name: 'Elli (Female)' },
+    { voiceId: 'TxGEqnHWrfWFTfGW9XjX', name: 'Josh (Male)' },
+    { voiceId: 'VR6AewLTigWG4xSOukaG', name: 'Arnold (Male)' },
+    { voiceId: '21m00Tcm4TlvDq8ikWAM', name: 'Jessica (Female)' },
+    { voiceId: 'AZnzlk1XvdvUeBnXmlld', name: 'Michael (Male)' }
+  ];
+
+  // Load available voices
+  const loadVoices = useCallback(async () => {
+    try {
+      // First set pre-built voices
+      setAvailableVoices(prebuiltVoices);
+      
+      // Then try to fetch custom voices if the API key is set
+      if (config.elevenLabsApiKey && !config.elevenLabsApiKey.includes('••••••••')) {
+        const result = await configApi.testElevenLabsConnection({
+          apiKey: config.elevenLabsApiKey
+        });
+        
+        if (result.success && result.details?.availableVoices) {
+          // Combine pre-built and custom voices
+          setAvailableVoices([
+            ...prebuiltVoices,
+            ...result.details.availableVoices
+          ]);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading voices:', error);
+      // Keep pre-built voices as fallback
+    }
+  }, [config.elevenLabsApiKey]);
+
+  // Load available voices when API key changes
+  const loadVoices = useCallback(async () => {
+    try {
+      // Start with prebuilt voices
+      setAvailableVoices(prebuiltVoices);
+      
+      // Try to fetch custom voices if API key is set and not masked
+      if (config.elevenLabsApiKey && !config.elevenLabsApiKey.includes('••••••••')) {
+        const result = await configApi.testElevenLabsConnection({
+          apiKey: config.elevenLabsApiKey
+        });
+        
+        if (result.success && result.details?.availableVoices) {
+          // Add custom voices if available
+          setAvailableVoices([
+            ...prebuiltVoices,
+            ...result.details.availableVoices
+          ]);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading voices:', error);
+      // Keep prebuilt voices as fallback
+    }
+  }, [config.elevenLabsApiKey]);
+
+  useEffect(() => {
+    // Load voices when API key changes or on initial load
+    loadVoices();
+  }, [config.elevenLabsApiKey, loadVoices]);
 
   useEffect(() => {
     // Fetch configuration from API
@@ -112,14 +199,17 @@ Keep the conversation natural and engaging. If they're not interested, politely 
       try {
         setLoading(true);
         const data = await configApi.getConfiguration();
+        console.log('Fetched configuration:', data);
+        
         setConfig({
           // Set defaults for any missing properties
           voiceProvider: data.elevenLabsConfig?.isEnabled ? 'elevenlabs' : 
                         (data.llmConfig?.providers.find((p: any) => p.name === 'openai' && p.isEnabled) ? 'openai' : 'google'),
           voiceId: data.elevenLabsConfig?.availableVoices?.[0]?.voiceId || 'rachel',
-          voiceSpeed: 1.0,
-          voiceStability: 0.8,
-          voiceClarity: 0.9,
+          voiceSpeed: data.elevenLabsConfig?.voiceSpeed || 1.0,
+          voiceStability: data.elevenLabsConfig?.voiceStability || 0.8,
+          voiceClarity: data.elevenLabsConfig?.voiceClarity || 0.9,
+          elevenLabsApiKey: data.elevenLabsConfig?.apiKey || '',
           
           twilioAccountSid: data.twilioConfig?.accountSid || '',
           twilioAuthToken: data.twilioConfig?.authToken || '',
@@ -129,13 +219,13 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           llmModel: data.llmConfig?.defaultModel || 'gpt-4',
           llmApiKey: data.llmConfig?.providers.find((p: any) => p.name === data.llmConfig?.defaultProvider)?.apiKey || '',
           systemPrompt: data.generalSettings?.defaultSystemPrompt || `You are a professional sales representative making cold calls. Be polite, respectful, and helpful.`,
-          temperature: 0.7,
-          maxTokens: 150,
+          temperature: data.llmConfig?.temperature || 0.7,
+          maxTokens: data.llmConfig?.maxTokens || 150,
           
           maxCallDuration: data.generalSettings?.maxCallDuration || 300,
           retryAttempts: data.generalSettings?.callRetryAttempts || 3,
           retryDelay: 60,
-          timeZone: data.generalSettings?.defaultTimeZone || 'America/New_York',
+          timeZone: data.generalSettings?.defaultTimeZone || data.generalSettings?.workingHours?.timeZone || 'America/New_York',
           
           webhookUrl: data.webhookConfig?.url || '',
           webhookSecret: data.webhookConfig?.secret || ''
@@ -159,6 +249,15 @@ Keep the conversation natural and engaging. If they're not interested, politely 
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Debug log before save
+      console.log('Saving configuration with state:', {
+        voiceProvider: config.voiceProvider,
+        voiceId: config.voiceId,
+        elevenLabsApiKey: config.elevenLabsApiKey ? 'SET' : 'NOT SET',
+        twilioAccountSid: config.twilioAccountSid ? 'SET' : 'NOT SET',
+        twilioAuthToken: config.twilioAuthToken ? 'SET' : 'NOT SET',
+      });
+      
       // Transform the flat config object into the structured API format
       const apiConfig = {
         twilioConfig: {
@@ -168,12 +267,23 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           isEnabled: !!config.twilioAccountSid && !!config.twilioAuthToken
         },
         elevenLabsConfig: {
-          apiKey: config.voiceProvider === 'elevenlabs' ? config.llmApiKey : '',
-          isEnabled: config.voiceProvider === 'elevenlabs'
+          apiKey: config.elevenLabsApiKey,
+          isEnabled: config.voiceProvider === 'elevenlabs' && !!config.elevenLabsApiKey,
+          voiceSpeed: config.voiceSpeed,
+          voiceStability: config.voiceStability,
+          voiceClarity: config.voiceClarity,
+          // Don't override existing voices, just ensure we have one if it's empty
+          availableVoices: [{
+            voiceId: config.voiceId,
+            name: 'Default Voice',
+            previewUrl: ''
+          }]
         },
         llmConfig: {
           defaultProvider: config.llmProvider,
           defaultModel: config.llmModel,
+          temperature: config.temperature,
+          maxTokens: config.maxTokens,
           providers: [
             {
               name: 'openai',
@@ -206,6 +316,35 @@ Keep the conversation natural and engaging. If they're not interested, politely 
       
       await configApi.updateConfiguration(apiConfig);
       
+      // Fetch the updated configuration to ensure we have the latest data
+      const updatedConfigData = await configApi.getConfiguration();
+      
+      // Update the local state with the fresh data
+      setConfig({
+        ...config,
+        // If we get masked API keys back, keep our current values
+        elevenLabsApiKey: updatedConfigData.elevenLabsConfig?.apiKey?.includes('••••••••') 
+          ? config.elevenLabsApiKey 
+          : updatedConfigData.elevenLabsConfig?.apiKey || '',
+        voiceSpeed: updatedConfigData.elevenLabsConfig?.voiceSpeed || config.voiceSpeed,
+        voiceStability: updatedConfigData.elevenLabsConfig?.voiceStability || config.voiceStability,
+        voiceClarity: updatedConfigData.elevenLabsConfig?.voiceClarity || config.voiceClarity,
+        twilioAccountSid: updatedConfigData.twilioConfig?.accountSid || config.twilioAccountSid,
+        twilioAuthToken: updatedConfigData.twilioConfig?.authToken?.includes('••••••••')
+          ? config.twilioAuthToken
+          : updatedConfigData.twilioConfig?.authToken || '',
+        twilioPhoneNumber: updatedConfigData.twilioConfig?.phoneNumbers?.[0] || config.twilioPhoneNumber,
+        temperature: updatedConfigData.llmConfig?.temperature || config.temperature,
+        maxTokens: updatedConfigData.llmConfig?.maxTokens || config.maxTokens,
+        maxCallDuration: updatedConfigData.generalSettings?.maxCallDuration || config.maxCallDuration,
+        systemPrompt: updatedConfigData.generalSettings?.defaultSystemPrompt || config.systemPrompt,
+        timeZone: updatedConfigData.generalSettings?.defaultTimeZone || config.timeZone,
+        webhookUrl: updatedConfigData.webhookConfig?.url || config.webhookUrl,
+        webhookSecret: updatedConfigData.webhookConfig?.secret?.includes('••••••••')
+          ? config.webhookSecret
+          : updatedConfigData.webhookConfig?.secret || '',
+      });
+      
       toast({
         title: "Configuration Saved",
         description: "Your settings have been successfully updated.",
@@ -226,20 +365,57 @@ Keep the conversation natural and engaging. If they're not interested, politely 
     setTestingVoice(true);
     try {
       if (config.voiceProvider === 'elevenlabs') {
-        await configApi.testElevenLabsConnection({ 
-          apiKey: config.llmApiKey 
-        });
+        const testText = "Hello! This is a test of the voice synthesis system. The voice sounds clear and natural.";
+        console.log(`Testing voice with ID: ${config.voiceId}`);
+        
+        // Make sure we're not sending a masked API key
+        const apiKey = config.elevenLabsApiKey;
+        if (!apiKey || apiKey.includes('••••••••')) {
+          throw new Error('Please enter a valid API key. The masked key cannot be used for testing.');
+        }
+        
+        if (!config.voiceId) {
+          throw new Error('Please select a voice to test.');
+        }
+        
+        try {
+          const result = await configApi.testVoiceSynthesis({ 
+            voiceId: config.voiceId,
+            text: testText,
+            apiKey: apiKey
+          });
+          
+          // Play the synthesized audio
+          if (result.audioData) {
+            const audio = new Audio(result.audioData);
+            await audio.play();
+            
+            toast({
+              title: "Voice Test Successful",
+              description: "Voice synthesis is working correctly and audio is playing.",
+            });
+          }
+        } catch (error: any) {
+          console.error('Voice synthesis test error:', error);
+          
+          // Check for voice limit reached error
+          const errorDetails = error.response?.data?.details;
+          if (errorDetails && errorDetails.includes('voice_limit_reached')) {
+            toast({
+              title: "Voice Limit Reached",
+              description: "You've reached your custom voice limit on ElevenLabs. Try using pre-built voices instead.",
+              variant: "destructive",
+            });
+          } else {
+            throw error;
+          }
+        }
       }
-      
-      toast({
-        title: "Voice Test Successful",
-        description: "Voice synthesis is working correctly.",
-      });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Voice test error:', error);
       toast({
         title: "Voice Test Failed",
-        description: "Please check your voice provider settings.",
+        description: error.message || "Please check your ElevenLabs API key and voice ID.",
         variant: "destructive",
       });
     } finally {
@@ -287,6 +463,9 @@ Keep the conversation natural and engaging. If they're not interested, politely 
   const updateConfig = (field: keyof Configuration, value: any) => {
     setConfig((prev: Configuration) => ({ ...prev, [field]: value }));
   };
+
+  // Debug function to log current configuration state
+  // Removed unused function
 
   if (loading) {
     return (
@@ -411,14 +590,35 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="voiceId">Voice ID</Label>
-              <Input
-                id="voiceId"
+              <Label htmlFor="voiceId">Voice</Label>
+              <Select
                 value={config.voiceId}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateConfig('voiceId', e.target.value)}
-                placeholder="rachel"
-              />
+                onValueChange={(value) => updateConfig('voiceId', value)}
+              >
+                <SelectTrigger id="voiceId" className="w-full h-10 rounded-xl">
+                  <SelectValue placeholder="Select a voice" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableVoices.map((voice) => (
+                    <SelectItem key={voice.voiceId} value={voice.voiceId}>
+                      {voice.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            {config.voiceProvider === 'elevenlabs' && (
+              <div className="space-y-2">
+                <Label htmlFor="elevenLabsApiKey">ElevenLabs API Key</Label>
+                <Input
+                  id="elevenLabsApiKey"
+                  type="password"
+                  value={config.elevenLabsApiKey}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateConfig('elevenLabsApiKey', e.target.value)}
+                  placeholder="Enter your ElevenLabs API key"
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="voiceSpeed">Voice Speed ({config.voiceSpeed}x)</Label>
               <Slider
@@ -450,8 +650,12 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             ) : (
               <Mic className="h-4 w-4 mr-2" />
             )}
-            Test Voice
+            {testingVoice ? 'Testing...' : 'Test Voice'}
           </Button>
+          <div className="text-xs text-muted-foreground mt-2">
+            Make sure you've entered a valid API key and voice ID before testing. 
+            Voice IDs can be found in your ElevenLabs dashboard.
+          </div>
         </CardContent>
       </Card>
 

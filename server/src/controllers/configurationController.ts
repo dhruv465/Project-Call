@@ -94,7 +94,10 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
         elevenLabsConfig: {
           apiKey: '',
           availableVoices: [],
-          isEnabled: false
+          isEnabled: false,
+          voiceSpeed: 1.0,
+          voiceStability: 0.8,
+          voiceClarity: 0.9
         },
         llmConfig: {
           providers: [
@@ -106,7 +109,9 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
             }
           ],
           defaultProvider: 'openai',
-          defaultModel: 'gpt-4'
+          defaultModel: 'gpt-4',
+          temperature: 0.7,
+          maxTokens: 150
         },
         generalSettings: {
           defaultLanguage: 'English',
@@ -114,6 +119,9 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
           maxConcurrentCalls: 10,
           callRetryAttempts: 3,
           callRetryDelay: 30,
+          maxCallDuration: 300,
+          defaultSystemPrompt: 'You are a professional sales representative making cold calls. Be polite, respectful, and helpful.',
+          defaultTimeZone: 'America/New_York',
           workingHours: {
             start: '09:00',
             end: '17:00',
@@ -129,6 +137,10 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
             start: '21:00',
             end: '08:00'
           }
+        },
+        webhookConfig: {
+          url: '',
+          secret: ''
         }
       });
     }
@@ -154,6 +166,11 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
       }
       return provider;
     });
+
+    // Mask webhook secret
+    if (configToSend.webhookConfig?.secret) {
+      configToSend.webhookConfig.secret = '••••••••' + configToSend.webhookConfig.secret.slice(-4);
+    }
 
     res.status(200).json(configToSend);
   } catch (error) {
@@ -189,9 +206,28 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
     }
     
     if (updatedConfig.elevenLabsConfig) {
+      // Handle API key (don't overwrite if masked)
       if (updatedConfig.elevenLabsConfig.apiKey && 
           updatedConfig.elevenLabsConfig.apiKey.includes('••••••••')) {
         delete updatedConfig.elevenLabsConfig.apiKey;
+      } else if (updatedConfig.elevenLabsConfig.apiKey) {
+        // Log that we're updating the ElevenLabs API key
+        logger.info('New ElevenLabs API key provided, updating...');
+        configuration.elevenLabsConfig.apiKey = updatedConfig.elevenLabsConfig.apiKey;
+      }
+      
+      // Handle availableVoices (don't overwrite existing voices if they exist)
+      if (updatedConfig.elevenLabsConfig.availableVoices && 
+          updatedConfig.elevenLabsConfig.availableVoices.length > 0 &&
+          (!configuration.elevenLabsConfig.availableVoices || 
+           configuration.elevenLabsConfig.availableVoices.length === 0)) {
+        logger.info('Setting initial available voices');
+        configuration.elevenLabsConfig.availableVoices = updatedConfig.elevenLabsConfig.availableVoices;
+      }
+      
+      // Always update isEnabled flag
+      if (updatedConfig.elevenLabsConfig.isEnabled !== undefined) {
+        configuration.elevenLabsConfig.isEnabled = updatedConfig.elevenLabsConfig.isEnabled;
       }
     }
     
@@ -213,26 +249,135 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
       });
     }
 
-    // Update configuration with new values
-    for (const key in updatedConfig) {
-      if (Object.prototype.hasOwnProperty.call(configuration, key)) {
-        // Handle nested objects
-        if (typeof updatedConfig[key] === 'object' && !Array.isArray(updatedConfig[key])) {
-          for (const nestedKey in updatedConfig[key]) {
-            if (configuration[key as keyof typeof configuration]) {
-              // Type assertion to handle the dynamic property access
-              (configuration[key as keyof typeof configuration] as any)[nestedKey] = 
-                (updatedConfig[key] as any)[nestedKey];
-            }
-          }
-        } else {
-          // Type assertion to handle the dynamic property access
-          (configuration as any)[key] = updatedConfig[key];
-        }
+    // Handle webhook config (don't overwrite if masked values are sent back)
+    if (updatedConfig.webhookConfig) {
+      if (updatedConfig.webhookConfig.secret && 
+          updatedConfig.webhookConfig.secret.includes('••••••••')) {
+        delete updatedConfig.webhookConfig.secret;
       }
     }
 
-    await configuration.save();
+    // Update configuration with new values - but more carefully
+    
+    // Handle Twilio config separately (already handled API key masking above)
+    if (updatedConfig.twilioConfig) {
+      configuration.twilioConfig.accountSid = updatedConfig.twilioConfig.accountSid || configuration.twilioConfig.accountSid;
+      configuration.twilioConfig.phoneNumbers = updatedConfig.twilioConfig.phoneNumbers || configuration.twilioConfig.phoneNumbers;
+      configuration.twilioConfig.isEnabled = updatedConfig.twilioConfig.isEnabled || configuration.twilioConfig.isEnabled;
+    }
+    
+    // Handle ElevenLabs config (already handled API key and voices above)
+    if (updatedConfig.elevenLabsConfig) {
+      configuration.elevenLabsConfig.isEnabled = updatedConfig.elevenLabsConfig.isEnabled || configuration.elevenLabsConfig.isEnabled;
+      
+      // Update voice settings
+      if (updatedConfig.elevenLabsConfig.voiceSpeed !== undefined) {
+        configuration.elevenLabsConfig.voiceSpeed = updatedConfig.elevenLabsConfig.voiceSpeed;
+      }
+      if (updatedConfig.elevenLabsConfig.voiceStability !== undefined) {
+        configuration.elevenLabsConfig.voiceStability = updatedConfig.elevenLabsConfig.voiceStability;
+      }
+      if (updatedConfig.elevenLabsConfig.voiceClarity !== undefined) {
+        configuration.elevenLabsConfig.voiceClarity = updatedConfig.elevenLabsConfig.voiceClarity;
+      }
+    }
+    
+    // Handle LLM config
+    if (updatedConfig.llmConfig) {
+      // Update default provider and model
+      if (updatedConfig.llmConfig.defaultProvider) {
+        configuration.llmConfig.defaultProvider = updatedConfig.llmConfig.defaultProvider;
+      }
+      if (updatedConfig.llmConfig.defaultModel) {
+        configuration.llmConfig.defaultModel = updatedConfig.llmConfig.defaultModel;
+      }
+      
+      // Update LLM settings
+      if (updatedConfig.llmConfig.temperature !== undefined) {
+        configuration.llmConfig.temperature = updatedConfig.llmConfig.temperature;
+      }
+      if (updatedConfig.llmConfig.maxTokens !== undefined) {
+        configuration.llmConfig.maxTokens = updatedConfig.llmConfig.maxTokens;
+      }
+      
+      // Handle providers
+      if (updatedConfig.llmConfig.providers && Array.isArray(updatedConfig.llmConfig.providers)) {
+        // Update each provider
+        updatedConfig.llmConfig.providers.forEach((updatedProvider: any) => {
+          const existingProviderIndex = configuration.llmConfig.providers.findIndex(
+            (p: any) => p.name === updatedProvider.name
+          );
+          
+          if (existingProviderIndex >= 0) {
+            // Skip masked API keys
+            if (updatedProvider.apiKey && !updatedProvider.apiKey.includes('••••••••')) {
+              configuration.llmConfig.providers[existingProviderIndex].apiKey = updatedProvider.apiKey;
+            }
+            
+            // Update other properties
+            if (updatedProvider.isEnabled !== undefined) {
+              configuration.llmConfig.providers[existingProviderIndex].isEnabled = updatedProvider.isEnabled;
+            }
+            if (updatedProvider.availableModels) {
+              configuration.llmConfig.providers[existingProviderIndex].availableModels = updatedProvider.availableModels;
+            }
+          }
+        });
+      }
+    }
+    
+    // Handle general settings
+    if (updatedConfig.generalSettings) {
+      // Update properties individually
+      if (updatedConfig.generalSettings.defaultLanguage) {
+        configuration.generalSettings.defaultLanguage = updatedConfig.generalSettings.defaultLanguage;
+      }
+      if (updatedConfig.generalSettings.supportedLanguages) {
+        configuration.generalSettings.supportedLanguages = updatedConfig.generalSettings.supportedLanguages;
+      }
+      if (updatedConfig.generalSettings.maxConcurrentCalls !== undefined) {
+        configuration.generalSettings.maxConcurrentCalls = updatedConfig.generalSettings.maxConcurrentCalls;
+      }
+      if (updatedConfig.generalSettings.callRetryAttempts !== undefined) {
+        configuration.generalSettings.callRetryAttempts = updatedConfig.generalSettings.callRetryAttempts;
+      }
+      if (updatedConfig.generalSettings.callRetryDelay !== undefined) {
+        configuration.generalSettings.callRetryDelay = updatedConfig.generalSettings.callRetryDelay;
+      }
+      if (updatedConfig.generalSettings.maxCallDuration !== undefined) {
+        configuration.generalSettings.maxCallDuration = updatedConfig.generalSettings.maxCallDuration;
+      }
+      if (updatedConfig.generalSettings.defaultSystemPrompt) {
+        configuration.generalSettings.defaultSystemPrompt = updatedConfig.generalSettings.defaultSystemPrompt;
+      }
+      if (updatedConfig.generalSettings.defaultTimeZone) {
+        configuration.generalSettings.defaultTimeZone = updatedConfig.generalSettings.defaultTimeZone;
+        // Also update working hours timezone for backward compatibility
+        configuration.generalSettings.workingHours.timeZone = updatedConfig.generalSettings.defaultTimeZone;
+      }
+    }
+
+    // Handle webhook config
+    if (updatedConfig.webhookConfig) {
+      if (updatedConfig.webhookConfig.url !== undefined) {
+        configuration.webhookConfig.url = updatedConfig.webhookConfig.url;
+      }
+      if (updatedConfig.webhookConfig.secret && !updatedConfig.webhookConfig.secret.includes('••••••••')) {
+        configuration.webhookConfig.secret = updatedConfig.webhookConfig.secret;
+      }
+    }
+
+    logger.info('Saving updated configuration to database...');
+    try {
+      await configuration.save();
+      logger.info('Configuration saved successfully');
+    } catch (error) {
+      logger.error('Error saving configuration to database:', error);
+      return res.status(500).json({
+        message: 'Failed to save configuration to database',
+        error: handleError(error)
+      });
+    }
 
     // Update services with new API keys
     await updateServicesWithNewConfig(configuration);
@@ -257,6 +402,11 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
       }
       return provider;
     });
+
+    // Mask webhook secret in response
+    if (configToSend.webhookConfig?.secret) {
+      configToSend.webhookConfig.secret = '••••••••' + configToSend.webhookConfig.secret.slice(-4);
+    }
 
     return res.status(200).json({
       message: 'Configuration updated successfully',
@@ -604,6 +754,125 @@ export const testElevenLabsConnection = async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Error in testElevenLabsConnection:', error);
+    return res.status(500).json({
+      message: 'Server error',
+      error: handleError(error)
+    });
+  }
+};
+
+// @desc    Test voice synthesis with ElevenLabs
+// @route   POST /api/configuration/test-voice
+// @access  Private
+export const testVoiceSynthesis = async (req: Request, res: Response) => {
+  try {
+    const { voiceId, text, apiKey } = req.body;
+    logger.info(`Voice synthesis test request received with voiceId: ${voiceId}`);
+    
+    if (!voiceId || !text) {
+      logger.warn('Voice synthesis test missing required fields', { voiceId: !!voiceId, text: !!text });
+      return res.status(400).json({ message: 'Voice ID and text are required' });
+    }
+
+    let elevenLabsApiKey = apiKey;
+
+    // If no API key provided in request, get it from configuration
+    if (!elevenLabsApiKey) {
+      logger.info('No API key provided in request, fetching from configuration');
+      const configuration = await Configuration.findOne();
+      if (!configuration?.elevenLabsConfig?.apiKey) {
+        logger.warn('ElevenLabs API key not configured');
+        return res.status(400).json({ message: 'ElevenLabs API key not configured' });
+      }
+      elevenLabsApiKey = configuration.elevenLabsConfig.apiKey;
+    }
+    
+    // Validate API key format (ElevenLabs keys are typically 32+ characters)
+    if (!elevenLabsApiKey || elevenLabsApiKey.length < 32 || elevenLabsApiKey.includes('••••••••')) {
+      logger.warn('Invalid ElevenLabs API key format');
+      return res.status(400).json({ message: 'Invalid ElevenLabs API key format' });
+    }
+
+    logger.info(`Making ElevenLabs API request with voice ID: ${voiceId}`);
+
+    try {
+      // Test voice synthesis with ElevenLabs
+      const elevenLabsResponse = await axios.post(
+        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+        {
+          text: text,
+          model_id: "eleven_monolingual_v1",
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.5
+          }
+        },
+        {
+          headers: {
+            'xi-api-key': elevenLabsApiKey,
+            'Content-Type': 'application/json'
+          },
+          responseType: 'arraybuffer'
+        }
+      );
+
+      // Convert audio data to base64
+      const audioBuffer = Buffer.from(elevenLabsResponse.data);
+      const audioBase64 = audioBuffer.toString('base64');
+
+      logger.info('Voice synthesis successful');
+      return res.status(200).json({
+        success: true,
+        message: 'Voice synthesis successful',
+        audioData: `data:audio/mpeg;base64,${audioBase64}`,
+        voiceId: voiceId,
+        text: text
+      });
+
+    } catch (error: unknown) {
+      logger.error('ElevenLabs voice synthesis failed:', error);
+      let errorMessage = 'Voice synthesis failed';
+      let errorDetails = handleError(error);
+      let statusCode = 400;
+
+      if (error instanceof Error && 'response' in error) {
+        const axiosError = error as any;
+        if (axiosError.response?.status === 401) {
+          errorMessage = 'Invalid ElevenLabs API key';
+        } else if (axiosError.response?.status === 422) {
+          errorMessage = 'Invalid voice ID or parameters';
+        } else if (axiosError.response?.status === 404) {
+          errorMessage = 'Voice ID not found';
+        }
+        
+        // Log response for debugging
+        if (axiosError.response?.data) {
+          try {
+            if (typeof axiosError.response.data === 'string') {
+              errorDetails = axiosError.response.data;
+            } else if (Buffer.isBuffer(axiosError.response.data)) {
+              errorDetails = axiosError.response.data.toString('utf8');
+            } else {
+              errorDetails = JSON.stringify(axiosError.response.data);
+            }
+            logger.error(`ElevenLabs error details: ${errorDetails}`);
+          } catch (parseError) {
+            logger.error('Error parsing ElevenLabs error response:', parseError);
+          }
+        }
+        
+        statusCode = axiosError.response?.status || 400;
+      }
+
+      return res.status(statusCode).json({
+        success: false,
+        message: errorMessage,
+        details: errorDetails
+      });
+    }
+
+  } catch (error) {
+    logger.error('Error in testVoiceSynthesis:', error);
     return res.status(500).json({
       message: 'Server error',
       error: handleError(error)

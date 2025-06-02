@@ -37,6 +37,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import LeadForm from '../components/leads/LeadForm';
 import DeleteLeadDialog from '../components/leads/DeleteLeadDialog';
 import CallLeadSheet from '../components/leads/CallLeadSheet';
+import ErrorBoundary from '../components/common/ErrorBoundary';
 
 // Import lead API service
 import { leadsApi } from '../services/leadsApi';
@@ -701,15 +702,17 @@ const Leads = () => {
 
       {/* Call Lead Sheet */}
       {leadToCall && (
-        <CallLeadSheet
-          open={isCallSheetOpen}
-          onOpenChange={setIsCallSheetOpen}
-          lead={leadToCall}
-          onSuccess={() => {
-            // Invalidate and refetch leads
-            queryClient.invalidateQueries(['leads']);
-          }}
-        />
+        <ErrorBoundary>
+          <CallLeadSheet
+            open={isCallSheetOpen}
+            onOpenChange={setIsCallSheetOpen}
+            lead={leadToCall}
+            onSuccess={() => {
+              // Invalidate and refetch leads
+              queryClient.invalidateQueries(['leads']);
+            }}
+          />
+        </ErrorBoundary>
       )}
     </div>
   );

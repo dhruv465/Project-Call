@@ -1,11 +1,25 @@
 import axios from 'axios';
 
+// For debugging configuration saves
+const logAPIOperation = (operation: string, url: string, data?: any) => {
+  console.log(`API ${operation} - ${url}`, data || '');
+};
+
+// Determine base URL - this ensures proxy works correctly in dev mode
+const apiBaseURL = import.meta.env.VITE_API_URL || '/api';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: apiBaseURL,
   headers: {
     'Content-Type': 'application/json',
   },
+  // Adding longer timeout for voice synthesis requests
+  timeout: 30000 // 30 seconds
 });
+
+// Log API configuration
+console.log('API configured with baseURL:', apiBaseURL);
+console.log('Running in environment:', import.meta.env.MODE);
 
 // Add custom type to window for production error reporting
 declare global {
@@ -29,6 +43,10 @@ api.interceptors.request.use(
       const { token } = JSON.parse(user);
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Log the request for debugging
+    logAPIOperation('Request', config.url || '', config.data);
+    
     return config;
   },
   (error) => {
@@ -39,6 +57,8 @@ api.interceptors.request.use(
 // Intercept responses
 api.interceptors.response.use(
   (response) => {
+    // Log successful response for debugging
+    logAPIOperation('Response', response.config.url || '', response.data);
     return response;
   },
   (error) => {

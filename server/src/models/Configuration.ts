@@ -15,6 +15,9 @@ export interface IConfiguration extends mongoose.Document {
       previewUrl: string;
     }[];
     isEnabled: boolean;
+    voiceSpeed: number;
+    voiceStability: number;
+    voiceClarity: number;
   };
   voiceAIConfig: {
     personalities: {
@@ -60,6 +63,8 @@ export interface IConfiguration extends mongoose.Document {
     }[];
     defaultProvider: string;
     defaultModel: string;
+    temperature: number;
+    maxTokens: number;
   };
   generalSettings: {
     defaultLanguage: string;
@@ -67,6 +72,9 @@ export interface IConfiguration extends mongoose.Document {
     maxConcurrentCalls: number;
     callRetryAttempts: number;
     callRetryDelay: number;
+    maxCallDuration: number;
+    defaultSystemPrompt: string;
+    defaultTimeZone: string;
     workingHours: {
       start: string;
       end: string;
@@ -82,6 +90,10 @@ export interface IConfiguration extends mongoose.Document {
       start: string;
       end: string;
     };
+  };
+  webhookConfig: {
+    url: string;
+    secret: string;
   };
   updatedBy: mongoose.Schema.Types.ObjectId;
   createdAt: Date;
@@ -135,6 +147,24 @@ const ConfigurationSchema = new mongoose.Schema(
         type: Boolean,
         default: false,
       },
+      voiceSpeed: {
+        type: Number,
+        default: 1.0,
+        min: 0.25,
+        max: 4.0,
+      },
+      voiceStability: {
+        type: Number,
+        default: 0.8,
+        min: 0.0,
+        max: 1.0,
+      },
+      voiceClarity: {
+        type: Number,
+        default: 0.9,
+        min: 0.0,
+        max: 1.0,
+      },
     },
     llmConfig: {
       providers: [
@@ -168,6 +198,18 @@ const ConfigurationSchema = new mongoose.Schema(
         required: [true, 'Please specify a default LLM model'],
         default: 'gpt-4o',
       },
+      temperature: {
+        type: Number,
+        default: 0.7,
+        min: 0.0,
+        max: 2.0,
+      },
+      maxTokens: {
+        type: Number,
+        default: 150,
+        min: 1,
+        max: 4000,
+      },
     },
     generalSettings: {
       defaultLanguage: {
@@ -197,6 +239,20 @@ const ConfigurationSchema = new mongoose.Schema(
         default: 60, // in minutes
         min: 15,
         max: 1440,
+      },
+      maxCallDuration: {
+        type: Number,
+        default: 300, // in seconds (5 minutes)
+        min: 30,
+        max: 3600,
+      },
+      defaultSystemPrompt: {
+        type: String,
+        default: 'You are a professional sales representative making cold calls. Be polite, respectful, and helpful.',
+      },
+      defaultTimeZone: {
+        type: String,
+        default: 'America/New_York',
       },
       workingHours: {
         start: {
@@ -242,6 +298,16 @@ const ConfigurationSchema = new mongoose.Schema(
           type: String,
           default: '08:00',
         },
+      },
+    },
+    webhookConfig: {
+      url: {
+        type: String,
+        default: '',
+      },
+      secret: {
+        type: String,
+        default: '',
       },
     },
     updatedBy: {

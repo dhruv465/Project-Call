@@ -10,6 +10,8 @@ import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
+
+// Import directly from ui/select for now to avoid additional component complexity
 import { 
   Select, 
   SelectContent, 
@@ -17,10 +19,12 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '../ui/select';
+
 import { useToast } from '../ui/use-toast';
 import { checkTelephonyConfiguration, ConfigurationStatus } from '../../utils/configurationUtils';
 import { callsApi } from '../../services/callsApi';
 import api from '../../services/api';
+import ErrorBoundary from '../common/ErrorBoundary';
 
 interface Campaign {
   _id: string;
@@ -65,8 +69,14 @@ const CallLeadSheet = ({
     const loadCampaigns = async () => {
       setIsLoadingCampaigns(true);
       try {
-        const response = await api.get('/api/campaigns');
-        const activeCampaigns = response.data.filter((campaign: Campaign) => 
+        const response = await api.get('/campaigns');
+        // Check if response.data is an object with campaigns property
+        const campaignsData = response.data.campaigns ? response.data.campaigns : response.data;
+        
+        // Make sure campaignsData is an array before filtering
+        const campaignsArray = Array.isArray(campaignsData) ? campaignsData : [];
+        
+        const activeCampaigns = campaignsArray.filter((campaign: Campaign) => 
           campaign.status === 'Active' || campaign.status === 'Draft'
         );
         
@@ -97,6 +107,19 @@ const CallLeadSheet = ({
       checkConfig();
       loadCampaigns();
     }
+    
+    // Cleanup function to reset state when component unmounts or closes
+    return () => {
+      if (!open) {
+        // Reset all state when sheet is closed to prevent issues on reopen
+        setCampaigns([]);
+        setSelectedCampaign('');
+        setCallStatus('idle');
+        setNotes('');
+        setSelectedLanguage(lead.languagePreference || 'English');
+        setIsLoadingCampaigns(false);
+      }
+    };
   }, [open]);
 
   // Create a default campaign if none exist
@@ -110,7 +133,7 @@ const CallLeadSheet = ({
         targetAudience: 'All leads'
       };
 
-      const response = await api.post('/api/campaigns', defaultCampaign);
+      const response = await api.post('/campaigns', defaultCampaign);
       const newCampaign = response.data;
       
       setCampaigns([newCampaign]);
@@ -219,12 +242,19 @@ const CallLeadSheet = ({
       }
       
       onSuccess();
-      onOpenChange(false);
       
-      // Reset state for next time
+      // Use the same careful unmounting approach as the Cancel button
       setCallStatus('idle');
       setNotes('');
-      setSelectedCampaign('');
+      
+      // Slight delay to allow React to clean up properly
+      setTimeout(() => {
+        setSelectedCampaign('');
+        setCampaigns([]);
+        setSelectedLanguage(lead.languagePreference || 'English');
+        setIsLoadingCampaigns(false);
+        onOpenChange(false);
+      }, 100);
     } catch (error) {
       console.error('Error saving call notes:', error);
       toast({
@@ -236,28 +266,43 @@ const CallLeadSheet = ({
   };
 
   return (
-    <Sheet open={open} onOpenChange={(newOpen) => {
-      // Prevent closing if call is in progress
-      if (isCallingInProgress && newOpen === false) {
-        toast({
-          title: "Call in Progress",
-          description: "Please end the call before closing this window.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      // Reset state when closing
-      if (newOpen === false) {
-        setCallStatus('idle');
-        setNotes('');
-        setSelectedCampaign('');
-        setCampaigns([]);
-        setIsLoadingCampaigns(false);
-      }
-      
-      onOpenChange(newOpen);
-    }}>
+    <Sheet 
+      open={open} 
+      onOpenChange={(newOpen) => {
+        // Prevent closing if call is in progress
+        if (isCallingInProgress && newOpen === false) {
+          toast({
+            title: "Call in Progress",
+            description: "Please end the call before closing this window.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        // If closing, ensure proper cleanup order
+        if (newOpen === false) {
+          // First reset UI states
+          setCallStatus('idle');
+          setNotes('');
+          
+          // Use a short delay to let React handle unmounting gracefully
+          setTimeout(() => {
+            // Close sheet first
+            onOpenChange(false);
+            
+            // Then reset data states with another delay
+            setTimeout(() => {
+              setSelectedCampaign('');
+              setCampaigns([]);
+              setSelectedLanguage(lead.languagePreference || 'English');
+              setIsLoadingCampaigns(false);
+            }, 100);
+          }, 100);
+        } else {
+          onOpenChange(newOpen);
+        }
+      }}
+    >
       <SheetContent className="sm:max-w-md overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Call Lead</SheetTitle>
@@ -289,49 +334,58 @@ const CallLeadSheet = ({
                 <span>Loading campaigns...</span>
               </div>
             ) : (
-              <Select 
-                value={selectedCampaign} 
-                onValueChange={setSelectedCampaign}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select campaign" />
-                </SelectTrigger>
-                <SelectContent>
-                  {campaigns.map((campaign) => (
-                    <SelectItem key={campaign._id} value={campaign._id}>
-                      {campaign.name} ({campaign.status})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ErrorBoundary>
+                <Select 
+                  value={selectedCampaign} 
+                  onValueChange={setSelectedCampaign}
+                  disabled={isLoadingCampaigns || campaigns.length === 0}
+                  // Adding a unique key helps React handle proper unmounting of the select
+                  key={`campaign-select-${open ? 'open' : 'closed'}`}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select campaign" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {campaigns.map((campaign) => (
+                      <SelectItem key={campaign._id} value={campaign._id}>
+                        {campaign.name} ({campaign.status})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </ErrorBoundary>
             )}
           </div>
 
           {/* Language Selection */}
           <div className="space-y-2">
             <Label htmlFor="language">Call Language</Label>
-            <Select 
-              value={selectedLanguage} 
-              onValueChange={setSelectedLanguage}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select language" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="English">English</SelectItem>
-                <SelectItem value="Spanish">Spanish</SelectItem>
-                <SelectItem value="French">French</SelectItem>
-                <SelectItem value="German">German</SelectItem>
-                <SelectItem value="Italian">Italian</SelectItem>
-                <SelectItem value="Portuguese">Portuguese</SelectItem>
-                <SelectItem value="Arabic">Arabic</SelectItem>
-                <SelectItem value="Hindi">Hindi</SelectItem>
-                <SelectItem value="Mandarin">Mandarin</SelectItem>
-                <SelectItem value="Japanese">Japanese</SelectItem>
-                <SelectItem value="Korean">Korean</SelectItem>
-                <SelectItem value="Russian">Russian</SelectItem>
-              </SelectContent>
-            </Select>
+            <ErrorBoundary>
+              <Select 
+                value={selectedLanguage} 
+                onValueChange={setSelectedLanguage}
+                // Adding a unique key helps React handle proper unmounting of the select
+                key={`language-select-${open ? 'open' : 'closed'}`}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select language" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem key="english" value="English">English</SelectItem>
+                  <SelectItem key="spanish" value="Spanish">Spanish</SelectItem>
+                  <SelectItem key="french" value="French">French</SelectItem>
+                  <SelectItem key="german" value="German">German</SelectItem>
+                  <SelectItem key="italian" value="Italian">Italian</SelectItem>
+                  <SelectItem key="portuguese" value="Portuguese">Portuguese</SelectItem>
+                  <SelectItem key="arabic" value="Arabic">Arabic</SelectItem>
+                  <SelectItem key="hindi" value="Hindi">Hindi</SelectItem>
+                  <SelectItem key="mandarin" value="Mandarin">Mandarin</SelectItem>
+                  <SelectItem key="japanese" value="Japanese">Japanese</SelectItem>
+                  <SelectItem key="korean" value="Korean">Korean</SelectItem>
+                  <SelectItem key="russian" value="Russian">Russian</SelectItem>
+                </SelectContent>
+              </Select>
+            </ErrorBoundary>
           </div>
 
           {/* Call Status */}
@@ -446,7 +500,23 @@ const CallLeadSheet = ({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onOpenChange(false)}
+              onClick={() => {
+                // First reset UI-related state
+                setCallStatus('idle');
+                setNotes('');
+                
+                // Force close with a slight delay to avoid React DOM errors
+                setTimeout(() => {
+                  // Reset state that affects select components
+                  setSelectedCampaign('');
+                  setCampaigns([]);
+                  setSelectedLanguage(lead.languagePreference || 'English');
+                  setIsLoadingCampaigns(false);
+                  
+                  // Finally close the sheet
+                  onOpenChange(false);
+                }, 100);
+              }}
               disabled={isCallingInProgress}
             >
               Cancel

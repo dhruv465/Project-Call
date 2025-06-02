@@ -68,15 +68,8 @@ export const getCampaigns = async (req: Request & { user?: any }, res: Response)
     
     const total = await Campaign.countDocuments(filter);
     
-    res.status(200).json({
-      campaigns: campaigns || [],
-      pagination: {
-        page,
-        pages: Math.ceil(total / limit),
-        total,
-        limit
-      }
-    });
+    // Return campaigns array directly for better client compatibility
+    res.status(200).json(campaigns || []);
   } catch (error) {
     logger.error('Error in getCampaigns:', error);
     res.status(500).json({
