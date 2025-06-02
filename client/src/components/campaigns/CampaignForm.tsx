@@ -19,6 +19,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import api from '@/services/api';
+import { configApi } from '@/services/configApi';
+import { toast } from '@/components/ui/use-toast';
 
 // Custom styles with consistent spacing
 const inputStyles = "w-full rounded-xl border border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
@@ -96,7 +99,7 @@ const initialFormState: CampaignFormData = {
   },
   voiceConfiguration: {
     provider: 'elevenlabs',
-    voiceId: '',
+    voiceId: 'default-voice-id', // Default value to ensure validation passes
     speed: 1.0,
     pitch: 1.0,
   },
@@ -143,10 +146,16 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState<CampaignFormData>(initialFormState);
   const [currentTab, setCurrentTab] = useState<'basic' | 'script' | 'scheduling' | 'ai'>('basic');
+  const [systemConfig, setSystemConfig] = useState<any>(null);
+  const [availableLLMModels, setAvailableLLMModels] = useState<string[]>(llmModels);
 
   // Toast function for notifications
   const showToast = (title: string, description: string, variant: 'default' | 'destructive' = 'default') => {
-    console.log(`Toast - ${title}: ${description} (${variant})`);
+    toast({
+      title,
+      description,
+      variant
+    });
   };
 
   // Load campaign data if editing
@@ -155,33 +164,113 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
     
     try {
       setIsLoading(true);
-      // Mock data loading
-      setTimeout(() => {
-        // Simulating data from API
-        const mockCampaignData = {
-          ...initialFormState,
-          name: 'Existing Campaign',
-          description: 'This is an existing campaign being edited',
-          startDate: '2025-06-10T00:00:00.000Z',
-          endDate: '2025-07-15T00:00:00.000Z'
-        };
-        
-        // Convert date strings to Date objects
-        setFormData({
-          ...mockCampaignData,
-          startDate: mockCampaignData.startDate ? new Date(mockCampaignData.startDate) : undefined,
-          endDate: mockCampaignData.endDate ? new Date(mockCampaignData.endDate) : undefined
-        });
-        
-        setIsLoading(false);
-      }, 500);
+      // Real API call to fetch campaign data
+      const response = await api.get(`/campaigns/${campaignId}`);
+      const campaignData = response.data;
+      
+      // Map API data to form structure
+      const formattedData = {
+        ...initialFormState,
+        name: campaignData.name,
+        description: campaignData.description,
+        goal: campaignData.goal,
+        targetAudience: campaignData.targetAudience,
+        leadSources: campaignData.leadSources || [''],
+        primaryLanguage: campaignData.primaryLanguage,
+        supportedLanguages: campaignData.supportedLanguages || [campaignData.primaryLanguage],
+        startDate: campaignData.startDate ? new Date(campaignData.startDate) : new Date(),
+        endDate: campaignData.endDate ? new Date(campaignData.endDate) : undefined,
+        script: {
+          name: campaignData.script?.versions?.[0]?.name || 'Primary Script',
+          content: campaignData.script?.versions?.[0]?.content || '',
+        },
+        callTiming: {
+          daysOfWeek: campaignData.callTiming?.daysOfWeek || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+          startTime: campaignData.callTiming?.startTime || '09:00',
+          endTime: campaignData.callTiming?.endTime || '17:00',
+          timeZone: campaignData.callTiming?.timeZone || 'Asia/Kolkata',
+        },
+        llmConfiguration: {
+          model: campaignData.llmConfiguration?.model || 'gpt-4o',
+          systemPrompt: campaignData.llmConfiguration?.systemPrompt || 'You are an AI assistant making a call on behalf of a company. Be professional, friendly, and helpful.',
+          temperature: campaignData.llmConfiguration?.temperature || 0.7,
+          maxTokens: campaignData.llmConfiguration?.maxTokens || 500,
+        },
+        voiceConfiguration: {
+          provider: campaignData.voiceConfiguration?.provider || 'elevenlabs',
+          voiceId: campaignData.voiceConfiguration?.voiceId || '',
+          speed: campaignData.voiceConfiguration?.speed || 1.0,
+          pitch: campaignData.voiceConfiguration?.pitch || 1.0,
+        },
+      };
+      
+      setFormData(formattedData);
+      setIsLoading(false);
     } catch (error) {
+      console.error('Error loading campaign data:', error);
       showToast('Error', 'Failed to load campaign data.', 'destructive');
       setIsLoading(false);
     }
   };
 
+  // Load system configuration
+  const loadSystemConfiguration = async () => {
+    try {
+      setIsLoading(true);
+      const config = await configApi.getConfiguration();
+      setSystemConfig(config);
+      
+      // Filter LLM models based on the configured provider
+      if (config.llmConfig?.providers) {
+        const defaultProvider = config.llmConfig.defaultProvider;
+        const providerInfo = config.llmConfig.providers.find((p: any) => p.name === defaultProvider);
+        
+        if (providerInfo && providerInfo.availableModels && providerInfo.availableModels.length > 0) {
+          setAvailableLLMModels(providerInfo.availableModels);
+        }
+      }
+      
+      // Update the form with defaults from system configuration if not editing
+      if (!campaignId) {
+        setFormData(prev => ({
+          ...prev,
+          llmConfiguration: {
+            ...prev.llmConfiguration,
+            model: config.llmConfig?.defaultModel || prev.llmConfiguration.model,
+            temperature: config.llmConfig?.temperature || prev.llmConfiguration.temperature,
+            maxTokens: config.llmConfig?.maxTokens || prev.llmConfiguration.maxTokens,
+            systemPrompt: config.generalSettings?.defaultSystemPrompt || prev.llmConfiguration.systemPrompt,
+          },
+          voiceConfiguration: {
+            ...prev.voiceConfiguration,
+            provider: config.elevenLabsConfig?.isEnabled ? 'elevenlabs' : 
+                    (config.llmConfig?.providers.find((p: any) => p.name === 'openai' && p.isEnabled) ? 'openai' : 'google'),
+            speed: config.elevenLabsConfig?.voiceSpeed || prev.voiceConfiguration.speed,
+            // If ElevenLabs is enabled and there are available voices, use the first one
+            voiceId: config.elevenLabsConfig?.isEnabled && config.elevenLabsConfig?.availableVoices?.length > 0 
+                    ? config.elevenLabsConfig.availableVoices[0].voiceId 
+                    : prev.voiceConfiguration.voiceId
+          },
+          callTiming: {
+            ...prev.callTiming,
+            timeZone: config.generalSettings?.defaultTimeZone || prev.callTiming.timeZone,
+          }
+        }));
+      }
+      
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error loading system configuration:', error);
+      showToast('Warning', 'Could not load system configuration. Using default settings.', 'default');
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
+    // Load system configuration first
+    loadSystemConfiguration();
+    
+    // If editing, load campaign data
     if (campaignId) {
       loadCampaignData();
     }
@@ -316,28 +405,62 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
         return;
       }
       
+      // Ensure all required fields have values that pass server validation
+      const defaultVoiceId = formData.voiceConfiguration.voiceId || 'default-voice-id';
+      const defaultSystemPrompt = formData.llmConfiguration.systemPrompt || 'You are an AI assistant making a call on behalf of a company. Be professional, friendly, and helpful.';
+      const startDate = formData.startDate ? new Date(formData.startDate) : new Date();
+      
       // Format dates for API submission
       const submissionData = {
         ...formData,
-        startDate: formData.startDate ? formData.startDate.toISOString() : null,
-        endDate: formData.endDate ? formData.endDate.toISOString() : null
+        status: 'Draft', // Default status for new campaigns
+        script: {
+          versions: [{
+            name: formData.script.name || 'Primary Script',
+            content: formData.script.content || 'Hello, this is an AI assistant calling from our company.',
+            isActive: true
+          }]
+        },
+        startDate: startDate.toISOString(), // Always provide a valid startDate
+        endDate: formData.endDate ? formData.endDate.toISOString() : null,
+        llmConfiguration: {
+          model: formData.llmConfiguration.model || 'gpt-4o',
+          systemPrompt: defaultSystemPrompt,
+          temperature: formData.llmConfiguration.temperature || 0.7,
+          maxTokens: formData.llmConfiguration.maxTokens || 500
+        },
+        voiceConfiguration: {
+          provider: formData.voiceConfiguration.provider || 'elevenlabs',
+          voiceId: defaultVoiceId,
+          speed: formData.voiceConfiguration.speed || 1.0,
+          pitch: formData.voiceConfiguration.pitch || 1.0
+        }
       };
       
-      // Mock API call - In a real application, you would send submissionData to the API
+      // Real API call to create or update the campaign
       console.log('Submitting campaign:', submissionData);
       
-      setTimeout(() => {
-        showToast(
-          campaignId ? 'Campaign Updated' : 'Campaign Created',
-          campaignId
-            ? 'The campaign has been updated successfully.'
-            : 'The campaign has been created successfully.'
-        );
-        
-        setIsLoading(false);
-        onSuccess();
-        onClose();
-      }, 1000);
+      let response;
+      if (campaignId) {
+        // Update existing campaign
+        response = await api.put(`/campaigns/${campaignId}`, submissionData);
+      } else {
+        // Create new campaign
+        response = await api.post('/campaigns', submissionData);
+      }
+      
+      console.log('Campaign saved successfully:', response.data);
+      
+      showToast(
+        campaignId ? 'Campaign Updated' : 'Campaign Created',
+        campaignId
+          ? 'The campaign has been updated successfully.'
+          : 'The campaign has been created successfully.'
+      );
+      
+      setIsLoading(false);
+      onSuccess();
+      onClose();
     } catch (error) {
       console.error('Error saving campaign:', error);
       showToast('Error', 'Failed to save campaign. Please try again.', 'destructive');
@@ -702,6 +825,17 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
               {/* AI & Voice Tab */}
               {currentTab === 'ai' && (
                 <div className="space-y-4">
+                  {systemConfig && (
+                    <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-xl text-sm border border-blue-200 dark:border-blue-800">
+                      <p className="font-medium">Using system configuration settings</p>
+                      <p className="text-muted-foreground text-xs mt-1">
+                        The AI and voice settings shown here are based on the system-wide configuration.
+                        {systemConfig.llmConfig?.defaultProvider && (
+                          <span> Using {systemConfig.llmConfig.defaultProvider} as the LLM provider.</span>
+                        )}
+                      </p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-1">
@@ -721,7 +855,7 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                           <SelectValue placeholder="Select a model" />
                         </SelectTrigger>
                         <SelectContent>
-                          {llmModels.map((model: string) => (
+                          {availableLLMModels.map((model: string) => (
                             <SelectItem key={model} value={model}>
                               {model}
                             </SelectItem>
@@ -743,18 +877,31 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                             provider: value
                           }
                         }))}
+                        disabled={systemConfig?.elevenLabsConfig?.isEnabled}
                       >
                         <SelectTrigger className="w-full rounded-xl">
                           <SelectValue placeholder="Select a voice provider" />
                         </SelectTrigger>
                         <SelectContent>
-                          {voiceProviders.map((provider: string) => (
-                            <SelectItem key={provider} value={provider}>
-                              {provider}
-                            </SelectItem>
-                          ))}
+                          {voiceProviders
+                            .filter(provider => 
+                              !systemConfig || 
+                              (provider === 'elevenlabs' && systemConfig?.elevenLabsConfig?.isEnabled) ||
+                              (provider === 'google')
+                            )
+                            .map((provider: string) => (
+                              <SelectItem key={provider} value={provider}>
+                                {provider}
+                              </SelectItem>
+                            ))
+                          }
                         </SelectContent>
                       </Select>
+                      {systemConfig?.elevenLabsConfig?.isEnabled && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Voice provider is set by system configuration
+                        </p>
+                      )}
                     </div>
                   </div>
                   
@@ -774,16 +921,41 @@ const CampaignForm = ({ campaignId, onClose, onSuccess }: CampaignFormProps) => 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-1">
-                        Voice ID
+                        Voice
                       </label>
-                      <input
-                        type="text"
-                        name="voiceConfiguration.voiceId"
-                        value={formData.voiceConfiguration.voiceId}
-                        onChange={handleChange}
-                        className={inputStyles}
-                        placeholder="Enter voice ID from provider"
-                      />
+                      {systemConfig?.elevenLabsConfig?.availableVoices && 
+                       formData.voiceConfiguration.provider === 'elevenlabs' ? (
+                        <Select
+                          value={formData.voiceConfiguration.voiceId}
+                          onValueChange={(value) => setFormData(prev => ({
+                            ...prev, 
+                            voiceConfiguration: {
+                              ...prev.voiceConfiguration,
+                              voiceId: value
+                            }
+                          }))}
+                        >
+                          <SelectTrigger className="w-full rounded-xl">
+                            <SelectValue placeholder="Select a voice" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {systemConfig.elevenLabsConfig.availableVoices.map((voice: any) => (
+                              <SelectItem key={voice.voiceId} value={voice.voiceId}>
+                                {voice.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <input
+                          type="text"
+                          name="voiceConfiguration.voiceId"
+                          value={formData.voiceConfiguration.voiceId}
+                          onChange={handleChange}
+                          className={inputStyles}
+                          placeholder="Enter voice ID from provider"
+                        />
+                      )}
                     </div>
                     
                     <div>

@@ -126,9 +126,24 @@ const Campaigns = () => {
     setIsSheetOpen(true);
   };
 
-  const handleChangeCampaignStatus = (campaignId: string, newStatus: 'Draft' | 'Active' | 'Paused' | 'Completed') => {
-    console.log(`Changing campaign ${campaignId} status to ${newStatus}`);
-    // In a real app, this would update the campaign via API
+  const handleChangeCampaignStatus = async (campaignId: string, newStatus: 'Draft' | 'Active' | 'Paused' | 'Completed') => {
+    try {
+      await api.put(`/campaigns/${campaignId}`, { status: newStatus });
+      console.log(`Campaign ${campaignId} status changed to ${newStatus}`);
+      
+      // Refresh campaigns data
+      refetch();
+      
+      // If campaign details sheet is open, update it
+      if (selectedCampaign && selectedCampaign._id === campaignId) {
+        setSelectedCampaign({
+          ...selectedCampaign,
+          status: newStatus
+        });
+      }
+    } catch (error) {
+      console.error('Error changing campaign status:', error);
+    }
   };
 
   const handleCampaignFormClose = () => {
@@ -138,7 +153,7 @@ const Campaigns = () => {
 
   const handleCampaignFormSuccess = () => {
     // Refresh campaigns data
-    console.log('Campaign saved successfully');
+    refetch();
   };
 
   const getStatusBadgeVariant = (status: string) => {

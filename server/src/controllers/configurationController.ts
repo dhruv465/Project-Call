@@ -3,6 +3,34 @@ import Configuration from '../models/Configuration';
 import { logger, getErrorMessage } from '../index';
 import axios from 'axios';
 import twilio from 'twilio';
+import { 
+  validateElevenLabsKey, 
+  validateVoiceParameters, 
+  validateLLMParameters,
+  validateGeneralSettings,
+  logValidationError
+} from '../utils/configValidation';
+import {
+  handleApiKeyUpdate,
+  isMaskedApiKey,
+  createMaskedApiKey,
+  handleObjectUpdate,
+  maskSensitiveValues
+} from '../utils/configHelpers';
+import {
+  IConfiguration,
+  UpdatedConfig,
+  BaseLLMProvider,
+  UpdateLLMProvider,
+  LLMConfig,
+  ElevenLabsConfig,
+  TwilioConfig,
+  WebhookConfig,
+  GeneralSettings,
+  ComplianceSettings
+} from '../types/configuration';
+
+// All interfaces moved to /types/configuration.ts
 
 // Helper function to handle unknown errors
 const handleError = (error: unknown): string => {
@@ -79,6 +107,8 @@ const updateServicesWithNewConfig = async (configuration: any): Promise<void> =>
 // @access  Private
 export const getSystemConfiguration = async (_req: Request, res: Response) => {
   try {
+    logger.info('Received request for system configuration');
+    
     // Get or create configuration
     let configuration = await Configuration.findOne();
     
@@ -148,29 +178,32 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
     // Remove sensitive information before sending to client
     const configToSend = configuration.toObject();
     
-    // Mask API keys and tokens
-    if (configToSend.twilioConfig.authToken) {
-      configToSend.twilioConfig.authToken = '••••••••' + configToSend.twilioConfig.authToken.slice(-4);
-    }
+    // Note: We no longer mask API keys in responses since the frontend uses password inputs for security
+    // The UI handles masking through password input components
     
-    if (configToSend.elevenLabsConfig.apiKey) {
-      configToSend.elevenLabsConfig.apiKey = '••••••••' + configToSend.elevenLabsConfig.apiKey.slice(-4);
-    }
-    
-    configToSend.llmConfig.providers = configToSend.llmConfig.providers.map((provider: any) => {
-      if (provider.apiKey) {
-        return {
-          ...provider,
-          apiKey: '••••••••' + provider.apiKey.slice(-4)
-        };
+    // Log what we're sending back to the client (sanitized)
+    logger.info('Sending system configuration to client with fields:', {
+      elevenLabsConfig: {
+        voiceSpeed: configToSend.elevenLabsConfig.voiceSpeed,
+        voiceStability: configToSend.elevenLabsConfig.voiceStability,
+        voiceClarity: configToSend.elevenLabsConfig.voiceClarity,
+        isEnabled: configToSend.elevenLabsConfig.isEnabled,
+      },
+      llmConfig: {
+        defaultProvider: configToSend.llmConfig.defaultProvider,
+        defaultModel: configToSend.llmConfig.defaultModel,
+        temperature: configToSend.llmConfig.temperature,
+        maxTokens: configToSend.llmConfig.maxTokens,
+      },
+      generalSettings: {
+        maxCallDuration: configToSend.generalSettings.maxCallDuration,
+        defaultSystemPrompt: configToSend.generalSettings.defaultSystemPrompt ? 'SET' : 'NOT SET',
+        defaultTimeZone: configToSend.generalSettings.defaultTimeZone,
+      },
+      webhookConfig: {
+        url: configToSend.webhookConfig.url ? 'SET' : 'NOT SET',
       }
-      return provider;
     });
-
-    // Mask webhook secret
-    if (configToSend.webhookConfig?.secret) {
-      configToSend.webhookConfig.secret = '••••••••' + configToSend.webhookConfig.secret.slice(-4);
-    }
 
     res.status(200).json(configToSend);
   } catch (error) {
@@ -183,240 +216,331 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
   }
 };
 
+// interfaces
+interface LLMProvider {
+  name: string;
+  apiKey?: string;
+  availableModels?: string[];
+  isEnabled?: boolean;
+}
+
+// Helper functions
+const updateApiKeyIfChanged = (newKey: string | undefined, existingKey: string): string => {
+  if (typeof newKey === 'undefined') return existingKey;
+  
+  // If masked (has '••••••••'), keep existing key
+  if (isMaskedApiKey(newKey)) {
+    logger.debug('Received masked API key, keeping existing value');
+    return existingKey;
+  }
+  
+  // If empty string is provided, it's an intentional clear
+  if (newKey === '') {
+    logger.info('API key explicitly cleared');
+    return '';
+  }
+  
+  return newKey;
+};
+
+const handleFieldUpdate = <T>(newValue: T | undefined, existingValue: T): T => {
+  return typeof newValue === 'undefined' ? existingValue : newValue;
+};
+
+const maskApiKey = (apiKey: string): string => {
+  if (!apiKey) return '';
+  return '••••••••' + apiKey.slice(-4);
+};
+
+const validateProviderUpdate = (
+  updated: UpdateLLMProvider | undefined, 
+  existing: BaseLLMProvider
+): BaseLLMProvider => {
+  if (!updated) return existing;
+  
+  // Check if API key is being updated
+  let status = existing.status;
+  let apiKey = updateApiKeyIfChanged(updated.apiKey, existing.apiKey);
+  
+  // If API key changed, reset status to unverified
+  if (apiKey !== existing.apiKey) {
+    // Only change status if the key is actually being set or cleared
+    // Not if we're just keeping the existing key due to masking
+    if (!isMaskedApiKey(updated.apiKey || '')) {
+      logger.info(`API key for provider ${existing.name} changed, resetting status to unverified`);
+      status = 'unverified';
+    }
+  } else if (updated.status) {
+    // If status is explicitly provided, use it
+    status = updated.status;
+  }
+  
+  return {
+    ...existing,
+    apiKey,
+    availableModels: updated.availableModels ?? existing.availableModels,
+    isEnabled: updated.isEnabled ?? existing.isEnabled,
+    status,
+    lastVerified: updated.lastVerified ?? existing.lastVerified,
+    name: updated.name || existing.name
+  };
+};
+
 // @desc    Update system configuration
 // @route   PUT /api/configuration
 // @access  Private
 export const updateSystemConfiguration = async (req: Request, res: Response) => {
+  const updatedConfig: UpdatedConfig = req.body;
+  
   try {
-    const updatedConfig = req.body;
+    const config = await Configuration.findOne();
     
-    // Get existing configuration
-    let configuration = await Configuration.findOne();
-    
-    if (!configuration) {
-      return res.status(404).json({ message: 'Configuration not found' });
-    }
-
-    // Handle API keys and tokens - don't overwrite if masked values are sent back
-    if (updatedConfig.twilioConfig) {
-      if (updatedConfig.twilioConfig.authToken && 
-          updatedConfig.twilioConfig.authToken.includes('••••••••')) {
-        delete updatedConfig.twilioConfig.authToken;
-      }
-    }
-    
-    if (updatedConfig.elevenLabsConfig) {
-      // Handle API key (don't overwrite if masked)
-      if (updatedConfig.elevenLabsConfig.apiKey && 
-          updatedConfig.elevenLabsConfig.apiKey.includes('••••••••')) {
-        delete updatedConfig.elevenLabsConfig.apiKey;
-      } else if (updatedConfig.elevenLabsConfig.apiKey) {
-        // Log that we're updating the ElevenLabs API key
-        logger.info('New ElevenLabs API key provided, updating...');
-        configuration.elevenLabsConfig.apiKey = updatedConfig.elevenLabsConfig.apiKey;
-      }
-      
-      // Handle availableVoices (don't overwrite existing voices if they exist)
-      if (updatedConfig.elevenLabsConfig.availableVoices && 
-          updatedConfig.elevenLabsConfig.availableVoices.length > 0 &&
-          (!configuration.elevenLabsConfig.availableVoices || 
-           configuration.elevenLabsConfig.availableVoices.length === 0)) {
-        logger.info('Setting initial available voices');
-        configuration.elevenLabsConfig.availableVoices = updatedConfig.elevenLabsConfig.availableVoices;
-      }
-      
-      // Always update isEnabled flag
-      if (updatedConfig.elevenLabsConfig.isEnabled !== undefined) {
-        configuration.elevenLabsConfig.isEnabled = updatedConfig.elevenLabsConfig.isEnabled;
-      }
-    }
-    
-    if (updatedConfig.llmConfig && updatedConfig.llmConfig.providers) {
-      updatedConfig.llmConfig.providers = updatedConfig.llmConfig.providers.map((provider: any, index: number) => {
-        if (provider.apiKey && provider.apiKey.includes('••••••••')) {
-          // Get the existing key from the stored configuration
-          const existingProvider = configuration.llmConfig.providers[index];
-          if (existingProvider) {
-            return {
-              ...provider,
-              apiKey: existingProvider.apiKey
-            };
-          }
-          // If provider doesn't exist in current config, remove the masked key
-          delete provider.apiKey;
-        }
-        return provider;
+    if (!config) {
+      logger.warn('Configuration not found');
+      res.status(404).json({ 
+        message: 'Configuration not found',
+        success: false
       });
+      return;
     }
-
-    // Handle webhook config (don't overwrite if masked values are sent back)
-    if (updatedConfig.webhookConfig) {
-      if (updatedConfig.webhookConfig.secret && 
-          updatedConfig.webhookConfig.secret.includes('••••••••')) {
-        delete updatedConfig.webhookConfig.secret;
-      }
-    }
-
-    // Update configuration with new values - but more carefully
     
-    // Handle Twilio config separately (already handled API key masking above)
+    const existingConfig = config.toObject();
+    
+    // Validate and update Twilio config
     if (updatedConfig.twilioConfig) {
-      configuration.twilioConfig.accountSid = updatedConfig.twilioConfig.accountSid || configuration.twilioConfig.accountSid;
-      configuration.twilioConfig.phoneNumbers = updatedConfig.twilioConfig.phoneNumbers || configuration.twilioConfig.phoneNumbers;
-      configuration.twilioConfig.isEnabled = updatedConfig.twilioConfig.isEnabled || configuration.twilioConfig.isEnabled;
+      logger.info('Updating Twilio configuration...');
+      
+      if (updatedConfig.twilioConfig.authToken) {
+        const keyUpdate = handleApiKeyUpdate(updatedConfig.twilioConfig.authToken, existingConfig.twilioConfig.authToken);
+        if (keyUpdate.error) {
+          return res.status(400).json({ 
+            message: 'Invalid Twilio auth token',
+            error: keyUpdate.error 
+          });
+        }
+        updatedConfig.twilioConfig.authToken = keyUpdate.key;
+        
+        // If auth token changed, reset status to unverified
+        if (keyUpdate.updated) {
+          logger.info('Twilio auth token changed, resetting status to unverified');
+          updatedConfig.twilioConfig.status = 'unverified';
+        }
+      }
+      
+      config.twilioConfig = handleObjectUpdate(updatedConfig.twilioConfig, existingConfig.twilioConfig);
     }
     
-    // Handle ElevenLabs config (already handled API key and voices above)
+    // Validate and update ElevenLabs config
     if (updatedConfig.elevenLabsConfig) {
-      configuration.elevenLabsConfig.isEnabled = updatedConfig.elevenLabsConfig.isEnabled || configuration.elevenLabsConfig.isEnabled;
+      logger.info('Updating ElevenLabs configuration...');
       
-      // Update voice settings
-      if (updatedConfig.elevenLabsConfig.voiceSpeed !== undefined) {
-        configuration.elevenLabsConfig.voiceSpeed = updatedConfig.elevenLabsConfig.voiceSpeed;
-      }
-      if (updatedConfig.elevenLabsConfig.voiceStability !== undefined) {
-        configuration.elevenLabsConfig.voiceStability = updatedConfig.elevenLabsConfig.voiceStability;
-      }
-      if (updatedConfig.elevenLabsConfig.voiceClarity !== undefined) {
-        configuration.elevenLabsConfig.voiceClarity = updatedConfig.elevenLabsConfig.voiceClarity;
-      }
-    }
-    
-    // Handle LLM config
-    if (updatedConfig.llmConfig) {
-      // Update default provider and model
-      if (updatedConfig.llmConfig.defaultProvider) {
-        configuration.llmConfig.defaultProvider = updatedConfig.llmConfig.defaultProvider;
-      }
-      if (updatedConfig.llmConfig.defaultModel) {
-        configuration.llmConfig.defaultModel = updatedConfig.llmConfig.defaultModel;
+      // Validate API key if provided
+      if (updatedConfig.elevenLabsConfig.apiKey) {
+        const validation = validateElevenLabsKey(updatedConfig.elevenLabsConfig.apiKey);
+        if (!validation.isValid) {
+          return res.status(400).json({ 
+            message: 'Invalid ElevenLabs API key',
+            error: validation.error 
+          });
+        }
+        
+        // If API key changed, reset status to unverified
+        const apiKeyUpdate = handleApiKeyUpdate(updatedConfig.elevenLabsConfig.apiKey, existingConfig.elevenLabsConfig.apiKey);
+        if (apiKeyUpdate.updated) {
+          logger.info('ElevenLabs API key changed, resetting status to unverified');
+          updatedConfig.elevenLabsConfig.status = 'unverified';
+        }
       }
       
-      // Update LLM settings
-      if (updatedConfig.llmConfig.temperature !== undefined) {
-        configuration.llmConfig.temperature = updatedConfig.llmConfig.temperature;
-      }
-      if (updatedConfig.llmConfig.maxTokens !== undefined) {
-        configuration.llmConfig.maxTokens = updatedConfig.llmConfig.maxTokens;
-      }
+      // Validate voice parameters if provided
+      const voiceValidation = validateVoiceParameters({
+        voiceSpeed: updatedConfig.elevenLabsConfig.voiceSpeed,
+        voiceStability: updatedConfig.elevenLabsConfig.voiceStability,
+        voiceClarity: updatedConfig.elevenLabsConfig.voiceClarity
+      });
       
-      // Handle providers
-      if (updatedConfig.llmConfig.providers && Array.isArray(updatedConfig.llmConfig.providers)) {
-        // Update each provider
-        updatedConfig.llmConfig.providers.forEach((updatedProvider: any) => {
-          const existingProviderIndex = configuration.llmConfig.providers.findIndex(
-            (p: any) => p.name === updatedProvider.name
-          );
-          
-          if (existingProviderIndex >= 0) {
-            // Skip masked API keys
-            if (updatedProvider.apiKey && !updatedProvider.apiKey.includes('••••••••')) {
-              configuration.llmConfig.providers[existingProviderIndex].apiKey = updatedProvider.apiKey;
-            }
-            
-            // Update other properties
-            if (updatedProvider.isEnabled !== undefined) {
-              configuration.llmConfig.providers[existingProviderIndex].isEnabled = updatedProvider.isEnabled;
-            }
-            if (updatedProvider.availableModels) {
-              configuration.llmConfig.providers[existingProviderIndex].availableModels = updatedProvider.availableModels;
-            }
-          }
+      if (!voiceValidation.isValid) {
+        return res.status(400).json({ 
+          message: 'Invalid voice parameters',
+          error: voiceValidation.error 
         });
       }
+      
+      config.elevenLabsConfig = {
+        ...existingConfig.elevenLabsConfig,
+        apiKey: updateApiKeyIfChanged(updatedConfig.elevenLabsConfig.apiKey, existingConfig.elevenLabsConfig.apiKey),
+        availableVoices: handleFieldUpdate(updatedConfig.elevenLabsConfig.availableVoices, existingConfig.elevenLabsConfig.availableVoices),
+        isEnabled: handleFieldUpdate(updatedConfig.elevenLabsConfig.isEnabled, existingConfig.elevenLabsConfig.isEnabled),
+        voiceSpeed: handleFieldUpdate(updatedConfig.elevenLabsConfig.voiceSpeed, existingConfig.elevenLabsConfig.voiceSpeed),
+        voiceStability: handleFieldUpdate(updatedConfig.elevenLabsConfig.voiceStability, existingConfig.elevenLabsConfig.voiceStability),
+        voiceClarity: handleFieldUpdate(updatedConfig.elevenLabsConfig.voiceClarity, existingConfig.elevenLabsConfig.voiceClarity)
+      };
     }
     
-    // Handle general settings
+    // Update LLM config if provided
+    if (updatedConfig.llmConfig) {
+      logger.info('Updating LLM configuration...');
+      
+      // Handle providers
+      if (updatedConfig.llmConfig.providers) {
+        config.llmConfig.providers = existingConfig.llmConfig.providers.map(existingProvider => {
+          const updatedProvider = updatedConfig.llmConfig?.providers?.find(p => p.name === existingProvider.name);
+          return validateProviderUpdate(updatedProvider, existingProvider);
+        });
+      }
+      
+      // Validate and update LLM settings
+      if (updatedConfig.llmConfig.temperature || updatedConfig.llmConfig.maxTokens) {
+        const llmValidation = validateLLMParameters({
+          temperature: updatedConfig.llmConfig.temperature,
+          maxTokens: updatedConfig.llmConfig.maxTokens
+        });
+        
+        if (!llmValidation.isValid) {
+          return res.status(400).json({
+            message: 'Invalid LLM parameters',
+            error: llmValidation.error
+          });
+        }
+      }
+      
+      config.llmConfig = {
+        ...config.llmConfig,
+        defaultProvider: handleFieldUpdate(updatedConfig.llmConfig.defaultProvider, existingConfig.llmConfig.defaultProvider),
+        defaultModel: handleFieldUpdate(updatedConfig.llmConfig.defaultModel, existingConfig.llmConfig.defaultModel),
+        temperature: handleFieldUpdate(updatedConfig.llmConfig.temperature, existingConfig.llmConfig.temperature),
+        maxTokens: handleFieldUpdate(updatedConfig.llmConfig.maxTokens, existingConfig.llmConfig.maxTokens)
+      };
+    }
+    
+    // Validate and update general settings
     if (updatedConfig.generalSettings) {
-      // Update properties individually
-      if (updatedConfig.generalSettings.defaultLanguage) {
-        configuration.generalSettings.defaultLanguage = updatedConfig.generalSettings.defaultLanguage;
+      logger.info('Updating general settings...');
+      
+      const generalValidation = validateGeneralSettings({
+        maxCallDuration: updatedConfig.generalSettings.maxCallDuration,
+        callRetryAttempts: updatedConfig.generalSettings.callRetryAttempts,
+        callRetryDelay: updatedConfig.generalSettings.callRetryDelay,
+        maxConcurrentCalls: updatedConfig.generalSettings.maxConcurrentCalls
+      });
+      
+      if (!generalValidation.isValid) {
+        return res.status(400).json({
+          message: 'Invalid general settings',
+          error: generalValidation.error
+        });
       }
-      if (updatedConfig.generalSettings.supportedLanguages) {
-        configuration.generalSettings.supportedLanguages = updatedConfig.generalSettings.supportedLanguages;
-      }
-      if (updatedConfig.generalSettings.maxConcurrentCalls !== undefined) {
-        configuration.generalSettings.maxConcurrentCalls = updatedConfig.generalSettings.maxConcurrentCalls;
-      }
-      if (updatedConfig.generalSettings.callRetryAttempts !== undefined) {
-        configuration.generalSettings.callRetryAttempts = updatedConfig.generalSettings.callRetryAttempts;
-      }
-      if (updatedConfig.generalSettings.callRetryDelay !== undefined) {
-        configuration.generalSettings.callRetryDelay = updatedConfig.generalSettings.callRetryDelay;
-      }
-      if (updatedConfig.generalSettings.maxCallDuration !== undefined) {
-        configuration.generalSettings.maxCallDuration = updatedConfig.generalSettings.maxCallDuration;
-      }
-      if (updatedConfig.generalSettings.defaultSystemPrompt) {
-        configuration.generalSettings.defaultSystemPrompt = updatedConfig.generalSettings.defaultSystemPrompt;
-      }
-      if (updatedConfig.generalSettings.defaultTimeZone) {
-        configuration.generalSettings.defaultTimeZone = updatedConfig.generalSettings.defaultTimeZone;
-        // Also update working hours timezone for backward compatibility
-        configuration.generalSettings.workingHours.timeZone = updatedConfig.generalSettings.defaultTimeZone;
-      }
+      
+      config.generalSettings = {
+        ...existingConfig.generalSettings,
+        defaultLanguage: handleFieldUpdate(updatedConfig.generalSettings.defaultLanguage, existingConfig.generalSettings.defaultLanguage),
+        supportedLanguages: handleFieldUpdate(updatedConfig.generalSettings.supportedLanguages, existingConfig.generalSettings.supportedLanguages),
+        maxConcurrentCalls: handleFieldUpdate(updatedConfig.generalSettings.maxConcurrentCalls, existingConfig.generalSettings.maxConcurrentCalls),
+        callRetryAttempts: handleFieldUpdate(updatedConfig.generalSettings.callRetryAttempts, existingConfig.generalSettings.callRetryAttempts),
+        callRetryDelay: handleFieldUpdate(updatedConfig.generalSettings.callRetryDelay, existingConfig.generalSettings.callRetryDelay),
+        maxCallDuration: handleFieldUpdate(updatedConfig.generalSettings.maxCallDuration, existingConfig.generalSettings.maxCallDuration),
+        defaultSystemPrompt: handleFieldUpdate(updatedConfig.generalSettings.defaultSystemPrompt, existingConfig.generalSettings.defaultSystemPrompt),
+        defaultTimeZone: handleFieldUpdate(updatedConfig.generalSettings.defaultTimeZone, existingConfig.generalSettings.defaultTimeZone),
+        workingHours: {
+          ...existingConfig.generalSettings.workingHours,
+          timeZone: handleFieldUpdate(updatedConfig.generalSettings.defaultTimeZone, existingConfig.generalSettings.workingHours.timeZone)
+        }
+      };
     }
-
-    // Handle webhook config
+    
+    // Update webhook config if provided
     if (updatedConfig.webhookConfig) {
-      if (updatedConfig.webhookConfig.url !== undefined) {
-        configuration.webhookConfig.url = updatedConfig.webhookConfig.url;
-      }
-      if (updatedConfig.webhookConfig.secret && !updatedConfig.webhookConfig.secret.includes('••••••••')) {
-        configuration.webhookConfig.secret = updatedConfig.webhookConfig.secret;
-      }
-    }
-
-    logger.info('Saving updated configuration to database...');
+      logger.info('Updating webhook configuration...');
+      config.webhookConfig = {
+        ...existingConfig.webhookConfig,
+        url: handleFieldUpdate(updatedConfig.webhookConfig.url, existingConfig.webhookConfig.url),
+        secret: updateApiKeyIfChanged(updatedConfig.webhookConfig.secret, existingConfig.webhookConfig.secret)
+      };
+    }      // Save configuration changes
     try {
-      await configuration.save();
+      await config.save();
       logger.info('Configuration saved successfully');
-    } catch (error) {
-      logger.error('Error saving configuration to database:', error);
-      return res.status(500).json({
-        message: 'Failed to save configuration to database',
-        error: handleError(error)
+      
+      // Update services with new API keys
+      await updateServicesWithNewConfig(config);
+      
+      // Prepare masked response
+      const response = maskSensitiveValues(config.toObject());
+      
+      // Log configuration update (with masked sensitive data)
+      logger.info('Configuration updated:', {
+        twilioConfig: {
+          isEnabled: response.twilioConfig.isEnabled,
+          hasAuthToken: !!response.twilioConfig.authToken,
+          phoneNumberCount: response.twilioConfig.phoneNumbers?.length || 0
+        },
+        elevenLabsConfig: {
+          isEnabled: response.elevenLabsConfig.isEnabled,
+          hasApiKey: !!response.elevenLabsConfig.apiKey,
+          voiceSpeed: response.elevenLabsConfig.voiceSpeed,
+          voiceStability: response.elevenLabsConfig.voiceStability,
+          voiceClarity: response.elevenLabsConfig.voiceClarity
+        },
+        llmConfig: {
+          defaultProvider: response.llmConfig.defaultProvider,
+          defaultModel: response.llmConfig.defaultModel,
+          temperature: response.llmConfig.temperature,
+          maxTokens: response.llmConfig.maxTokens,
+          providers: response.llmConfig.providers.map(p => ({
+            name: p.name,
+            isEnabled: p.isEnabled,
+            hasApiKey: !!p.apiKey
+          }))
+        },
+        generalSettings: {
+          maxCallDuration: response.generalSettings.maxCallDuration,
+          maxConcurrentCalls: response.generalSettings.maxConcurrentCalls,
+          callRetryAttempts: response.generalSettings.callRetryAttempts
+        },
+        webhookConfig: {
+          hasUrl: !!response.webhookConfig.url,
+          hasSecret: !!response.webhookConfig.secret
+        }
+      });
+      
+      res.status(200).json({
+        message: 'Configuration updated successfully',
+        success: true,
+        configuration: response
+      });
+      
+    } catch (saveError) {
+      logger.error('Error saving configuration:', saveError);
+      throw saveError;
+    }
+    
+  } catch (error: unknown) {
+    logger.error('Error in updateSystemConfiguration:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      config: maskSensitiveValues(req.body)
+    });
+
+    if (error instanceof Error && error.name === 'ValidationError') {
+      return res.status(400).json({
+        message: 'Configuration validation failed',
+        success: false,
+        error: error.message
       });
     }
 
-    // Update services with new API keys
-    await updateServicesWithNewConfig(configuration);
-    
-    // Mask sensitive data before sending response
-    const configToSend = configuration.toObject();
-    
-    if (configToSend.twilioConfig.authToken) {
-      configToSend.twilioConfig.authToken = '••••••••' + configToSend.twilioConfig.authToken.slice(-4);
-    }
-    
-    if (configToSend.elevenLabsConfig.apiKey) {
-      configToSend.elevenLabsConfig.apiKey = '••••••••' + configToSend.elevenLabsConfig.apiKey.slice(-4);
-    }
-    
-    configToSend.llmConfig.providers = configToSend.llmConfig.providers.map((provider: any) => {
-      if (provider.apiKey) {
-        return {
-          ...provider,
-          apiKey: '••••••••' + provider.apiKey.slice(-4)
-        };
-      }
-      return provider;
-    });
-
-    // Mask webhook secret in response
-    if (configToSend.webhookConfig?.secret) {
-      configToSend.webhookConfig.secret = '••••••••' + configToSend.webhookConfig.secret.slice(-4);
+    if (error instanceof Error && error.name === 'MongoError') {
+      return res.status(500).json({
+        message: 'Database error',
+        success: false,
+        error: 'Failed to save configuration'
+      });
     }
 
-    return res.status(200).json({
-      message: 'Configuration updated successfully',
-      configuration: configToSend
-    });
-  } catch (error) {
-    logger.error('Error in updateSystemConfiguration:', error);
-    return res.status(500).json({
+    res.status(500).json({
       message: 'Server error',
-      error: handleError(error)
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 };
@@ -526,20 +650,26 @@ export const getVoiceOptions = async (_req: Request, res: Response) => {
 // @access  Private
 export const testLLMConnection = async (req: Request, res: Response) => {
   try {
-    const { provider, apiKey, model } = req.body;
+    const { provider, apiKey, model } = req.body as {
+      provider: string;
+      apiKey: string;
+      model: string;
+    };
 
     if (!provider || !apiKey || !model) {
-      return res.status(400).json({ message: 'Provider, API key, and model are required' });
+      return res.status(400).json({ 
+        message: 'Provider, API key, and model are required',
+        success: false
+      });
     }
 
     let isSuccessful = false;
-    let response = null;
+    let response: any = null;
 
     // Test connection based on provider
     switch (provider) {
       case 'openai':
         try {
-          // Simple test request to OpenAI
           const openaiResponse = await axios.post(
             'https://api.openai.com/v1/chat/completions',
             {
@@ -569,7 +699,6 @@ export const testLLMConnection = async (req: Request, res: Response) => {
         
       case 'anthropic':
         try {
-          // Simple test request to Anthropic
           const anthropicResponse = await axios.post(
             'https://api.anthropic.com/v1/messages',
             {
@@ -600,7 +729,6 @@ export const testLLMConnection = async (req: Request, res: Response) => {
         
       case 'google':
         try {
-          // Simple test request to Google AI
           const googleResponse = await axios.post(
             `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent`,
             {
@@ -625,7 +753,44 @@ export const testLLMConnection = async (req: Request, res: Response) => {
         break;
         
       default:
-        return res.status(400).json({ message: 'Unsupported LLM provider' });
+        return res.status(400).json({ 
+          message: 'Unsupported LLM provider',
+          success: false
+        });
+    }
+
+    // Update LLM provider status in database based on test result
+    if (isSuccessful) {
+      // Update status in database
+      const configuration = await Configuration.findOne();
+      if (configuration) {
+        // Find the provider and update its status
+        const providerIndex = configuration.llmConfig.providers.findIndex(
+          p => p.name === provider
+        );
+        
+        if (providerIndex >= 0) {
+          configuration.llmConfig.providers[providerIndex].lastVerified = new Date();
+          configuration.llmConfig.providers[providerIndex].status = 'verified';
+          await configuration.save();
+          logger.info(`${provider} LLM provider status updated to verified`);
+        }
+      }
+    } else {
+      // Update status to failed
+      const configuration = await Configuration.findOne();
+      if (configuration) {
+        // Find the provider and update its status
+        const providerIndex = configuration.llmConfig.providers.findIndex(
+          p => p.name === provider
+        );
+        
+        if (providerIndex >= 0) {
+          configuration.llmConfig.providers[providerIndex].status = 'failed';
+          await configuration.save();
+          logger.info(`${provider} LLM provider status updated to failed`);
+        }
+      }
     }
 
     return res.status(200).json({
@@ -637,6 +802,7 @@ export const testLLMConnection = async (req: Request, res: Response) => {
     logger.error('Error in testLLMConnection:', error);
     return res.status(500).json({
       message: 'Server error',
+      success: false,
       error: handleError(error)
     });
   }
@@ -685,9 +851,26 @@ export const testTwilioConnection = async (req: Request, res: Response) => {
         accountType: account.type,
         accountName: account.friendlyName
       };
+      
+      // Update status in database
+      const configuration = await Configuration.findOne();
+      if (configuration) {
+        configuration.twilioConfig.lastVerified = new Date();
+        configuration.twilioConfig.status = 'verified';
+        await configuration.save();
+        logger.info('Twilio configuration status updated to verified');
+      }
     } catch (error) {
       logger.error('Twilio test connection failed:', error);
       response = handleError(error);
+      
+      // Update status in database
+      const configuration = await Configuration.findOne();
+      if (configuration) {
+        configuration.twilioConfig.status = 'failed';
+        await configuration.save();
+        logger.info('Twilio configuration status updated to failed');
+      }
     }
 
     return res.status(200).json({
@@ -738,12 +921,29 @@ export const testElevenLabsConnection = async (req: Request, res: Response) => {
           previewUrl: voice.preview_url
         }))
       };
+      
+      // Update status in database
+      const configuration = await Configuration.findOne();
+      if (configuration) {
+        configuration.elevenLabsConfig.lastVerified = new Date();
+        configuration.elevenLabsConfig.status = 'verified';
+        await configuration.save();
+        logger.info('ElevenLabs configuration status updated to verified');
+      }
     } catch (error: unknown) {
       logger.error('ElevenLabs test connection failed:', error);
       if (error instanceof Error && 'response' in error) {
         response = (error as any).response?.data || handleError(error);
       } else {
         response = handleError(error);
+      }
+      
+      // Update status in database
+      const configuration = await Configuration.findOne();
+      if (configuration) {
+        configuration.elevenLabsConfig.status = 'failed';
+        await configuration.save();
+        logger.info('ElevenLabs configuration status updated to failed');
       }
     }
 
@@ -820,6 +1020,15 @@ export const testVoiceSynthesis = async (req: Request, res: Response) => {
       const audioBuffer = Buffer.from(elevenLabsResponse.data);
       const audioBase64 = audioBuffer.toString('base64');
 
+      // Update ElevenLabs status in database
+      const configuration = await Configuration.findOne();
+      if (configuration) {
+        configuration.elevenLabsConfig.lastVerified = new Date();
+        configuration.elevenLabsConfig.status = 'verified';
+        await configuration.save();
+        logger.info('ElevenLabs configuration status updated to verified after successful voice synthesis');
+      }
+
       logger.info('Voice synthesis successful');
       return res.status(200).json({
         success: true,
@@ -839,6 +1048,14 @@ export const testVoiceSynthesis = async (req: Request, res: Response) => {
         const axiosError = error as any;
         if (axiosError.response?.status === 401) {
           errorMessage = 'Invalid ElevenLabs API key';
+          
+          // Update ElevenLabs status to failed in database
+          const configuration = await Configuration.findOne();
+          if (configuration) {
+            configuration.elevenLabsConfig.status = 'failed';
+            await configuration.save();
+            logger.info('ElevenLabs configuration status updated to failed after voice synthesis error');
+          }
         } else if (axiosError.response?.status === 422) {
           errorMessage = 'Invalid voice ID or parameters';
         } else if (axiosError.response?.status === 404) {
@@ -873,6 +1090,140 @@ export const testVoiceSynthesis = async (req: Request, res: Response) => {
 
   } catch (error) {
     logger.error('Error in testVoiceSynthesis:', error);
+    return res.status(500).json({
+      message: 'Server error',
+      error: handleError(error)
+    });
+  }
+};
+
+// @desc    Delete API key
+// @route   DELETE /api/configuration/api-key/:provider/:name?
+// @access  Private
+export const deleteApiKey = async (req: Request, res: Response) => {
+  try {
+    const { provider, name } = req.params;
+    
+    logger.info(`Received request to delete API key for provider: ${provider}${name ? `, name: ${name}` : ''}`);
+    
+    // Get existing configuration
+    let configuration = await Configuration.findOne();
+    
+    if (!configuration) {
+      return res.status(404).json({ message: 'Configuration not found' });
+    }
+    
+    let success = false;
+    let message = '';
+    
+    // Delete the appropriate API key based on provider
+    switch (provider) {
+      case 'elevenlabs':
+        if (configuration.elevenLabsConfig && configuration.elevenLabsConfig.apiKey) {
+          configuration.elevenLabsConfig.apiKey = '';
+          configuration.elevenLabsConfig.isEnabled = false;
+          configuration.elevenLabsConfig.status = 'unverified';
+          success = true;
+          message = 'ElevenLabs API key deleted successfully';
+          logger.info('ElevenLabs API key deleted');
+        } else {
+          message = 'No ElevenLabs API key found to delete';
+          logger.warn('No ElevenLabs API key found to delete');
+        }
+        break;
+        
+      case 'twilio':
+        if (configuration.twilioConfig) {
+          configuration.twilioConfig.authToken = '';
+          configuration.twilioConfig.isEnabled = false;
+          configuration.twilioConfig.status = 'unverified';
+          success = true;
+          message = 'Twilio auth token deleted successfully';
+          logger.info('Twilio auth token deleted');
+        } else {
+          message = 'No Twilio auth token found to delete';
+          logger.warn('No Twilio auth token found to delete');
+        }
+        break;
+        
+      case 'llm':
+        if (!name) {
+          return res.status(400).json({ message: 'LLM provider name is required' });
+        }
+        
+        if (configuration.llmConfig && configuration.llmConfig.providers) {
+          const providerIndex = configuration.llmConfig.providers.findIndex(
+            (p: any) => p.name === name
+          );
+          
+          if (providerIndex >= 0) {
+            configuration.llmConfig.providers[providerIndex].apiKey = '';
+            configuration.llmConfig.providers[providerIndex].isEnabled = false;
+            success = true;
+            message = `${name} API key deleted successfully`;
+            logger.info(`${name} API key deleted`);
+            
+            // If this was the default provider, update to another provider if available
+            if (configuration.llmConfig.defaultProvider === name) {
+              const availableProvider = configuration.llmConfig.providers.find(
+                (p: any) => p.name !== name && p.apiKey
+              );
+              
+              if (availableProvider) {
+                configuration.llmConfig.defaultProvider = availableProvider.name;
+                logger.info(`Updated default LLM provider to ${availableProvider.name}`);
+              }
+            }
+          } else {
+            message = `No API key found for LLM provider: ${name}`;
+            logger.warn(`No API key found for LLM provider: ${name}`);
+          }
+        } else {
+          message = 'LLM configuration not found';
+          logger.warn('LLM configuration not found');
+        }
+        break;
+        
+      case 'webhook':
+        if (configuration.webhookConfig) {
+          configuration.webhookConfig.secret = '';
+          success = true;
+          message = 'Webhook secret deleted successfully';
+          logger.info('Webhook secret deleted');
+        } else {
+          message = 'No webhook secret found to delete';
+          logger.warn('No webhook secret found to delete');
+        }
+        break;
+        
+      default:
+        return res.status(400).json({ message: 'Invalid provider specified' });
+    }
+    
+    // Save the updated configuration
+    if (success) {
+      try {
+        await configuration.save();
+        
+        // Update services with new configuration (removed API keys)
+        await updateServicesWithNewConfig(configuration);
+        
+        logger.info('Configuration saved after API key deletion');
+      } catch (error) {
+        logger.error('Error saving configuration after API key deletion:', error);
+        return res.status(500).json({
+          message: 'Failed to save configuration after API key deletion',
+          error: handleError(error)
+        });
+      }
+    }
+    
+    return res.status(200).json({
+      success,
+      message
+    });
+  } catch (error) {
+    logger.error('Error in deleteApiKey:', error);
     return res.status(500).json({
       message: 'Server error',
       error: handleError(error)

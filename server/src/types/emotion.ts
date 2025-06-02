@@ -12,6 +12,8 @@ export type Emotion =
 export interface EmotionResult {
   emotion: Emotion;
   confidence: number;
+  all_scores?: { [key: string]: number };
+  model_used?: string;
   metadata: {
     model: string;
     latency: number;

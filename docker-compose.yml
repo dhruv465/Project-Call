@@ -1,18 +1,6 @@
 version: '3.8'
 
 services:
-  # MongoDB service
-  mongodb:
-    image: mongo:latest
-    container_name: mongodb
-    restart: always
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-    networks:
-      - app_network
-
   # Redis service for caching
   redis:
     image: redis:alpine
@@ -35,12 +23,11 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - mongodb
       - redis
     environment:
       - NODE_ENV=development
       - PORT=8000
-      - MONGODB_URI=mongodb://mongodb:27017/lumina-outreach
+      - MONGODB_URI=mongodb+srv://dhruvsathe11:<db_password>@cluster0.llfstua.mongodb.net/lumina-outreach?retryWrites=true&w=majority&appName=Cluster0
       - REDIS_URL=redis://redis:6379
       - CLIENT_URL=http://localhost:3000
       - JWT_SECRET=${JWT_SECRET}
@@ -82,5 +69,4 @@ networks:
     driver: bridge
 
 volumes:
-  mongodb_data:
   redis_data:

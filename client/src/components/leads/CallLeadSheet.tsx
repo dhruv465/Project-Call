@@ -70,27 +70,45 @@ const CallLeadSheet = ({
       setIsLoadingCampaigns(true);
       try {
         const response = await api.get('/campaigns');
-        // Check if response.data is an object with campaigns property
-        const campaignsData = response.data.campaigns ? response.data.campaigns : response.data;
+        console.log('Campaigns API response:', response.data);
         
-        // Make sure campaignsData is an array before filtering
-        const campaignsArray = Array.isArray(campaignsData) ? campaignsData : [];
+        // Normalize the response data structure
+        let campaignsArray;
+        if (Array.isArray(response.data)) {
+          // If response is directly an array
+          campaignsArray = response.data;
+        } else if (response.data && response.data.campaigns && Array.isArray(response.data.campaigns)) {
+          // If response has a campaigns property that is an array
+          campaignsArray = response.data.campaigns;
+        } else {
+          // Fallback to empty array if data structure is unexpected
+          console.warn('Unexpected campaigns data structure:', response.data);
+          campaignsArray = [];
+        }
         
+        // Filter to only active or draft campaigns
         const activeCampaigns = campaignsArray.filter((campaign: Campaign) => 
           campaign.status === 'Active' || campaign.status === 'Draft'
         );
         
+        console.log('Active campaigns:', activeCampaigns);
         setCampaigns(activeCampaigns);
         
         // Auto-select the first active campaign if available
         if (activeCampaigns.length > 0) {
           setSelectedCampaign(activeCampaigns[0]._id);
         } else {
+          console.log('No active campaigns found, creating default campaign...');
           // Create a default campaign if none exist
           await createDefaultCampaign();
         }
       } catch (error) {
         console.error('Error loading campaigns:', error);
+        toast({
+          title: "Error Loading Campaigns",
+          description: "Failed to load campaigns. Creating a default campaign.",
+          variant: "destructive",
+        });
         // If campaigns fail to load, create a default one
         await createDefaultCampaign();
       } finally {
@@ -130,7 +148,36 @@ const CallLeadSheet = ({
         description: 'Auto-generated campaign for lead calls',
         status: 'Active',
         goal: 'Lead outreach and qualification',
-        targetAudience: 'All leads'
+        targetAudience: 'All leads',
+        leadSources: ['Manual Entry'],
+        primaryLanguage: 'English',
+        supportedLanguages: ['English'],
+        startDate: new Date().toISOString(),
+        script: {
+          versions: [{
+            name: 'Default Script',
+            content: "Hello, this is [Agent Name] calling from [Company Name]. I'm reaching out because we noticed you've shown interest in our services. Do you have a few minutes to discuss how we might be able to help with your needs?",
+            isActive: true
+          }]
+        },
+        callTiming: {
+          daysOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+          startTime: '09:00',
+          endTime: '17:00',
+          timeZone: 'Asia/Kolkata'
+        },
+        llmConfiguration: {
+          model: 'gpt-4o',
+          systemPrompt: 'You are an AI assistant making a call on behalf of a company. Be professional, friendly, and helpful.',
+          temperature: 0.7,
+          maxTokens: 500
+        },
+        voiceConfiguration: {
+          provider: 'elevenlabs',
+          voiceId: '',
+          speed: 1.0,
+          pitch: 1.0
+        }
       };
 
       const response = await api.post('/campaigns', defaultCampaign);

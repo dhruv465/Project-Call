@@ -6,6 +6,8 @@ export interface IConfiguration extends mongoose.Document {
     authToken: string;
     phoneNumbers: string[];
     isEnabled: boolean;
+    lastVerified?: Date | null;
+    status?: 'unverified' | 'verified' | 'failed';
   };
   elevenLabsConfig: {
     apiKey: string;
@@ -18,6 +20,8 @@ export interface IConfiguration extends mongoose.Document {
     voiceSpeed: number;
     voiceStability: number;
     voiceClarity: number;
+    lastVerified?: Date | null;
+    status?: 'unverified' | 'verified' | 'failed';
   };
   voiceAIConfig: {
     personalities: {
@@ -60,6 +64,8 @@ export interface IConfiguration extends mongoose.Document {
       apiKey: string;
       availableModels: string[];
       isEnabled: boolean;
+      lastVerified?: Date | null;
+      status?: 'unverified' | 'verified' | 'failed';
     }[];
     defaultProvider: string;
     defaultModel: string;
@@ -94,10 +100,19 @@ export interface IConfiguration extends mongoose.Document {
   webhookConfig: {
     url: string;
     secret: string;
+    lastVerified?: Date | null;
+    status?: 'unverified' | 'verified' | 'failed';
   };
+  configurationVersion?: number;
+  lastSystemUpdate?: Date;
   updatedBy: mongoose.Schema.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
+  
+  // Methods
+  getMaskedConfig?: () => any;
+  deleteApiKey?: (provider: string, name?: string | null) => boolean;
+  updateApiKeyStatus?: (provider: string, name: string | null, status: 'unverified' | 'verified' | 'failed', details?: any) => boolean;
 }
 
 const ConfigurationSchema = new mongoose.Schema(
@@ -120,6 +135,15 @@ const ConfigurationSchema = new mongoose.Schema(
       isEnabled: {
         type: Boolean,
         default: false,
+      },
+      lastVerified: {
+        type: Date,
+        default: null,
+      },
+      status: {
+        type: String,
+        enum: ['unverified', 'verified', 'failed'],
+        default: 'unverified',
       },
     },
     elevenLabsConfig: {
@@ -165,6 +189,15 @@ const ConfigurationSchema = new mongoose.Schema(
         min: 0.0,
         max: 1.0,
       },
+      lastVerified: {
+        type: Date,
+        default: null,
+      },
+      status: {
+        type: String,
+        enum: ['unverified', 'verified', 'failed'],
+        default: 'unverified',
+      },
     },
     llmConfig: {
       providers: [
@@ -200,15 +233,15 @@ const ConfigurationSchema = new mongoose.Schema(
       },
       temperature: {
         type: Number,
-        default: 0.7,
-        min: 0.0,
+        min: 0,
         max: 2.0,
+        default: 0.7,
       },
       maxTokens: {
         type: Number,
-        default: 150,
         min: 1,
-        max: 4000,
+        max: 32000,
+        default: 150,
       },
     },
     generalSettings: {
