@@ -81,7 +81,7 @@ const initialFormState: CampaignFormData = {
   leadSources: [""],
   primaryLanguage: "English",
   supportedLanguages: ["English"],
-  startDate: new Date(),
+  startDate: new Date(), // Always initialize with current date
   endDate: undefined,
   script: {
     name: "Primary Script",
@@ -102,7 +102,7 @@ const initialFormState: CampaignFormData = {
   },
   voiceConfiguration: {
     provider: "elevenlabs",
-    voiceId: "default-voice-id", // Default value to ensure validation passes
+    voiceId: "default-voice-id", // Will be overridden with system configuration
     speed: 1.0,
     pitch: 1.0,
   },
@@ -243,7 +243,9 @@ const CampaignForm = ({
       setIsLoading(true);
       const config = await configApi.getConfiguration();
       setSystemConfig(config);
-
+      
+      console.log("Loaded system configuration:", config);
+      
       // Filter LLM models based on the configured provider
       if (config.llmConfig?.providers) {
         const defaultProvider = config.llmConfig.defaultProvider;
@@ -260,54 +262,87 @@ const CampaignForm = ({
         }
       }
 
-      // Update the form with defaults from system configuration if not editing
+      // Only update form data if not editing an existing campaign
       if (!campaignId) {
+        // Determine the most reliable voice ID from configuration
+        let bestVoiceId = 'default-voice-id';
+        
+        // Priority 1: voice config default ID
+        if (config.voiceConfig?.defaultVoiceId) {
+          bestVoiceId = config.voiceConfig.defaultVoiceId;
+        } 
+        // Priority 2: ElevenLabs first voice
+        else if (config.elevenLabsConfig?.availableVoices?.length > 0) {
+          bestVoiceId = config.elevenLabsConfig.availableVoices[0].voiceId;
+        }
+        
+        // Determine best system prompt
+        const bestSystemPrompt = config.llmConfig?.defaultSystemPrompt || 
+                               config.generalSettings?.defaultSystemPrompt ||
+                               'You are an AI assistant making a call on behalf of a company. Be professional, friendly, and helpful.';
+        
+        // Determine best LLM model
+        const bestModel = config.llmConfig?.defaultModel || 
+                       (config.llmConfig?.providers?.[0]?.availableModels?.[0]) || 
+                       "gpt-4o";
+        
+        // Ensure we have a valid date
+        const today = new Date();
+        
+        // Set all form data in a single update to avoid race conditions
         setFormData((prev) => ({
           ...prev,
+          startDate: today,
           llmConfiguration: {
             ...prev.llmConfiguration,
-            model:
-              config.llmConfig?.defaultModel || prev.llmConfiguration.model,
-            temperature:
-              config.llmConfig?.temperature ||
-              prev.llmConfiguration.temperature,
-            maxTokens:
-              config.llmConfig?.maxTokens || prev.llmConfiguration.maxTokens,
-            systemPrompt:
-              config.generalSettings?.defaultSystemPrompt ||
-              prev.llmConfiguration.systemPrompt,
+            model: bestModel,
+            systemPrompt: bestSystemPrompt,
+            temperature: config.llmConfig?.temperature || prev.llmConfiguration.temperature,
+            maxTokens: config.llmConfig?.maxTokens || prev.llmConfiguration.maxTokens,
           },
           voiceConfiguration: {
             ...prev.voiceConfiguration,
-            provider: config.elevenLabsConfig?.isEnabled
-              ? "elevenlabs"
-              : config.llmConfig?.providers.find(
-                  (p: any) => p.name === "openai" && p.isEnabled
-                )
-              ? "openai"
-              : "google",
-            speed:
-              config.elevenLabsConfig?.voiceSpeed ||
-              prev.voiceConfiguration.speed,
-            // If ElevenLabs is enabled and there are available voices, use the first one
-            voiceId:
-              config.elevenLabsConfig?.isEnabled &&
-              config.elevenLabsConfig?.availableVoices?.length > 0
-                ? config.elevenLabsConfig.availableVoices[0].voiceId
-                : prev.voiceConfiguration.voiceId,
+            provider: config.voiceConfig?.defaultProvider || 
+                    (config.elevenLabsConfig?.isEnabled ? "elevenlabs" : "google"),
+            voiceId: bestVoiceId,
+            speed: config.voiceConfig?.speed || prev.voiceConfiguration.speed,
+            pitch: config.voiceConfig?.pitch || prev.voiceConfiguration.pitch,
           },
           callTiming: {
             ...prev.callTiming,
-            timeZone:
-              config.generalSettings?.defaultTimeZone ||
-              prev.callTiming.timeZone,
+            timeZone: config.generalSettings?.defaultTimeZone || prev.callTiming.timeZone,
           },
         }));
+        
+        // Log the important values to verify they're set
+        console.log("Set required fields from system config:", {
+          startDate: today,
+          systemPrompt: bestSystemPrompt,
+          voiceId: bestVoiceId,
+          model: bestModel
+        });
       }
 
       setIsLoading(false);
     } catch (error) {
       console.error("Error loading system configuration:", error);
+      
+      // Set fallback values for required fields even if config loading fails
+      if (!campaignId) {
+        setFormData(prev => ({
+          ...prev,
+          startDate: new Date(),
+          llmConfiguration: {
+            ...prev.llmConfiguration,
+            systemPrompt: 'You are an AI assistant making a call on behalf of a company. Be professional, friendly, and helpful.',
+          },
+          voiceConfiguration: {
+            ...prev.voiceConfiguration,
+            voiceId: 'default-voice-id',
+          }
+        }));
+      }
+      
       showToast(
         "Warning",
         "Could not load system configuration. Using default settings.",
@@ -471,19 +506,50 @@ const CampaignForm = ({
         return;
       }
 
-      // Ensure all required fields have values that pass server validation
-      const defaultVoiceId =
-        formData.voiceConfiguration.voiceId || "default-voice-id";
-      const defaultSystemPrompt =
-        formData.llmConfiguration.systemPrompt ||
-        "You are an AI assistant making a call on behalf of a company. Be professional, friendly, and helpful.";
-      const startDate = formData.startDate
-        ? new Date(formData.startDate)
-        : new Date();
+      // Additional validation for required fields
+      if (!formData.voiceConfiguration.voiceId || formData.voiceConfiguration.voiceId === '') {
+        showToast(
+          "Voice ID Required",
+          "Please select or enter a Voice ID for the campaign.",
+          "destructive"
+        );
+        setCurrentTab('ai');
+        setIsLoading(false);
+        return;
+      }
 
-      // Format dates for API submission
+      if (!formData.llmConfiguration.systemPrompt || formData.llmConfiguration.systemPrompt === '') {
+        showToast(
+          "System Prompt Required",
+          "Please provide a system prompt for the AI model.",
+          "destructive"
+        );
+        setCurrentTab('ai');
+        setIsLoading(false);
+        return;
+      }
+
+      if (!formData.startDate) {
+        showToast(
+          "Start Date Required",
+          "Please select a start date for the campaign.",
+          "destructive"
+        );
+        setCurrentTab('basic');
+        setIsLoading(false);
+        return;
+      }
+
+      // Format dates for API submission - ensure all required fields have valid values
       const submissionData = {
-        ...formData,
+        // Don't spread formData directly to avoid potential nested object issues
+        name: formData.name,
+        description: formData.description,
+        goal: formData.goal,
+        targetAudience: formData.targetAudience,
+        leadSources: formData.leadSources,
+        primaryLanguage: formData.primaryLanguage,
+        supportedLanguages: formData.supportedLanguages,
         status: "Draft", // Default status for new campaigns
         script: {
           versions: [
@@ -496,24 +562,94 @@ const CampaignForm = ({
             },
           ],
         },
-        startDate: startDate.toISOString(), // Always provide a valid startDate
-        endDate: formData.endDate ? formData.endDate.toISOString() : null,
+        // Explicitly format date fields as strings
+        startDate: formData.startDate instanceof Date 
+          ? formData.startDate.toISOString() 
+          : new Date().toISOString(),
+        endDate: formData.endDate instanceof Date 
+          ? formData.endDate.toISOString() 
+          : null,
+        callTiming: {
+          daysOfWeek: formData.callTiming.daysOfWeek,
+          startTime: formData.callTiming.startTime,
+          endTime: formData.callTiming.endTime,
+          timeZone: formData.callTiming.timeZone,
+        },
         llmConfiguration: {
           model: formData.llmConfiguration.model || "gpt-4o",
-          systemPrompt: defaultSystemPrompt,
-          temperature: formData.llmConfiguration.temperature || 0.7,
-          maxTokens: formData.llmConfiguration.maxTokens || 500,
+          // Ensure systemPrompt is always provided as a non-empty string
+          systemPrompt: formData.llmConfiguration.systemPrompt || 
+            "You are an AI assistant making a call on behalf of a company. Be professional, friendly, and helpful.",
+          temperature: Number(formData.llmConfiguration.temperature) || 0.7,
+          maxTokens: Number(formData.llmConfiguration.maxTokens) || 500,
         },
         voiceConfiguration: {
           provider: formData.voiceConfiguration.provider || "elevenlabs",
-          voiceId: defaultVoiceId,
-          speed: formData.voiceConfiguration.speed || 1.0,
-          pitch: formData.voiceConfiguration.pitch || 1.0,
+          // Ensure voiceId is always provided as a non-empty string
+          voiceId: formData.voiceConfiguration.voiceId || 
+            (systemConfig?.elevenLabsConfig?.availableVoices?.[0]?.voiceId || "default-voice-id"),
+          speed: Number(formData.voiceConfiguration.speed) || 1.0,
+          pitch: Number(formData.voiceConfiguration.pitch) || 1.0,
         },
       };
+      
+      // Debug log to verify required fields are present
+      console.log("Critical fields check:", {
+        startDate: submissionData.startDate,
+        systemPrompt: submissionData.llmConfiguration.systemPrompt,
+        voiceId: submissionData.voiceConfiguration.voiceId,
+      });
+
+      // Additional validation right before submission to catch any missing values
+      if (!submissionData.startDate) {
+        console.error("startDate is still missing after all validations");
+        submissionData.startDate = new Date().toISOString();
+      }
+      
+      if (!submissionData.llmConfiguration.systemPrompt) {
+        console.error("systemPrompt is still missing after all validations");
+        submissionData.llmConfiguration.systemPrompt = "You are an AI assistant making a call on behalf of a company. Be professional, friendly, and helpful.";
+      }
+      
+      if (!submissionData.voiceConfiguration.voiceId) {
+        console.error("voiceId is still missing after all validations");
+        // Try to get a voice ID from any available source
+        const fallbackVoiceId = systemConfig?.elevenLabsConfig?.availableVoices?.[0]?.voiceId || 
+                               "default-voice-id";
+        submissionData.voiceConfiguration.voiceId = fallbackVoiceId;
+      }
+
+      // Explicitly sanitize the submissionData to ensure it has the three required fields
+      // These fields must be present as non-empty strings or the server will reject the request
+      
+      // 1. Ensure startDate is a valid ISO string
+      if (typeof submissionData.startDate !== 'string' || !submissionData.startDate) {
+        submissionData.startDate = new Date().toISOString();
+      }
+      
+      // 2. Ensure systemPrompt is a non-empty string
+      if (!submissionData.llmConfiguration.systemPrompt) {
+        submissionData.llmConfiguration.systemPrompt = 
+          "You are an AI assistant making a call on behalf of a company. Be professional, friendly, and helpful.";
+      }
+      
+      // 3. Ensure voiceId is a non-empty string
+      if (!submissionData.voiceConfiguration.voiceId) {
+        submissionData.voiceConfiguration.voiceId = 
+          systemConfig?.elevenLabsConfig?.availableVoices?.[0]?.voiceId || "default-voice-id";
+      }
+      
+      // Double-check that the required fields are present and log them
+      const sanitizationCheck = {
+        startDate: !!submissionData.startDate,
+        systemPrompt: !!submissionData.llmConfiguration.systemPrompt,
+        voiceId: !!submissionData.voiceConfiguration.voiceId
+      };
+      
+      console.log("Final sanitization check for required fields:", sanitizationCheck);
 
       // Real API call to create or update the campaign
-      console.log("Submitting campaign:", submissionData);
+      console.log("Submitting campaign:", JSON.stringify(submissionData, null, 2));
 
       let response;
       if (campaignId) {
@@ -536,13 +672,31 @@ const CampaignForm = ({
       setIsLoading(false);
       onSuccess();
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving campaign:", error);
-      showToast(
-        "Error",
-        "Failed to save campaign. Please try again.",
-        "destructive"
-      );
+      
+      // Enhanced error logging to help diagnose the issue
+      if (error.response && error.response.data) {
+        console.error("Server response data:", error.response.data);
+        
+        // Show more specific error message if available
+        const errorMessage = error.response.data.error || error.response.data.message || "Failed to save campaign. Please try again.";
+        showToast("Error", errorMessage, "destructive");
+      } else {
+        showToast(
+          "Error",
+          "Failed to save campaign. Please try again.",
+          "destructive"
+        );
+      }
+      
+      // Log the current state of the critical fields for debugging
+      console.error("Current form data state:", {
+        startDate: formData.startDate,
+        systemPrompt: formData.llmConfiguration.systemPrompt,
+        voiceId: formData.voiceConfiguration.voiceId
+      });
+      
       setIsLoading(false);
     }
   };
@@ -698,6 +852,11 @@ const CampaignForm = ({
                               }
                               placeholder="Select start date"
                             />
+                            {!formData.startDate && (
+                              <p className="text-xs text-red-500 mt-1">
+                                Start date is required
+                              </p>
+                            )}
                           </div>
 
                           <div>
@@ -1072,15 +1231,21 @@ const CampaignForm = ({
 
                       <div>
                         <label className="block text-sm font-medium mb-1">
-                          System Prompt
+                          System Prompt *
                         </label>
                         <textarea
                           name="llmConfiguration.systemPrompt"
                           value={formData.llmConfiguration.systemPrompt}
                           onChange={handleChange}
-                          className={textareaStyles}
+                          className={`${textareaStyles} ${!formData.llmConfiguration.systemPrompt ? "border-red-500" : ""}`}
                           placeholder="Instructions for the AI model"
+                          required
                         />
+                        {!formData.llmConfiguration.systemPrompt && (
+                          <p className="text-xs text-red-500 mt-1">
+                            System prompt is required
+                          </p>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1089,8 +1254,7 @@ const CampaignForm = ({
                             Voice
                           </label>
                           {systemConfig?.elevenLabsConfig?.availableVoices &&
-                          formData.voiceConfiguration.provider ===
-                            "elevenlabs" ? (
+                          formData.voiceConfiguration.provider === "elevenlabs" ? (
                             <Select
                               value={formData.voiceConfiguration.voiceId}
                               onValueChange={(value) =>
@@ -1102,8 +1266,9 @@ const CampaignForm = ({
                                   },
                                 }))
                               }
+                              required
                             >
-                              <SelectTrigger className="w-full rounded-xl">
+                              <SelectTrigger className={`w-full rounded-xl ${!formData.voiceConfiguration.voiceId ? "border-red-500" : ""}`}>
                                 <SelectValue placeholder="Select a voice" />
                               </SelectTrigger>
                               <SelectContent>
@@ -1125,9 +1290,15 @@ const CampaignForm = ({
                               name="voiceConfiguration.voiceId"
                               value={formData.voiceConfiguration.voiceId}
                               onChange={handleChange}
-                              className={inputStyles}
+                              className={`${inputStyles} ${!formData.voiceConfiguration.voiceId ? "border-red-500" : ""}`}
                               placeholder="Enter voice ID from provider"
+                              required
                             />
+                          )}
+                          {!formData.voiceConfiguration.voiceId && (
+                            <p className="text-xs text-red-500 mt-1">
+                              Voice ID is required
+                            </p>
                           )}
                         </div>
 

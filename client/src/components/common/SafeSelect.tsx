@@ -1,4 +1,4 @@
-import React, { forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
 import {
   Select as UISelect,
   SelectContent as UISelectContent,
@@ -7,21 +7,34 @@ import {
   SelectValue as UISelectValue
 } from '../ui/select';
 
+// Define props interface to fix TypeScript errors
+interface SafeSelectProps {
+  children: React.ReactNode;
+  value: string;
+  onValueChange: (value: string) => void;
+  disabled?: boolean;
+  [key: string]: any; // For other props
+}
+
 // A safer version of Select that properly handles unmounting
-export const SafeSelect = forwardRef(({ children, value, onValueChange, disabled, ...props }, ref) => {
-  const selectRef = useRef(null);
+export const SafeSelect = forwardRef<HTMLDivElement, SafeSelectProps>(({ children, value, onValueChange, disabled, ...props }, ref) => {
+  const selectRef = useRef<HTMLDivElement | null>(null);
   
-  useImperativeHandle(ref, () => selectRef.current);
+  useImperativeHandle(ref, () => selectRef.current as HTMLDivElement);
   
   // Reset open state when unmounting to prevent React DOM errors
   useEffect(() => {
     return () => {
       // Clean up any potential lingering popovers/portals
       if (selectRef.current) {
-        // Force close select dropdown if it's open
-        const openState = selectRef.current.dataset?.state === 'open';
-        if (openState) {
-          selectRef.current.dataset.state = 'closed';
+        try {
+          // Force close select dropdown if it's open
+          const element = selectRef.current as HTMLElement;
+          if (element.dataset && element.dataset.state === 'open') {
+            element.dataset.state = 'closed';
+          }
+        } catch (error) {
+          console.error('Error closing select dropdown:', error);
         }
       }
     };
