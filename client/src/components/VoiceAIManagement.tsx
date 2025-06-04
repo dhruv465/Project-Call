@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import api from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -71,17 +72,10 @@ const VoiceAIManagement: React.FC = () => {
 
   const loadVoicePersonalities = async () => {
     try {
-      const response = await fetch('/api/lumina-outreach/personalities', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const response = await api.get('/lumina-outreach/personalities');
       
-      if (response.ok) {
-        const data = await response.json();
-        setPersonalities(data.personalities);
-        setIsModelTrained(data.modelTrained);
-      }
+      setPersonalities(response.data.personalities);
+      setIsModelTrained(response.data.modelTrained);
     } catch (error) {
       console.error('Error loading voice personalities:', error);
       toast.error('Failed to load voice personalities');
@@ -104,25 +98,14 @@ const VoiceAIManagement: React.FC = () => {
         });
       }, 500);
 
-      const response = await fetch('/api/lumina-outreach/train-model', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await api.post('/lumina-outreach/train-model');
 
       clearInterval(progressInterval);
       setTrainingProgress(100);
 
-      if (response.ok) {
-        const data = await response.json();
-        setTrainingResults(data.trainingResults);
-        setIsModelTrained(true);
-        toast.success('Voice AI model trained successfully!');
-      } else {
-        throw new Error('Training failed');
-      }
+      setTrainingResults(response.data.trainingResults);
+      setIsModelTrained(true);
+      toast.success('Voice AI model trained successfully!');
     } catch (error) {
       console.error('Error training voice model:', error);
       toast.error('Failed to train voice model');
@@ -140,25 +123,13 @@ const VoiceAIManagement: React.FC = () => {
 
     setIsAnalyzing(true);
     try {
-      const response = await fetch('/api/lumina-outreach/analyze-emotion', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          text: testText,
-          language: selectedLanguage
-        })
+      const response = await api.post('/lumina-outreach/analyze-emotion', {
+        text: testText,
+        language: selectedLanguage
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setEmotionAnalysis(data.emotionAnalysis);
-        toast.success('Emotion analysis completed');
-      } else {
-        throw new Error('Analysis failed');
-      }
+      setEmotionAnalysis(response.data.emotionAnalysis);
+      toast.success('Emotion analysis completed');
     } catch (error) {
       console.error('Error analyzing emotion:', error);
       toast.error('Failed to analyze emotion');
@@ -175,28 +146,18 @@ const VoiceAIManagement: React.FC = () => {
 
     setIsSynthesizing(true);
     try {
-      const response = await fetch('/api/lumina-outreach/synthesize-speech', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          text: testText,
-          personalityId: selectedPersonality,
-          language: selectedLanguage,
-          emotionalContext: emotionAnalysis?.context
-        })
+      const response = await api.post('/lumina-outreach/synthesize-speech', {
+        text: testText,
+        personalityId: selectedPersonality,
+        language: selectedLanguage,
+        emotionalContext: emotionAnalysis?.context
+      }, {
+        responseType: 'blob'
       });
 
-      if (response.ok) {
-        const audioBlob = await response.blob();
-        const url = URL.createObjectURL(audioBlob);
-        setAudioUrl(url);
-        toast.success('Speech synthesized successfully');
-      } else {
-        throw new Error('Synthesis failed');
-      }
+      const url = URL.createObjectURL(response.data);
+      setAudioUrl(url);
+      toast.success('Speech synthesized successfully');
     } catch (error) {
       console.error('Error synthesizing speech:', error);
       toast.error('Failed to synthesize speech');

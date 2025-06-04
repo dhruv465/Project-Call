@@ -446,4 +446,132 @@ Keep it brief, friendly, and culturally appropriate. Include a polite greeting a
       };
     }
   }
+  
+  /**
+   * Process stream input and generate real-time responses
+   */
+  public async processStreamInput(
+    conversationId: string, 
+    callId: string,
+    req: any,
+    res: any
+  ): Promise<void> {
+    try {
+      // Find the conversation
+      const session = this.activeSessions.get(conversationId);
+      if (!session) {
+        throw new Error(`Conversation ${conversationId} not found`);
+      }
+      
+      logger.info(`Processing stream for conversation ${conversationId}, call ${callId}`);
+      
+      // Set up WebSocket connection for real-time audio streaming
+      const websocket = req.body;
+      
+      // Generate initial greeting if this is the first interaction
+      if (session.conversationHistory.length === 0) {
+        // Generate an opening message
+        const openingMessage = await this.generateOpeningMessage(
+          conversationId,
+          "Customer", // Default name if we don't have it
+          session.campaignId
+        );
+        
+        // Use ElevenLabs to synthesize speech
+        const voiceId = session.currentPersonality.voiceId;
+        const speechResponse = await this.voiceAI.synthesizeAdaptiveVoice({
+          text: openingMessage,
+          personalityId: voiceId,
+          language: session.language,
+          adaptToEmotion: true,
+          emotion: { primary: 'professional', confidence: 1.0 }
+        });
+        
+        // Add to conversation history
+        const agentTurn: ConversationTurn = {
+          id: uuidv4(),
+          timestamp: new Date(),
+          speaker: 'agent',
+          content: openingMessage,
+          voicePersonality: session.currentPersonality
+        };
+        
+        session.conversationHistory.push(agentTurn);
+        session.metrics.totalTurns++;
+        
+        logger.info(`Generated opening for stream: ${openingMessage.substring(0, 50)}...`);
+      }
+      
+      // Set up audio stream processing from the call
+      if (websocket && websocket.on) {
+        // Handle incoming audio data
+        websocket.on('message', async (data: any) => {
+          try {
+            // Process audio data with speech recognition
+            const speechResult = await this.speechAnalysis.transcribeAudio(data);
+            
+            if (speechResult && speechResult.transcript) {
+              // Add user input to conversation
+              const userTurn: ConversationTurn = {
+                id: uuidv4(),
+                timestamp: new Date(),
+                speaker: 'customer',
+                content: speechResult.transcript
+              };
+              
+              session.conversationHistory.push(userTurn);
+              
+              // Generate AI response
+              const responseText = await this.generateResponse({
+                sessionId: conversationId,
+                userInput: speechResult.transcript
+              });
+              
+              // Use ElevenLabs to synthesize speech
+              const voiceId = session.currentPersonality.voiceId;
+              const speechResponse = await this.voiceAI.synthesizeAdaptiveVoice({
+                text: responseText,
+                personalityId: voiceId,
+                language: session.language,
+                adaptToEmotion: true,
+                emotion: { primary: 'professional', confidence: 1.0 }
+              });
+              
+              // Send synthesized audio back through the stream
+              if (websocket.send && speechResponse.audioContent) {
+                websocket.send(speechResponse.audioContent);
+              }
+              
+              // Add to conversation history
+              const agentTurn: ConversationTurn = {
+                id: uuidv4(),
+                timestamp: new Date(),
+                speaker: 'agent',
+                content: responseText,
+                voicePersonality: session.currentPersonality
+              };
+              
+              session.conversationHistory.push(agentTurn);
+              session.metrics.totalTurns += 2; // User + agent
+            }
+          } catch (error) {
+            logger.error(`Error processing audio stream: ${getErrorMessage(error)}`);
+          }
+        });
+        
+        // Handle connection close
+        websocket.on('close', () => {
+          logger.info(`Stream connection closed for conversation ${conversationId}`);
+          // Don't end the session here as the call may still be active
+        });
+      }
+      
+      // Return success immediately, WebSocket connection is established
+      res.status(200).send();
+      
+    } catch (error) {
+      logger.error(`Error in processStreamInput: ${getErrorMessage(error)}`);
+      throw error;
+    }
+  }
 }

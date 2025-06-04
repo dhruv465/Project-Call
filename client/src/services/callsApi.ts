@@ -48,8 +48,16 @@ export const callsApi = {
 
   // Initiate a new call
   initiateCall: async (callData: CallData) => {
-    const response = await api.post('/calls/initiate', callData);
-    return response.data;
+    try {
+      console.log('Calling initiateCall API with data:', callData);
+      const response = await api.post('/calls/initiate', callData);
+      console.log('API response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error in initiateCall API:', error);
+      // Rethrow the error to be handled by the component
+      throw error;
+    }
   },
 
   // Get call recording

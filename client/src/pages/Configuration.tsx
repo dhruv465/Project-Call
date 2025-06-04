@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import api from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -211,18 +212,10 @@ Keep the conversation natural and engaging. If they're not interested, politely 
 
     try {
       setLoadingModels(true);
-      const response = await fetch('/api/configuration/llm-models', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await api.get('/configuration/llm-models');
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setAvailableModels(data.models);
-        }
+      if (response.data.success) {
+        setAvailableModels(response.data.models);
       }
     } catch (error) {
       console.error('Failed to fetch available models:', error);
@@ -416,11 +409,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           voiceStability: config.voiceStability,
           voiceClarity: config.voiceClarity,
           status: config.elevenLabsStatus,
-          availableVoices: availableVoices.length > 0 ? availableVoices : [{
-            voiceId: config.voiceId || 'EXAVITQu4vr4xnSDxMaL',
-            name: 'Default Voice',
-            previewUrl: ''
-          }]
+          availableVoices: availableVoices.length > 0 ? availableVoices : []
         },
         llmConfig: {
           defaultProvider: config.llmProvider,

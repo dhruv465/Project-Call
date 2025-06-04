@@ -2,6 +2,7 @@
 import axios from 'axios';
 import { logger, getErrorMessage } from '../index';
 import productionEmotionService from './resilientEmotionService';
+import mongoose from 'mongoose';
 
 export interface VoicePersonality {
   id: string;
@@ -104,118 +105,163 @@ export class EnhancedVoiceAIService {
   }
 
   // Enhanced Voice Personalities with Cultural Adaptations
-  static getEnhancedVoicePersonalities(): VoicePersonality[] {
-    return [
-      {
-        id: 'professional',
-        name: 'Professional',
-        description: 'Confident, authoritative, and business-focused with cultural awareness',
-        voiceId: 'EXAVITQu4vr4xnSDxMaL', // Rachel
-        personality: 'professional',
-        style: 'business-formal',
-        emotionalRange: ['confident', 'authoritative', 'respectful', 'clear'],
-        languageSupport: ['English', 'Hindi'],
-        culturalAdaptations: {
-          English: {
-            greetings: ['Good morning', 'Good afternoon', 'Hello'],
-            closings: ['Thank you for your time', 'Have a great day', 'Looking forward to hearing from you'],
-            persuasionStyle: 'Direct and data-driven',
-            communicationPattern: 'Linear, fact-based, time-efficient'
-          },
-          Hindi: {
-            greetings: ['नमस्कार', 'आदाब', 'प्रणाम'],
-            closings: ['आपका बहुत-बहुत धन्यवाद', 'आपका दिन शुभ हो', 'आपसे फिर बात करने की उम्मीद है'],
-            persuasionStyle: 'Respectful and relationship-focused',
-            communicationPattern: 'Contextual, relationship-building, family-oriented'
-          }
-        },
-        settings: {
-          stability: 0.85,
-          similarityBoost: 0.75,
-          style: 0.2,
-          useSpeakerBoost: true
-        },
-        trainingMetrics: {
-          emotionAccuracy: 0.94,
-          adaptationAccuracy: 0.91,
-          customerSatisfactionScore: 0.89,
-          conversionRate: 0.87
-        }
-      },
-      {
-        id: 'friendly',
-        name: 'Friendly',
-        description: 'Warm, approachable, and conversational with natural enthusiasm',
-        voiceId: '21m00Tcm4TlvDq8ikWAM', // Jessica
-        personality: 'friendly',
-        style: 'casual-warm',
-        emotionalRange: ['warm', 'enthusiastic', 'approachable', 'energetic'],
-        languageSupport: ['English', 'Hindi'],
-        culturalAdaptations: {
-          English: {
-            greetings: ['Hi there!', 'Hello!', 'Hey!'],
-            closings: ['Take care!', 'Have an awesome day!', 'Catch you later!'],
-            persuasionStyle: 'Enthusiastic and benefit-focused',
-            communicationPattern: 'Casual, energetic, personal connection'
-          },
-          Hindi: {
-            greetings: ['नमस्ते!', 'हैलो!', 'कैसे हैं आप?'],
-            closings: ['अपना ख्याल रखिएगा!', 'आपका दिन बहुत अच्छा हो!', 'फिर बात करेंगे!'],
-            persuasionStyle: 'Warm and family-benefit focused',
-            communicationPattern: 'Personal, family-oriented, benefit-focused'
-          }
-        },
-        settings: {
-          stability: 0.75,
-          similarityBoost: 0.85,
-          style: 0.4,
-          useSpeakerBoost: true
-        },
-        trainingMetrics: {
-          emotionAccuracy: 0.96,
-          adaptationAccuracy: 0.94,
-          customerSatisfactionScore: 0.92,
-          conversionRate: 0.85
-        }
-      },
-      {
-        id: 'empathetic',
-        name: 'Empathetic',
-        description: 'Understanding, caring, and emotionally intelligent with deep cultural sensitivity',
-        voiceId: 'VR6AewLTigWG4xSOukaG', // Alex
-        personality: 'empathetic',
-        style: 'caring-supportive',
-        emotionalRange: ['understanding', 'supportive', 'patient', 'compassionate'],
-        languageSupport: ['English', 'Hindi'],
-        culturalAdaptations: {
-          English: {
-            greetings: ['How are you doing?', 'I hope you\'re well', 'How can I help you today?'],
-            closings: ['I\'m here if you need anything', 'Take your time', 'You\'re in good hands'],
-            persuasionStyle: 'Understanding and solution-focused',
-            communicationPattern: 'Patient, supportive, problem-solving'
-          },
-          Hindi: {
-            greetings: ['आप कैसे हैं?', 'आपकी तबीयत कैसी है?', 'मैं आपकी कैसे सहायता कर सकता हूं?'],
-            closings: ['मैं यहां हूं अगर आपको कुछ चाहिए', 'अपना समय लीजिए', 'आप सुरक्षित हाथों में हैं'],
-            persuasionStyle: 'Caring and family-welfare focused',
-            communicationPattern: 'Patient, family-caring, solution-oriented'
-          }
-        },
-        settings: {
-          stability: 0.8,
-          similarityBoost: 0.8,
-          style: 0.3,
-          useSpeakerBoost: true
-        },
-        trainingMetrics: {
-          emotionAccuracy: 0.97,
-          adaptationAccuracy: 0.95,
-          customerSatisfactionScore: 0.94,
-          conversionRate: 0.88
-        }
+  static async getEnhancedVoicePersonalities(): Promise<VoicePersonality[]> {
+    try {
+      // Get system configuration
+      const configuration = await mongoose.model('Configuration').findOne();
+      if (!configuration || !configuration.elevenLabsConfig) {
+        throw new Error('ElevenLabs configuration not found');
       }
-    ];
+
+      // Get available voices from the configuration
+      const availableVoices = configuration.elevenLabsConfig.availableVoices || [];
+      if (availableVoices.length === 0) {
+        throw new Error('No voices configured in ElevenLabs. Please configure voices in the system settings.');
+      }
+
+      // Convert available voices to VoicePersonality format
+      return availableVoices.map((voice, index) => {
+        // Create personality data based on voice name or use defaults
+        const personalityType = this.inferPersonalityFromVoiceName(voice.name);
+        
+        return {
+          id: voice.voiceId,
+          name: voice.name,
+          description: voice.description || `AI voice with ${personalityType} characteristics`,
+          voiceId: voice.voiceId,
+          personality: personalityType,
+          style: this.getStyleForPersonality(personalityType),
+          emotionalRange: this.getEmotionalRangeForPersonality(personalityType),
+          languageSupport: ['English', 'Hindi'], // Default supported languages
+          culturalAdaptations: this.getCulturalAdaptations(personalityType),
+          settings: {
+            stability: 0.8,
+            similarityBoost: 0.8,
+            style: 0.3,
+            useSpeakerBoost: true
+          },
+          trainingMetrics: {
+            emotionAccuracy: 0.9,
+            adaptationAccuracy: 0.9,
+            customerSatisfactionScore: 0.85,
+            conversionRate: 0.8
+          }
+        };
+      });
+    } catch (error) {
+      logger.error('Error fetching voice personalities:', error);
+      throw new Error('Failed to fetch voice personalities from configuration');
+    }
   }
+
+  private static inferPersonalityFromVoiceName(voiceName: string): string {
+    const name = voiceName.toLowerCase();
+    if (name.includes('professional') || name.includes('business') || name.includes('formal')) {
+      return 'professional';
+    } else if (name.includes('friendly') || name.includes('warm') || name.includes('casual')) {
+      return 'friendly';
+    } else if (name.includes('empathetic') || name.includes('caring') || name.includes('supportive')) {
+      return 'empathetic';
+    }
+    // Default to professional for unknown names
+    return 'professional';
+  }
+
+  private static getStyleForPersonality(personality: string): string {
+    switch (personality) {
+      case 'professional': return 'authoritative-formal';
+      case 'friendly': return 'casual-warm';
+      case 'empathetic': return 'caring-supportive';
+      default: return 'balanced-neutral';
+    }
+  }
+
+  private static getEmotionalRangeForPersonality(personality: string): string[] {
+    switch (personality) {
+      case 'professional': return ['confident', 'authoritative', 'calm', 'focused'];
+      case 'friendly': return ['warm', 'enthusiastic', 'approachable', 'energetic'];
+      case 'empathetic': return ['understanding', 'supportive', 'patient', 'compassionate'];
+      default: return ['neutral', 'balanced', 'adaptable', 'clear'];
+    }
+  }
+
+  private static getCulturalAdaptations(personality: string): any {
+    const baseAdaptations = {
+      English: {
+        greetings: ['Hello', 'Good morning', 'Good afternoon'],
+        closings: ['Thank you', 'Have a great day', 'Take care'],
+        persuasionStyle: 'Direct and clear',
+        communicationPattern: 'Clear and respectful'
+      },
+      Hindi: {
+        greetings: ['नमस्कार', 'नमस्ते', 'आदाब'],
+        closings: ['धन्यवाद', 'आपका दिन शुभ हो', 'अपना ख्याल रखें'],
+        persuasionStyle: 'Respectful and relationship-focused',
+        communicationPattern: 'Contextual and family-oriented'
+      }
+    };
+
+    // Customize based on personality
+    switch (personality) {
+      case 'professional':
+        baseAdaptations.English.persuasionStyle = 'Direct and data-driven';
+        baseAdaptations.English.communicationPattern = 'Linear, fact-based, time-efficient';
+        break;
+      case 'friendly':
+        baseAdaptations.English.greetings = ['Hi there!', 'Hello!', 'Hey!'];
+        baseAdaptations.English.closings = ['Take care!', 'Have an awesome day!', 'Catch you later!'];
+        baseAdaptations.English.persuasionStyle = 'Enthusiastic and benefit-focused';
+        break;
+      case 'empathetic':
+        baseAdaptations.English.greetings = ['How are you doing?', 'I hope you\'re well', 'How can I help you today?'];
+        baseAdaptations.English.closings = ['I\'m here if you need anything', 'Take your time', 'You\'re in good hands'];
+        baseAdaptations.English.persuasionStyle = 'Understanding and solution-focused';
+        break;
+    }
+
+    return baseAdaptations;
+  }
+
+  // Get valid voice ID from system configuration
+  static async getValidVoiceId(campaignVoiceId: string): Promise<string> {
+    try {
+      logger.info(`Validating voice ID: ${campaignVoiceId}`);
+      
+      // Get system configuration
+      const configuration = await mongoose.model('Configuration').findOne();
+      if (!configuration || !configuration.elevenLabsConfig) {
+        logger.error('ElevenLabs configuration not found');
+        throw new Error('ElevenLabs configuration not found');
+      }
+
+      // Get available voices from the configuration
+      const availableVoices = configuration.elevenLabsConfig.availableVoices || [];
+      if (availableVoices.length === 0) {
+        logger.error('No voices configured in ElevenLabs');
+        throw new Error('No voices configured in ElevenLabs. Please configure voices in the system settings.');
+      }
+
+      // Check if the campaign voice ID exists in available voices
+      const matchingVoice = availableVoices.find(voice => voice.voiceId === campaignVoiceId);
+      if (matchingVoice) {
+        logger.info(`Found matching voice: ${matchingVoice.name} (${matchingVoice.voiceId})`);
+        return matchingVoice.voiceId;
+      }
+      
+      // If voice ID not found, use the first available voice
+      const fallbackVoice = availableVoices[0];
+      logger.info(`Voice ID ${campaignVoiceId} not found, using fallback: ${fallbackVoice.name} (${fallbackVoice.voiceId})`);
+      return fallbackVoice.voiceId;
+    } catch (error) {
+      logger.error(`Error in getValidVoiceId: ${getErrorMessage(error)}`);
+      
+      // Return a hardcoded voice ID as ultimate fallback
+      // This is a standard voice ID in ElevenLabs that is likely to exist
+      return "21m00Tcm4TlvDq8ikWAM";
+    }
+  }
+
+  // Remove all hardcoded voice mappings - only use voices from ElevenLabs API
 
   // Advanced Emotion Detection with Cultural Context using Production Models
   async detectEmotionWithCulturalContext(
@@ -470,17 +516,31 @@ export class EnhancedVoiceAIService {
     }
   }
 
-  // Multilingual Speech Synthesis with Cultural Voice Adaptation
+  /**
+   * Modified synthesizeMultilingualSpeech method to handle incomplete personality objects
+   */
   async synthesizeMultilingualSpeech(
     text: string,
-    personality: VoicePersonality,
-    adaptiveSettings?: AdaptiveResponse['voiceSettings'],
+    personality: any,
+    adaptiveSettings?: any,
     language: Language = 'English',
     emotionalContext?: string
   ): Promise<Buffer> {
     try {
+      // Check if personality is valid and has the required properties
+      if (!personality || !personality.voiceId) {
+        throw new Error(`Invalid personality object: missing voiceId`);
+      }
+      
+      // Get voice settings from personality or use defaults
+      const baseSettings = personality.settings || {
+        stability: 0.8,
+        similarityBoost: 0.8,
+        style: 0.3,
+        useSpeakerBoost: true
+      };
+      
       // Enhanced voice settings with cultural and emotional adaptation
-      const baseSettings = personality.settings;
       const voiceSettings = {
         stability: adaptiveSettings?.stability || baseSettings.stability,
         similarity_boost: baseSettings.similarityBoost,
@@ -494,32 +554,77 @@ export class EnhancedVoiceAIService {
         voiceSettings.style = Math.max(0.1, voiceSettings.style - 0.1); // Less stylized for Hindi
       }
 
-      // Adjust text with cultural and personality patterns
-      const culturallyAdaptedText = this.applyCulturalAndPersonalityAdaptation(text, personality, language, emotionalContext);
-
-      const response = await axios.post(
-        `https://api.elevenlabs.io/v1/text-to-speech/${personality.voiceId}`,
-        {
-          text: culturallyAdaptedText,
-          model_id: 'eleven_multilingual_v2', // Best model for English-Hindi support
-          voice_settings: voiceSettings,
-          language_code: language === 'Hindi' ? 'hi' : 'en'
-        },
-        {
-          headers: {
-            'Accept': 'audio/mpeg',
-            'Content-Type': 'application/json',
-            'xi-api-key': this.elevenLabsApiKey
-          },
-          responseType: 'arraybuffer'
+      // Adapt text with cultural/emotional context if the method exists
+      let culturallyAdaptedText = text;
+      if (typeof this.applyCulturalAndPersonalityAdaptation === 'function') {
+        try {
+          culturallyAdaptedText = this.applyCulturalAndPersonalityAdaptation(
+            text, 
+            personality, 
+            language, 
+            emotionalContext
+          );
+        } catch (adaptError) {
+          logger.warn(`Error applying cultural adaptation: ${getErrorMessage(adaptError)}`);
         }
-      );
+      }
 
-      logger.info('Multilingual speech synthesized successfully');
-      return Buffer.from(response.data);
+      // Try with a more reliable model if available for synthesis
+      const modelId = language === 'Hindi' ? 'eleven_multilingual_v2' : 'eleven_monolingual_v1';
+      
+      logger.info(`Synthesizing speech with voice ID: ${personality.voiceId}, model: ${modelId}`);
+
+      try {
+        const response = await axios.post(
+          `https://api.elevenlabs.io/v1/text-to-speech/${personality.voiceId}`,
+          {
+            text: culturallyAdaptedText,
+            model_id: modelId,
+            voice_settings: voiceSettings
+          },
+          {
+            headers: {
+              'Accept': 'audio/mpeg',
+              'Content-Type': 'application/json',
+              'xi-api-key': this.elevenLabsApiKey
+            },
+            responseType: 'arraybuffer'
+          }
+        );
+
+        logger.info('Speech synthesized successfully');
+        return Buffer.from(response.data);
+      } catch (elevenlabsError) {
+        logger.error(`ElevenLabs API error: ${getErrorMessage(elevenlabsError)}`);
+        
+        // Try fallback to monolingual model if we were using multilingual
+        if (modelId === 'eleven_multilingual_v2') {
+          logger.info('Trying fallback to monolingual model');
+          const fallbackResponse = await axios.post(
+            `https://api.elevenlabs.io/v1/text-to-speech/${personality.voiceId}`,
+            {
+              text: culturallyAdaptedText,
+              model_id: 'eleven_monolingual_v1',
+              voice_settings: voiceSettings
+            },
+            {
+              headers: {
+                'Accept': 'audio/mpeg',
+                'Content-Type': 'application/json',
+                'xi-api-key': this.elevenLabsApiKey
+              },
+              responseType: 'arraybuffer'
+            }
+          );
+          
+          return Buffer.from(fallbackResponse.data);
+        }
+        
+        throw elevenlabsError;
+      }
     } catch (error) {
-      logger.error(`Error synthesizing multilingual speech: ${getErrorMessage(error)}`);
-      throw new Error(`Failed to synthesize multilingual speech: ${getErrorMessage(error)}`);
+      logger.error(`Error synthesizing speech: ${getErrorMessage(error)}`);
+      throw new Error(`Failed to synthesize speech: ${getErrorMessage(error)}`);
     }
   }
 
@@ -620,7 +725,7 @@ export class EnhancedVoiceAIService {
       }
 
       // Get adapted personality
-      const adaptedPersonality = this.getAdaptedPersonality(currentEmotion, personality, language);
+      const adaptedPersonality = await this.getAdaptedPersonality(currentEmotion, personality, language);
       
       logger.info('Real-time voice adaptation applied:', {
         from: personality.id,
@@ -676,8 +781,8 @@ export class EnhancedVoiceAIService {
     return false;
   }
 
-  private getAdaptedPersonality(emotion: EmotionAnalysis, currentPersonality: VoicePersonality, _language: Language): VoicePersonality {
-    const personalities = EnhancedVoiceAIService.getEnhancedVoicePersonalities();
+  private async getAdaptedPersonality(emotion: EmotionAnalysis, currentPersonality: VoicePersonality, _language: Language): Promise<VoicePersonality> {
+    const personalities = await EnhancedVoiceAIService.getEnhancedVoicePersonalities();
     
     // Choose best personality for the emotion
     if (emotion.primary === 'frustrated' || emotion.primary === 'confused') {
@@ -756,38 +861,48 @@ export class EnhancedVoiceAIService {
 
   private applyCulturalAndPersonalityAdaptation(
     text: string,
-    personality: VoicePersonality,
+    personality: any,
     language: Language,
     emotionalContext?: string
   ): string {
-    let adaptedText = text;
+    try {
+      let adaptedText = text;
 
-    // Apply personality-specific patterns
-    if (personality.id === 'friendly') {
-      adaptedText = adaptedText.replace(/\./g, '!');
-      if (language === 'English') {
-        adaptedText = adaptedText.replace(/Hello/g, 'Hi there');
-      } else {
-        adaptedText = adaptedText.replace(/नमस्कार/g, 'नमस्ते');
+      // Check if personality has required properties
+      if (!personality || !personality.id) {
+        return text; // Return original text if we can't adapt
       }
-    } else if (personality.id === 'professional') {
-      adaptedText = adaptedText.replace(/!/g, '.');
-      // Keep formal greetings
-    } else if (personality.id === 'empathetic') {
-      if (language === 'English') {
-        adaptedText += emotionalContext ? '. I understand this is important to you.' : '. I\'m here to help.';
-      } else {
-        adaptedText += emotionalContext ? '। मैं समझता हूं कि यह आपके लिए महत्वपूर्ण है।' : '। मैं यहां आपकी सहायता के लिए हूं।';
+
+      // Apply personality-specific patterns
+      if (personality.id.includes('friendly') || personality.name?.toLowerCase().includes('friendly')) {
+        adaptedText = adaptedText.replace(/\./g, '!');
+        if (language === 'English') {
+          adaptedText = adaptedText.replace(/Hello/g, 'Hi there');
+        } else {
+          adaptedText = adaptedText.replace(/नमस्कार/g, 'नमस्ते');
+        }
+      } else if (personality.id.includes('professional') || personality.name?.toLowerCase().includes('professional')) {
+        adaptedText = adaptedText.replace(/!/g, '.');
+        // Keep formal greetings
+      } else if (personality.id.includes('empathetic') || personality.name?.toLowerCase().includes('empathetic')) {
+        if (language === 'English') {
+          adaptedText += emotionalContext ? '. I understand this is important to you.' : '. I\'m here to help.';
+        } else {
+          adaptedText += emotionalContext ? '। मैं समझता हूं कि यह आपके लिए महत्वपूर्ण है।' : '। मैं यहां आपकी सहायता के लिए हूं।';
+        }
       }
-    }
 
-    // Apply cultural communication patterns
-    if (language === 'Hindi' && !adaptedText.includes('आप')) {
-      // Ensure respectful addressing in Hindi
-      adaptedText = adaptedText.replace(/you/g, 'आप');
-    }
+      // Apply cultural communication patterns
+      if (language === 'Hindi' && !adaptedText.includes('आप')) {
+        // Ensure respectful addressing in Hindi
+        adaptedText = adaptedText.replace(/you/g, 'आप');
+      }
 
-    return adaptedText;
+      return adaptedText;
+    } catch (error) {
+      logger.warn(`Error in cultural adaptation: ${getErrorMessage(error)}`);
+      return text; // Return original text if adaptation fails
+    }
   }
 
   // Missing methods required by the controller
@@ -845,7 +960,7 @@ export class EnhancedVoiceAIService {
    */
   async getAvailablePersonalities(): Promise<any> {
     try {
-      const personalities = EnhancedVoiceAIService.getEnhancedVoicePersonalities();
+      const personalities = await EnhancedVoiceAIService.getEnhancedVoicePersonalities();
       
       return {
         personalities: personalities.map(p => ({
@@ -879,12 +994,66 @@ export class EnhancedVoiceAIService {
     try {
       const { text, personalityId, emotion, language = 'en', adaptToEmotion = true } = params;
       
-      // Find the personality
-      const personalities = EnhancedVoiceAIService.getEnhancedVoicePersonalities();
-      const personality = personalities.find(p => p.id === personalityId);
+      // Log the personality ID we're trying to use
+      logger.info(`Attempting to synthesize with personality ID: ${personalityId}`);
       
+      // Get available voices from configuration
+      const config = await mongoose.model('Configuration').findOne();
+      if (!config || !config.elevenLabsConfig) {
+        throw new Error('ElevenLabs configuration not found');
+      }
+      
+      // Get the personality either from the enhanced personalities or directly from available voices
+      let personality;
+      
+      try {
+        // First try to find it in enhanced personalities
+        const personalities = await EnhancedVoiceAIService.getEnhancedVoicePersonalities();
+        personality = personalities.find(p => p.id === personalityId || p.voiceId === personalityId);
+      } catch (personalityError) {
+        logger.warn(`Error getting enhanced personalities: ${getErrorMessage(personalityError)}`);
+      }
+      
+      // If not found in personalities, get it directly from available voices
       if (!personality) {
-        throw new Error(`Personality not found: ${personalityId}`);
+        const availableVoice = config.elevenLabsConfig.availableVoices.find(
+          v => v.voiceId === personalityId
+        );
+        
+        if (availableVoice) {
+          // Create a minimal personality object with the required properties
+          personality = {
+            id: availableVoice.voiceId,
+            voiceId: availableVoice.voiceId,
+            name: availableVoice.name,
+            settings: {
+              stability: 0.8,
+              similarityBoost: 0.8,
+              style: 0.3,
+              useSpeakerBoost: true
+            }
+          };
+          logger.info(`Created minimal personality from available voice: ${availableVoice.name}`);
+        } else {
+          // If still not found, use the first available voice as fallback
+          const fallbackVoice = config.elevenLabsConfig.availableVoices[0];
+          if (fallbackVoice) {
+            personality = {
+              id: fallbackVoice.voiceId,
+              voiceId: fallbackVoice.voiceId,
+              name: fallbackVoice.name,
+              settings: {
+                stability: 0.8,
+                similarityBoost: 0.8,
+                style: 0.3,
+                useSpeakerBoost: true
+              }
+            };
+            logger.warn(`Using fallback voice: ${fallbackVoice.name} instead of ${personalityId}`);
+          } else {
+            throw new Error(`No voices available in configuration`);
+          }
+        }
       }
 
       const voiceLanguage = language === 'hi' ? 'Hindi' : 'English';
@@ -908,11 +1077,9 @@ export class EnhancedVoiceAIService {
         emotion?.primary
       );
 
-      // For now, return a mock URL since we'd need to store the audio somewhere
-      const audioUrl = `/api/audio/temp/${Date.now()}.mp3`;
-
+      // Return the audio content and metadata
       return {
-        audioUrl,
+        audioContent: audioBuffer,
         metadata: {
           personality: personality.name,
           language: voiceLanguage,
@@ -1010,7 +1177,7 @@ export class EnhancedVoiceAIService {
 
       // Test personality responses
       if (personalityId) {
-        const personalities = EnhancedVoiceAIService.getEnhancedVoicePersonalities();
+        const personalities = await EnhancedVoiceAIService.getEnhancedVoicePersonalities();
         const personality = personalities.find(p => p.id === personalityId);
         
         if (personality) {

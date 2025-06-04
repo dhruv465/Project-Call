@@ -540,6 +540,17 @@ const CampaignForm = ({
         return;
       }
 
+      // Format script data correctly to match the server model
+      const scriptData = {
+        versions: [
+          {
+            name: formData.script.name || "Primary Script",
+            content: formData.script.content || "",
+            isActive: true
+          }
+        ]
+      };
+
       // Format dates for API submission - ensure all required fields have valid values
       const submissionData = {
         // Don't spread formData directly to avoid potential nested object issues
@@ -551,17 +562,8 @@ const CampaignForm = ({
         primaryLanguage: formData.primaryLanguage,
         supportedLanguages: formData.supportedLanguages,
         status: "Draft", // Default status for new campaigns
-        script: {
-          versions: [
-            {
-              name: formData.script.name || "Primary Script",
-              content:
-                formData.script.content ||
-                "Hello, this is an AI assistant calling from our company.",
-              isActive: true,
-            },
-          ],
-        },
+        script: scriptData,
+        // Explicitly format date fields as strings
         // Explicitly format date fields as strings
         startDate: formData.startDate instanceof Date 
           ? formData.startDate.toISOString() 
@@ -670,8 +672,8 @@ const CampaignForm = ({
       );
 
       setIsLoading(false);
-      onSuccess();
-      onClose();
+      if (onSuccess) onSuccess();
+      if (onClose) onClose();
     } catch (error: any) {
       console.error("Error saving campaign:", error);
       
@@ -685,7 +687,7 @@ const CampaignForm = ({
       } else {
         showToast(
           "Error",
-          "Failed to save campaign. Please try again.",
+          "Failed to save campaign. Please check your network connection and try again.",
           "destructive"
         );
       }

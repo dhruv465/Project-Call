@@ -21,14 +21,12 @@ import NotFound from '@/pages/NotFound';
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
-  const isDevelopment = import.meta.env.VITE_ENV === 'development';
 
   if (isLoading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
 
-  // In development mode, always allow access
-  if (isDevelopment || isAuthenticated) {
+  if (isAuthenticated) {
     return <>{children}</>;
   }
 
@@ -36,28 +34,14 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 function App() {
-  const isDevelopment = import.meta.env.VITE_ENV === 'development';
-  
   return (
     <>
       <Routes>
         {/* Auth routes */}
         <Route path="/" element={<AuthLayout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
-          {/* Only show auth routes in production or if explicitly accessed */}
-          {!isDevelopment && (
-            <>
-              <Route path="login" element={<Login />} />
-              <Route path="register" element={<Register />} />
-            </>
-          )}
-          {/* In development, redirect auth routes to dashboard */}
-          {isDevelopment && (
-            <>
-              <Route path="login" element={<Navigate to="/dashboard" replace />} />
-              <Route path="register" element={<Navigate to="/dashboard" replace />} />
-            </>
-          )}
+          <Route path="login" element={<Login />} />
+          <Route path="register" element={<Register />} />
         </Route>
 
         {/* Dashboard routes */}

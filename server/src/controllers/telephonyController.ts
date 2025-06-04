@@ -27,7 +27,7 @@ export const queueCall = async (req: Request & { user?: any }, res: Response) =>
 
     const callbackUrl = `${process.env.API_BASE_URL || 'http://localhost:8000'}/api/telephony`;
 
-    const callId = await advancedTelephonyService.queueCall({
+    const callId = await advancedTelephonyService.makeCall({
       leadId,
       campaignId,
       phoneNumber,
@@ -205,7 +205,7 @@ export const bulkQueueCalls = async (req: Request & { user?: any }, res: Respons
         // In a real implementation, you'd fetch the lead's phone number
         const phoneNumber = `+1234567890${i}`; // Placeholder
 
-        const callId = await advancedTelephonyService.queueCall({
+        const callId = await advancedTelephonyService.makeCall({
           leadId,
           campaignId,
           phoneNumber,

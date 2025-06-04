@@ -26,6 +26,7 @@ import { callsApi } from '../../services/callsApi';
 import api from '../../services/api';
 import ErrorBoundary from '../common/ErrorBoundary';
 
+// Define Campaign interface
 interface Campaign {
   _id: string;
   name: string;
@@ -39,7 +40,8 @@ interface CallLeadSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   lead: {
-    id: string;
+    id?: string; // Optional since we might get _id instead
+    _id?: string; // MongoDB ID format
     name: string;
     phoneNumber: string;
     company: string;
@@ -222,17 +224,59 @@ const CallLeadSheet = ({
       return;
     }
 
+    // Use the leadId from either property
+    const leadId = lead.id || lead._id;
+    
+    if (!leadId) {
+      toast({
+        title: "Lead ID Missing",
+        description: "The lead ID is missing. Please refresh and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log('Debug verifyIds - sending data:', { leadId, campaignId: selectedCampaign });
+
+    // First, try to create a test call to diagnose any issues
+    try {
+      // Import debugApi only when needed to avoid unused import warnings
+      const { debugApi } = await import('../../services/debugApi');
+      
+      const testResult = await debugApi.testCallCreation({
+        leadId,
+        campaignId: selectedCampaign
+      });
+      
+      console.log('Test call creation result:', testResult);
+      
+      if (!testResult.success) {
+        toast({
+          title: "Call Test Failed",
+          description: testResult.message || "Failed to create a test call. There may be an issue with the call service.",
+          variant: "destructive",
+        });
+        return;
+      }
+    } catch (error) {
+      console.error('Error testing call creation:', error);
+      // Continue with the actual call attempt even if test fails
+    }
+    
     setIsCallingInProgress(true);
     setCallStatus('connecting');
     
     try {
       // Use the real API to initiate the call
       const callData = {
-        leadId: lead.id,
+        leadId: leadId,
         campaignId: selectedCampaign,
         // Add any additional parameters like language preference
-        notes: `Language preference: ${selectedLanguage}`
+        notes: notes || `Language preference: ${selectedLanguage}`
       };
+
+      // Add debugging log to see what we're sending
+      console.log('Initiating call with data:', callData, 'Lead:', lead);
 
       await callsApi.initiateCall(callData);
       

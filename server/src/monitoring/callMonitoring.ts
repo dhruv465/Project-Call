@@ -121,10 +121,10 @@ class CallMonitoringService extends EventEmitter {
         cpuUsage: process.cpuUsage().user / 1000000, // Approximate CPU usage
         memoryUsage: process.memoryUsage().heapUsed / 1024 / 1024, // MB
         activeConnections: activeConversations + this.activeClients.size,
-        queuedCalls: telephonyMetrics.queueStatus.queued,
-        totalCalls24h: telephonyMetrics.totalCalls,
-        successRate24h: telephonyMetrics.successRate,
-        averageDuration: telephonyMetrics.averageDuration,
+        queuedCalls: telephonyMetrics.queuedCalls || 0,
+        totalCalls24h: telephonyMetrics.totalCalls || 0,
+        successRate24h: telephonyMetrics.successRate || 0,
+        averageDuration: telephonyMetrics.averageDuration || 0,
         lastUpdated: new Date()
       };
       

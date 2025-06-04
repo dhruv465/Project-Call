@@ -610,30 +610,22 @@ export const getVoiceOptions = async (_req: Request, res: Response) => {
       });
     }
 
-    // In a real implementation, this would fetch voices from ElevenLabs API
-    // For now, return some sample voices
-    const voiceOptions = [
-      {
-        voiceId: 'EXAVITQu4vr4xnSDxMaL',
-        name: 'Rachel',
-        previewUrl: 'https://storage.googleapis.com/eleven-public-prod/premade/voices/rachel/sample.mp3'
-      },
-      {
-        voiceId: 'VR6AewLTigWG4xSOukaG',
-        name: 'Alex',
-        previewUrl: 'https://storage.googleapis.com/eleven-public-prod/premade/voices/alex/sample.mp3'
-      },
-      {
-        voiceId: '21m00Tcm4TlvDq8ikWAM',
-        name: 'Jessica',
-        previewUrl: 'https://storage.googleapis.com/eleven-public-prod/premade/voices/jessica/sample.mp3'
-      },
-      {
-        voiceId: 'AZnzlk1XvdvUeBnXmlld',
-        name: 'Michael',
-        previewUrl: 'https://storage.googleapis.com/eleven-public-prod/premade/voices/michael/sample.mp3'
-      }
-    ];
+    // Get voices from configuration instead of hardcoded values
+    const availableVoices = configuration.elevenLabsConfig.availableVoices || [];
+    
+    if (availableVoices.length === 0) {
+      return res.status(200).json({ 
+        message: 'No voices configured. Please set up voices in ElevenLabs configuration.',
+        voices: [] 
+      });
+    }
+
+    // Map configuration voices to the expected format
+    const voiceOptions = availableVoices.map(voice => ({
+      voiceId: voice.voiceId,
+      name: voice.name,
+      previewUrl: voice.previewUrl || null
+    }));
 
     return res.status(200).json({ voices: voiceOptions });
   } catch (error) {

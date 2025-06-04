@@ -11,27 +11,28 @@ import {
   exportCalls
 } from '../controllers/callController';
 import { updateCallStatus } from '../controllers/updateCallStatusController';
-import { webhookHandlers } from '../services';
+import {
+  handleTwilioVoiceWebhook,
+  handleTwilioStatusWebhook,
+  handleTwilioGatherWebhook,
+  handleTwilioStreamWebhook
+} from '../services/webhookHandlers';
 
 const router = express.Router();
 
-// Protected routes
-router.use('/initiate', authenticate);
-router.use('/analytics', authenticate);
-router.use('/export', authenticate);
-router.use('/history', authenticate);
+// Webhook routes - MUST BE FIRST and not authenticated (for Twilio callbacks)
+// These routes need to match exactly what's being called in callController.ts
+router.post('/voice-webhook', handleTwilioVoiceWebhook);
+router.post('/status-webhook', handleTwilioStatusWebhook);
+router.post('/gather', handleTwilioGatherWebhook);
+router.post('/stream', handleTwilioStreamWebhook);
+router.post('/recording-webhook', handleTwilioStatusWebhook); // Reuse status webhook for recording
 
-// Webhook routes - these should not be authenticated
-router.post('/voice-webhook', webhookHandlers.handleTwilioVoiceWebhook);
-router.post('/status-webhook', webhookHandlers.handleTwilioStatusWebhook);
-router.post('/gather', webhookHandlers.handleTwilioGatherWebhook);
-router.post('/stream', webhookHandlers.handleTwilioStreamWebhook);
-
-// Call management routes
-router.post('/initiate', initiateCall);
-router.get('/', getCallHistory);
-router.get('/analytics', getCallAnalytics);
-router.get('/export', exportCalls);
+// Call management routes (protected)
+router.post('/initiate', authenticate, initiateCall);
+router.get('/', authenticate, getCallHistory);
+router.get('/analytics', authenticate, getCallAnalytics);
+router.get('/export', authenticate, exportCalls);
 router.get('/:id', authenticate, getCallById);
 router.get('/:id/recording', authenticate, getCallRecording);
 router.get('/:id/transcript', authenticate, getCallTranscript);

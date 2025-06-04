@@ -1,11 +1,10 @@
 import mongoose from 'mongoose';
 
 export interface ICall extends mongoose.Document {
-  _id: string;
-  leadId: string;
-  campaignId: string;
+  leadId: mongoose.Types.ObjectId;
+  campaignId: mongoose.Types.ObjectId;
   phoneNumber: string;
-  status: 'queued' | 'dialing' | 'in-progress' | 'completed' | 'failed' | 'no-answer' | 'busy' | 'voicemail';
+  status: 'queued' | 'dialing' | 'in-progress' | 'completed' | 'failed' | 'no-answer' | 'busy' | 'voicemail' | 'scheduled' | 'pending';
   priority: 'low' | 'medium' | 'high';
   scheduledAt: Date;
   twilioSid?: string;
@@ -18,7 +17,7 @@ export interface ICall extends mongoose.Document {
   abTestVariantId?: string;
   maxRetries: number;
   retryCount: number;
-  callbackUrl: string;
+  callbackUrl?: string; // Make this optional since it's not required in schema
   createdAt: Date;
   updatedAt: Date;
   recordCall: boolean;
@@ -125,13 +124,22 @@ export interface ICall extends mongoose.Document {
 }
 
 const CallSchema = new mongoose.Schema({
-  _id: String,
-  leadId: { type: String, required: true, index: true },
-  campaignId: { type: String, required: true, index: true },
+  leadId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Lead',
+    required: true, 
+    index: true 
+  },
+  campaignId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Campaign',
+    required: true, 
+    index: true 
+  },
   phoneNumber: { type: String, required: true },
   status: { 
     type: String, 
-    enum: ['queued', 'dialing', 'in-progress', 'completed', 'failed', 'no-answer', 'busy', 'voicemail'],
+    enum: ['queued', 'dialing', 'in-progress', 'completed', 'failed', 'no-answer', 'busy', 'voicemail', 'scheduled', 'pending'],
     default: 'queued',
     index: true
   },
@@ -279,9 +287,9 @@ const CallSchema = new mongoose.Schema({
       enum: ['sent', 'failed', 'received'],
       default: 'sent' 
     }
-  }],
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  }]
+}, { 
+  timestamps: true // This will automatically handle createdAt and updatedAt
 });
 
 // Create compound indexes for efficient queries

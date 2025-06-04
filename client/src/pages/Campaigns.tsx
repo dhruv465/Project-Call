@@ -153,7 +153,12 @@ const Campaigns = () => {
 
   const handleCampaignFormSuccess = () => {
     // Refresh campaigns data
-    refetch();
+    console.log("Campaign form succeeded, refreshing data...");
+    refetch().then(() => {
+      console.log("Campaign data refreshed");
+    }).catch(err => {
+      console.error("Error refreshing campaign data:", err);
+    });
   };
 
   const getStatusBadgeVariant = (status: string) => {
@@ -185,6 +190,7 @@ const Campaigns = () => {
         }
         
         const response = await api.get(`/campaigns?${params.toString()}`);
+        console.log('Campaign API response:', response.data);
         return response.data || { campaigns: [], pagination: { page: 1, pages: 0, total: 0, limit: itemsPerPage } };
       } catch (err) {
         console.error('Error fetching campaigns:', err);
@@ -195,11 +201,15 @@ const Campaigns = () => {
     {
       refetchOnWindowFocus: false,
       staleTime: 30000, // 30 seconds
+      retry: 3, // Retry up to 3 times on failure
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff
     }
   );
 
   // Get filtered campaigns based on data
-  const filteredCampaigns = campaignsData?.campaigns || [];
+  const filteredCampaigns = campaignsData?.campaigns || 
+    // Handle both formats: array response or object with campaigns property
+    (Array.isArray(campaignsData) ? campaignsData : []);
 
   // Event handlers
   

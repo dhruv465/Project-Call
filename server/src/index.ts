@@ -9,6 +9,7 @@ import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import winston from 'winston';
 import path from 'path';
+import expressWs from 'express-ws';
 
 // Routes
 import userRoutes from './routes/userRoutes';
@@ -20,6 +21,8 @@ import configurationRoutes from './routes/configurationRoutes';
 import voiceAIRoutes from './routes/voiceAIRoutes';
 import telephonyRoutes from './routes/telephonyRoutes';
 import analyticsRoutes from './routes/analyticsRoutes';
+import debugRoutes from './routes/debugRoutes';
+import streamRoutes from './routes/streamRoutes';
 
 // Services initialization
 import { initializeSpeechService } from './services/realSpeechService';
@@ -61,6 +64,9 @@ const io = new SocketIOServer(server, {
     credentials: true,
   },
 });
+
+// Initialize WebSocket support
+const wsInstance = expressWs(app, server);
 
 // Middleware
 app.use(cors());
@@ -110,6 +116,10 @@ app.use('/api/configuration', configurationRoutes);
 app.use('/api/lumina-outreach', voiceAIRoutes);
 app.use('/api/telephony', telephonyRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/debug', debugRoutes);
+
+// WebSocket routes
+app.use('/', streamRoutes);
 
 // Global error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -170,29 +180,29 @@ const initializeServices = async () => {
     let anthropicApiKey = '';
     let googleSpeechApiKey = '';
     
-    // If configuration exists, use it; otherwise fall back to env vars as temporary measure
+    // If configuration exists, use it; otherwise use empty keys (no environment fallback)
     if (config) {
       logger.info('Using API configuration from database');
       
       // ElevenLabs
-      elevenLabsApiKey = config.elevenLabsConfig?.apiKey || process.env.ELEVENLABS_API_KEY || '';
+      elevenLabsApiKey = config.elevenLabsConfig?.apiKey || '';
       
       // LLM providers
       const openAIProvider = config.llmConfig?.providers?.find((p: any) => p.name === 'openai');
-      openAIApiKey = openAIProvider?.apiKey || process.env.OPENAI_API_KEY || '';
+      openAIApiKey = openAIProvider?.apiKey || '';
       
       const anthropicProvider = config.llmConfig?.providers?.find((p: any) => p.name === 'anthropic');
-      anthropicApiKey = anthropicProvider?.apiKey || process.env.ANTHROPIC_API_KEY || '';
+      anthropicApiKey = anthropicProvider?.apiKey || '';
       
       // Google (if configured)
       const googleProvider = config.llmConfig?.providers?.find((p: any) => p.name === 'google');
-      googleSpeechApiKey = googleProvider?.apiKey || process.env.GOOGLE_SPEECH_API_KEY || '';
+      googleSpeechApiKey = googleProvider?.apiKey || '';
     } else {
-      logger.warn('No configuration found in database, using environment variables as fallback');
-      elevenLabsApiKey = process.env.ELEVENLABS_API_KEY || '';
-      openAIApiKey = process.env.OPENAI_API_KEY || '';
-      anthropicApiKey = process.env.ANTHROPIC_API_KEY || '';
-      googleSpeechApiKey = process.env.GOOGLE_SPEECH_API_KEY || '';
+      logger.warn('No configuration found in database, services will operate without API keys');
+      elevenLabsApiKey = '';
+      openAIApiKey = '';
+      anthropicApiKey = '';
+      googleSpeechApiKey = '';
     }
 
     // Speech synthesis service

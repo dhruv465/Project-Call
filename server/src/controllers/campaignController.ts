@@ -14,16 +14,16 @@ export const createCampaign = async (req: Request & { user?: any }, res: Respons
   try {
     const { name, description, goal, targetAudience, script } = req.body;
 
+    logger.info(`Creating new campaign "${name}" for user ${req.user.id}`);
+    
     const campaign = new Campaign({
-      name,
-      description,
-      goal,
-      targetAudience,
-      script,
+      ...req.body,
       createdBy: req.user.id
     });
 
     const savedCampaign = await campaign.save();
+    
+    logger.info(`Campaign created successfully with ID: ${savedCampaign._id}`);
 
     res.status(201).json(savedCampaign);
   } catch (error) {
@@ -61,6 +61,8 @@ export const getCampaigns = async (req: Request & { user?: any }, res: Response)
       filter.status = status;
     }
     
+    logger.info(`Fetching campaigns for user ${req.user.id} with filter:`, filter);
+    
     const campaigns = await Campaign.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -68,8 +70,20 @@ export const getCampaigns = async (req: Request & { user?: any }, res: Response)
     
     const total = await Campaign.countDocuments(filter);
     
-    // Return campaigns array directly for better client compatibility
-    res.status(200).json(campaigns || []);
+    // Return campaigns with pagination for client compatibility
+    const responseData = {
+      campaigns: campaigns || [],
+      pagination: {
+        page,
+        pages: Math.ceil(total / limit),
+        total,
+        limit
+      }
+    };
+    
+    logger.info(`Returning ${campaigns.length} campaigns of ${total} total`);
+    
+    res.status(200).json(responseData);
   } catch (error) {
     logger.error('Error in getCampaigns:', error);
     res.status(500).json({
@@ -121,11 +135,15 @@ export const updateCampaign = async (req: Request & { user?: any }, res: Respons
       return res.status(403).json({ message: 'Not authorized to update this campaign' });
     }
     
+    logger.info(`Updating campaign ${req.params.id} for user ${req.user.id}`);
+    
     const updatedCampaign = await Campaign.findByIdAndUpdate(
       req.params.id,
       { $set: req.body },
-      { new: true }
+      { new: true, runValidators: true }
     );
+    
+    logger.info(`Campaign ${req.params.id} updated successfully`);
     
     return res.status(200).json(updatedCampaign);
   } catch (error) {

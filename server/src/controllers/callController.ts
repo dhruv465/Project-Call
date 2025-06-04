@@ -6,32 +6,50 @@ import Configuration from '../models/Configuration';
 import { logger } from '../index';
 import mongoose from 'mongoose';
 import { handleError } from '../utils/errorHandling';
+import twilio from 'twilio';
+import { EnhancedVoiceAIService } from '../services/enhancedVoiceAIService';
+
+// Initialize Voice AI Service
+let voiceAIService = null as EnhancedVoiceAIService | null;
 
 // @desc    Initiate a new AI call to a lead
 // @route   POST /api/calls/initiate
 // @access  Private
 export const initiateCall = async (req: Request & { user?: any }, res: Response): Promise<Response> => {
   try {
-    const { leadId, campaignId, scheduleTime } = req.body;
+    const { leadId, campaignId, scheduleTime, notes } = req.body;
+
+    // Log the received request for debugging
+    logger.info('Call initiate request:', { 
+      body: req.body, 
+      leadId: req.body.leadId, 
+      campaignId: req.body.campaignId 
+    });
 
     if (!leadId || !campaignId) {
+      logger.error('Missing required fields:', { leadId, campaignId });
       return res.status(400).json({ message: 'Lead ID and Campaign ID are required' });
     }
 
     // Check if lead and campaign exist
     const lead = await Lead.findById(leadId);
     if (!lead) {
+      logger.error(`Lead not found with ID: ${leadId}`);
       return res.status(404).json({ message: 'Lead not found' });
     }
 
     const campaign = await Campaign.findById(campaignId);
     if (!campaign) {
+      logger.error(`Campaign not found with ID: ${campaignId}`);
       return res.status(404).json({ message: 'Campaign not found' });
     }
 
     // Get system configuration
     const configuration = await Configuration.findOne();
-    if (!configuration || !configuration.twilioConfig.isEnabled) {
+    const isDemoMode = process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true';
+    
+    if (!isDemoMode && (!configuration || !configuration.twilioConfig.isEnabled)) {
+      logger.error('Twilio not configured:', { configuration: configuration?.twilioConfig });
       return res.status(400).json({ message: 'Twilio is not configured or enabled' });
     }
 
@@ -41,42 +59,90 @@ export const initiateCall = async (req: Request & { user?: any }, res: Response)
       return res.status(400).json({ message: 'No active script found for this campaign' });
     }
 
-    // Create a new call record
+    // Create a new call record first (before using it in TwiML)
     const newCall = new Call({
-      campaign: campaignId,
-      lead: leadId,
-      status: scheduleTime ? 'scheduled' : 'pending',
-      startTime: scheduleTime || new Date(),
-      createdBy: req.user.id,
-      conversationLog: [],
+      leadId: new mongoose.Types.ObjectId(leadId),
+      campaignId: new mongoose.Types.ObjectId(campaignId),
+      phoneNumber: lead.phoneNumber,
+      status: scheduleTime ? 'scheduled' : 'queued',
+      scheduledAt: scheduleTime || new Date(),
+      notes: notes || '',
+      maxRetries: configuration.generalSettings.callRetryAttempts,
+      retryCount: 0,
+      recordCall: configuration.complianceSettings.recordCalls,
+      priority: 'medium',
+      conversationLog: []
     });
 
-    // If call is scheduled for future, save the scheduled time
+    // If call is scheduled for future, we're done
     if (scheduleTime) {
-      (newCall as any).scheduledTime = scheduleTime;
-    } else {
-      // Initiate call with Twilio (simplified for now)
-      // In a real implementation, this would integrate with Twilio's API
-      try {
-        // Make real Twilio API call here
-        newCall.status = 'in-progress';
-        (newCall as any).twilioCallSid = `TC${Math.random().toString(36).substring(2, 15)}`;
-        
-        // Update lead's last contacted date
-        (lead as any).lastContacted = new Date();
-        (lead as any).callCount = ((lead as any).callCount || 0) + 1;
-        await lead.save();
-      } catch (error) {
-        logger.error('Error initiating Twilio call:', error);
-        newCall.status = 'failed';
-        (newCall as any).notes = `Failed to initiate: ${handleError(error)}`;
-      }
+      await newCall.save();
+      return res.status(201).json({
+        message: 'Call scheduled successfully',
+        call: newCall
+      });
+    } 
+
+    try {
+      // Initialize Twilio client with configuration
+      const client = twilio(
+        configuration.twilioConfig.accountSid,
+        configuration.twilioConfig.authToken
+      );
+
+      // Use ngrok URL in development, otherwise use the host header
+      const baseUrl = process.env.WEBHOOK_BASE_URL || 'https://e56c-103-147-161-85.ngrok-free.app';
+      
+      // Create the Twilio call with webhook URL
+      // The webhook will handle voice synthesis to avoid API key issues here
+      const twilioCall = await client.calls.create({
+        url: `${baseUrl}/api/calls/voice-webhook?callId=${newCall._id}`,
+        to: lead.phoneNumber,
+        from: configuration.twilioConfig.phoneNumbers[0],
+        statusCallback: `${baseUrl}/api/calls/status-webhook?callId=${newCall._id}`,
+        statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
+        record: configuration.complianceSettings.recordCalls,
+        recordingStatusCallback: `${baseUrl}/api/calls/recording-webhook?callId=${newCall._id}`,
+        recordingStatusCallbackEvent: ['completed'],
+        timeout: configuration.generalSettings.maxCallDuration,
+        // Change this to DetectMessageEnd to ensure webhook is always called
+        machineDetection: 'DetectMessageEnd'
+      });
+
+      // Update call record with Twilio data
+      newCall.status = 'dialing';
+      newCall.twilioSid = twilioCall.sid;
+      newCall.startTime = new Date();
+      
+      // Update lead's last contacted date
+      lead.lastContacted = new Date();
+      lead.callCount = (lead.callCount || 0) + 1;
+      await lead.save();
+
+      logger.info('Twilio call initiated successfully:', { 
+        callSid: twilioCall.sid, 
+        status: twilioCall.status,
+        to: lead.phoneNumber,
+        campaignId: campaign._id,
+        voiceId: campaign.voiceConfiguration?.voiceId || 'default'
+      });
+    } catch (error) {
+      logger.error('Error initiating Twilio call:', error);
+      newCall.status = 'failed';
+      newCall.notes = `Failed to initiate: ${handleError(error)}`;
+      
+      // Save the failed call and return error
+      await newCall.save();
+      return res.status(500).json({
+        message: 'Failed to initiate call',
+        error: handleError(error)
+      });
     }
 
     await newCall.save();
 
     return res.status(201).json({
-      message: scheduleTime ? 'Call scheduled successfully' : 'Call initiated successfully',
+      message: 'Call initiated successfully',
       call: newCall
     });
   } catch (error) {
@@ -88,6 +154,7 @@ export const initiateCall = async (req: Request & { user?: any }, res: Response)
   }
 };
 
+// Rest of the controller methods remain the same...
 // @desc    Get call history with filtering and pagination
 // @route   GET /api/calls
 // @access  Private
@@ -112,8 +179,8 @@ export const getCallHistory = async (req: Request & { user?: any }, res: Respons
     const query: any = {};
 
     if (status) query.status = status;
-    if (campaignId) query.campaign = campaignId;
-    if (leadId) query.lead = leadId;
+    if (campaignId) query.campaignId = campaignId;
+    if (leadId) query.leadId = leadId;
     if (outcome) query.outcome = outcome;
 
     // Date range filtering
@@ -128,8 +195,8 @@ export const getCallHistory = async (req: Request & { user?: any }, res: Respons
       .sort({ startTime: -1 })
       .skip(skip)
       .limit(limitNum)
-      .populate('lead', 'name phoneNumber company')
-      .populate('campaign', 'name');
+      .populate('leadId', 'name phoneNumber company')
+      .populate('campaignId', 'name');
 
     // Get total count for pagination
     const total = await Call.countDocuments(query);
@@ -158,9 +225,8 @@ export const getCallHistory = async (req: Request & { user?: any }, res: Respons
 export const getCallById = async (req: Request, res: Response): Promise<Response> => {
   try {
     const call = await Call.findById(req.params.id)
-      .populate('lead', 'name phoneNumber company email title')
-      .populate('campaign', 'name description goal')
-      .populate('createdBy', 'name email');
+      .populate('leadId', 'name phoneNumber company email title')
+      .populate('campaignId', 'name description goal');
 
     if (!call) {
       return res.status(404).json({ message: 'Call not found' });
@@ -191,8 +257,56 @@ export const getCallRecording = async (req: Request, res: Response): Promise<Res
       return res.status(404).json({ message: 'No recording available for this call' });
     }
 
-    // In a real app, this would handle Twilio authentication and possibly proxying
-    return res.status(200).json({ recordingUrl: (call as any).recordingUrl });
+    // Check if the client is requesting the direct URL or streaming
+    const isStream = req.query.stream === 'true';
+    
+    if (isStream) {
+      // Get Twilio configuration
+      const configuration = await Configuration.findOne();
+      if (!configuration || !configuration.twilioConfig || !configuration.twilioConfig.accountSid || !configuration.twilioConfig.authToken) {
+        return res.status(500).json({ message: 'Twilio configuration not found' });
+      }
+      
+      try {
+        // Use axios to proxy the request to Twilio
+        const axios = require('axios');
+        const twilioRecordingUrl = (call as any).recordingUrl;
+        
+        // Create authentication header for Twilio
+        const auth = {
+          username: configuration.twilioConfig.accountSid,
+          password: configuration.twilioConfig.authToken
+        };
+        
+        // Fetch the audio file from Twilio
+        const response = await axios({
+          method: 'get',
+          url: twilioRecordingUrl,
+          responseType: 'stream',
+          auth: auth
+        });
+        
+        // Set appropriate headers
+        res.set('Content-Type', response.headers['content-type']);
+        res.set('Content-Length', response.headers['content-length']);
+        res.set('Accept-Ranges', 'bytes');
+        
+        // Pipe the audio stream directly to the client
+        return response.data.pipe(res);
+      } catch (error) {
+        logger.error('Error streaming recording:', error);
+        return res.status(500).json({
+          message: 'Error streaming recording',
+          error: (error as Error).message
+        });
+      }
+    } else {
+      // Return a URL to our streaming endpoint
+      const streamUrl = `/api/calls/${call._id}/recording?stream=true`;
+      return res.status(200).json({ 
+        recordingUrl: streamUrl
+      });
+    }
   } catch (error) {
     logger.error('Error in getCallRecording:', error);
     return res.status(500).json({
@@ -462,17 +576,17 @@ export const exportCalls = async (req: Request & { user?: any }, res: Response):
     // Get calls with populated lead and campaign info
     const calls = await Call.find(query)
       .sort({ startTime: -1 })
-      .populate('lead', 'name phoneNumber company email')
-      .populate('campaign', 'name');
+      .populate('leadId', 'name phoneNumber company email')
+      .populate('campaignId', 'name');
 
     // Process calls for export
     const exportData = calls.map((call: any) => ({
       id: call._id,
-      leadName: call.lead?.name || 'Unknown',
-      leadPhone: call.lead?.phoneNumber || 'N/A',
-      leadEmail: call.lead?.email || 'N/A',
-      leadCompany: call.lead?.company || 'N/A',
-      campaignName: call.campaign?.name || 'Unknown',
+      leadName: call.leadId?.name || 'Unknown',
+      leadPhone: call.leadId?.phoneNumber || 'N/A',
+      leadEmail: call.leadId?.email || 'N/A',
+      leadCompany: call.leadId?.company || 'N/A',
+      campaignName: call.campaignId?.name || 'Unknown',
       status: call.status,
       startTime: call.startTime,
       endTime: call.endTime,

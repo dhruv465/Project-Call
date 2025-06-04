@@ -36,14 +36,23 @@ import {
 } from '@/components/ui/resizable';
 
 interface Call {
-  id: string;
-  leadName: string;
-  leadPhone: string;
-  campaignName: string;
-  status: 'completed' | 'failed' | 'in-progress' | 'scheduled';
-  duration: number;
-  callDate: Date;
-  outcome: 'answered' | 'voicemail' | 'no-answer' | 'busy' | 'interested' | 'not-interested';
+  _id: string;
+  leadId: {
+    _id: string;
+    name: string;
+    phoneNumber: string;
+    company?: string;
+  } | null;
+  campaignId: {
+    _id: string;
+    name: string;
+  } | null;
+  phoneNumber: string;
+  status: 'queued' | 'dialing' | 'in-progress' | 'completed' | 'failed' | 'no-answer' | 'busy' | 'voicemail' | 'scheduled' | 'pending';
+  duration?: number;
+  startTime?: string;
+  endTime?: string;
+  outcome?: string;
   notes?: string;
   recordingUrl?: string;
 }
@@ -132,8 +141,12 @@ const Calls = () => {
     }
   };
 
-  const getOutcomeBadge = (outcome: Call['outcome']) => {
-    const variants: Record<Call['outcome'], string> = {
+  const getOutcomeBadge = (outcome?: string) => {
+    if (!outcome) {
+      return <Badge className="bg-gray-100 text-gray-800">unknown</Badge>;
+    }
+    
+    const variants: Record<string, string> = {
       'answered': 'bg-green-100 text-green-800',
       'voicemail': 'bg-yellow-100 text-yellow-800',
       'no-answer': 'bg-gray-100 text-gray-800',
@@ -143,22 +156,27 @@ const Calls = () => {
     };
 
     return (
-      <Badge className={variants[outcome]}>
+      <Badge className={variants[outcome] || 'bg-gray-100 text-gray-800'}>
         {outcome.replace('-', ' ')}
       </Badge>
     );
   };
 
-  const formatDuration = (seconds: number) => {
+  const formatDuration = (seconds?: number) => {
+    if (!seconds) return '0:00';
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const filteredCalls = calls.filter((call: Call) => {
-    const matchesSearch = call.leadName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         call.leadPhone.includes(searchTerm) ||
-                         call.campaignName.toLowerCase().includes(searchTerm.toLowerCase());
+    const leadName = call.leadId?.name || '';
+    const leadPhone = call.phoneNumber || '';
+    const campaignName = call.campaignId?.name || '';
+    
+    const matchesSearch = leadName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         leadPhone.includes(searchTerm) ||
+                         campaignName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || call.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -190,6 +208,13 @@ const Calls = () => {
         return;
       }
 
+      // If the URL doesn't start with http, it's a relative URL to our proxy endpoint
+      // This ensures we use the authenticated proxy for Twilio URLs
+      if (!audioUrl.startsWith('http')) {
+        // Add the base URL for our API
+        audioUrl = `${import.meta.env.VITE_API_BASE_URL || ''}${audioUrl}`;
+      }
+
       // Create and play the audio
       const audio = new Audio(audioUrl);
       audio.addEventListener('ended', () => {
@@ -201,6 +226,11 @@ const Calls = () => {
       setCurrentPlayingId(callId);
     } catch (error) {
       console.error('Error playing recording:', error);
+      toast({
+        title: "Playback Error",
+        description: "There was a problem playing this recording. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -275,7 +305,7 @@ const Calls = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatDuration(Math.round(calls.reduce((acc: number, call: Call) => acc + call.duration, 0) / calls.length))}
+              {formatDuration(Math.round(calls.reduce((acc: number, call: Call) => acc + (call.duration || 0), 0) / calls.length))}
             </div>
           </CardContent>
         </Card>
@@ -354,7 +384,7 @@ const Calls = () => {
         <CardContent className="p-3 sm:p-6">
           <div className="space-y-4">
             {filteredCalls.map((call: Call) => (
-              <div key={call.id}>
+              <div key={call._id}>
                 {/* Desktop Layout - Hidden on mobile */}
                 <div className="hidden lg:block">
                   <ResizablePanelGroup
@@ -366,14 +396,14 @@ const Calls = () => {
                         <div className="flex items-center space-x-2">
                           {getStatusIcon(call.status)}
                           <div>
-                            <p className="font-medium">{call.leadName}</p>
-                            <p className="text-sm text-muted-foreground">{call.leadPhone}</p>
+                            <p className="font-medium">{call.leadId?.name || 'Unknown Lead'}</p>
+                            <p className="text-sm text-muted-foreground">{call.phoneNumber}</p>
                           </div>
                         </div>
                         <div>
-                          <p className="text-sm font-medium">{call.campaignName}</p>
+                          <p className="text-sm font-medium">{call.campaignId?.name || 'Unknown Campaign'}</p>
                           <p className="text-sm text-muted-foreground">
-                            {call.callDate.toLocaleDateString()} at {call.callDate.toLocaleTimeString()}
+                            {call.startTime ? new Date(call.startTime).toLocaleDateString() : 'Unknown'} at {call.startTime ? new Date(call.startTime).toLocaleTimeString() : 'Unknown'}
                           </p>
                         </div>
                       </div>
@@ -391,10 +421,10 @@ const Calls = () => {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => handlePlayRecording(call.id, call.recordingUrl)}
+                            onClick={() => handlePlayRecording(call._id, call.recordingUrl)}
                           >
                             <Volume2 className="h-4 w-4 mr-1" />
-                            {currentPlayingId === call.id ? 'Pause' : 'Play'}
+                            {currentPlayingId === call._id ? 'Pause' : 'Play'}
                           </Button>
                         )}
                       </div>
@@ -412,8 +442,8 @@ const Calls = () => {
                           <div className="flex items-center space-x-2 min-w-0 flex-1">
                             {getStatusIcon(call.status)}
                             <div className="min-w-0 flex-1">
-                              <p className="font-medium truncate">{call.leadName}</p>
-                              <p className="text-sm text-muted-foreground truncate">{call.leadPhone}</p>
+                              <p className="font-medium truncate">{call.leadId?.name || 'Unknown Lead'}</p>
+                              <p className="text-sm text-muted-foreground truncate">{call.phoneNumber}</p>
                             </div>
                           </div>
                           <div className="flex-shrink-0 ml-2">
@@ -423,9 +453,9 @@ const Calls = () => {
 
                         {/* Campaign and date row */}
                         <div className="space-y-1">
-                          <p className="text-sm font-medium truncate">{call.campaignName}</p>
+                          <p className="text-sm font-medium truncate">{call.campaignId?.name || 'Unknown Campaign'}</p>
                           <p className="text-sm text-muted-foreground">
-                            {call.callDate.toLocaleDateString()} at {call.callDate.toLocaleTimeString()}
+                            {call.startTime ? new Date(call.startTime).toLocaleDateString() : 'Unknown'} at {call.startTime ? new Date(call.startTime).toLocaleTimeString() : 'Unknown'}
                           </p>
                         </div>
 
@@ -438,11 +468,11 @@ const Calls = () => {
                             <Button 
                               variant="outline" 
                               size="sm"
-                              onClick={() => handlePlayRecording(call.id, call.recordingUrl)}
+                              onClick={() => handlePlayRecording(call._id, call.recordingUrl)}
                               className="flex-shrink-0"
                             >
                               <Volume2 className="h-4 w-4 mr-1" />
-                              {currentPlayingId === call.id ? 'Pause' : 'Play'}
+                              {currentPlayingId === call._id ? 'Pause' : 'Play'}
                             </Button>
                           )}
                         </div>

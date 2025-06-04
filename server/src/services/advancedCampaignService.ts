@@ -1,11 +1,66 @@
 import ScriptTemplate from '../models/ScriptTemplate';
 import ABTest from '../models/ABTest';
 import Campaign from '../models/Campaign';
+import Configuration from '../models/Configuration';
 import { logger } from '../index';
-import { LLMService } from './llmService';
+import { LLMService } from './llm/service';
+import { LLMConfig, LLMProvider } from './llm/types';
 
-// Initialize LLM service instance
-const llmService = new LLMService(process.env.OPENAI_API_KEY || '', process.env.ANTHROPIC_API_KEY);
+// Initialize LLM service instance with database configuration
+let llmService: LLMService;
+let defaultModel: string = 'gpt-4';
+
+const initializeLLMService = async () => {
+  try {
+    const config = await Configuration.findOne();
+    if (config && config.llmConfig?.providers) {
+      // Store default model first
+      defaultModel = config.llmConfig.defaultModel || 'gpt-4';
+      
+      // Transform database configuration to LLM service configuration
+      const llmConfig: LLMConfig = {
+        providers: config.llmConfig.providers.map(p => ({
+          name: p.name.toLowerCase() as LLMProvider,
+          apiKey: p.apiKey,
+          isEnabled: p.isEnabled,
+          models: p.availableModels || []
+        })),
+        defaultProvider: (config.llmConfig.defaultProvider?.toLowerCase() || 'openai') as LLMProvider,
+        defaultModel: defaultModel,
+        timeoutMs: 30000,
+        retryConfig: {
+          maxRetries: 2,
+          initialDelayMs: 1000,
+          maxDelayMs: 5000
+        }
+      };
+      
+      llmService = new LLMService(llmConfig);
+    } else {
+      // Create empty configuration if no config found
+      defaultModel = 'gpt-4';
+      const emptyConfig: LLMConfig = {
+        providers: [],
+        defaultProvider: 'openai' as LLMProvider,
+        timeoutMs: 30000
+      };
+      llmService = new LLMService(emptyConfig);
+    }
+  } catch (error) {
+    logger.error('Failed to initialize LLM service from database configuration:', error);
+    // Create empty configuration on error
+    defaultModel = 'gpt-4';
+    const emptyConfig: LLMConfig = {
+      providers: [],
+      defaultProvider: 'openai' as LLMProvider,
+      timeoutMs: 30000
+    };
+    llmService = new LLMService(emptyConfig);
+  }
+};
+
+// Initialize service on startup
+initializeLLMService();
 
 export interface ScriptGenerationOptions {
   industry: string;
@@ -48,10 +103,22 @@ export class AdvancedCampaignService {
       
       // Generate script using LLM
       const prompt = this.buildScriptGenerationPrompt(options, similarTemplates);
-      const llmResponse = await llmService.generateResponse([
-        { role: 'user', content: prompt }
-      ], 'auto', { temperature: 0.7, maxTokens: 1500 });
-      const generatedScript = llmResponse.text;
+      
+      // Use the new LLM service chat method with default provider
+      const defaultProvider = llmService.getDefaultProvider();
+      const llmResponse = await llmService.chat({
+        provider: defaultProvider.getProviderName(),
+        model: defaultModel,
+        messages: [
+          { role: 'user', content: prompt }
+        ],
+        options: {
+          temperature: 0.7,
+          maxTokens: 1500
+        }
+      });
+      
+      const generatedScript = llmResponse.content;
       
       // Validate compliance
       const complianceCheck = await this.validateCompliance(generatedScript, options.complianceRegion);

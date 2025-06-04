@@ -371,7 +371,7 @@ export class CampaignService {
           const sessionId = uuidv4();
           
           // Get the personality object from the personality ID
-          const personalities = EnhancedVoiceAIService.getEnhancedVoicePersonalities();
+          const personalities = await EnhancedVoiceAIService.getEnhancedVoicePersonalities();
           const personalityObj = personalities.find(p => p.id === variant.personality) || personalities[0];
           
           await this.conversationEngine.initializeConversation(

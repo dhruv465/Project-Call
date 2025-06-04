@@ -18,27 +18,7 @@ export const useAuth = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if we're in development mode and should bypass auth
-    const isDevelopment = import.meta.env.VITE_ENV === 'development';
-    
-    if (isDevelopment) {
-      // Create a mock user for development
-      const mockUser: User = {
-        _id: 'dev-user-123',
-        name: 'Development User',
-        email: 'dev@example.com',
-        role: 'admin',
-        token: 'dev-token-bypass'
-      };
-      
-      setUser(mockUser);
-      // Set a mock token for API calls
-      api.defaults.headers.common['Authorization'] = `Bearer ${mockUser.token}`;
-      setIsLoading(false);
-      return;
-    }
-
-    // Check if user is stored in local storage (production mode)
+    // Check if user is stored in local storage
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);

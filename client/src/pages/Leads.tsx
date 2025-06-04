@@ -177,6 +177,7 @@ const Leads = () => {
     // Find the lead to get its details
     const lead = leadsData?.leads.find((lead: Lead) => lead.id === leadId);
     if (lead) {
+      console.log('Setting lead to call:', lead);
       setLeadToCall(lead);
       setIsCallSheetOpen(true);
     }

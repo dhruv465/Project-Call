@@ -26,7 +26,13 @@ export const uploadLeads = async (req: Request & { user?: any }, res: Response) 
       }));
 
       // Create multiple leads
-      const createdLeads = await Lead.create(validatedLeads);
+      const createdLeadDocuments = await Lead.create(validatedLeads);
+
+      // Transform leads to include both _id and id properties for client compatibility
+      const createdLeads = createdLeadDocuments.map(lead => ({
+        ...lead.toObject(),
+        id: lead._id.toString(),
+      }));
 
       return res.status(201).json({
         message: `Successfully created ${createdLeads.length} leads`,
@@ -54,7 +60,13 @@ export const uploadLeads = async (req: Request & { user?: any }, res: Response) 
         tags,
       };
 
-      const createdLead = await Lead.create(leadData);
+      const createdLeadDocument = await Lead.create(leadData);
+
+      // Transform lead to include both _id and id properties for client compatibility
+      const createdLead = {
+        ...createdLeadDocument.toObject(),
+        id: createdLeadDocument._id.toString(),
+      };
 
       return res.status(201).json({
         message: 'Lead created successfully',
@@ -93,10 +105,16 @@ export const getLeads = async (req: Request & { user?: any }, res: Response) => 
     }
 
     // Get leads with pagination
-    const leads = await Lead.find(filter)
+    const leadDocuments = await Lead.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
+
+    // Transform leads to include both _id and id properties for client compatibility
+    const leads = leadDocuments.map(lead => ({
+      ...lead.toObject(),
+      id: lead._id.toString(), // Add id property for client-side compatibility
+    }));
 
     // Get total count for pagination
     const total = await Lead.countDocuments(filter);
@@ -121,11 +139,17 @@ export const getLeads = async (req: Request & { user?: any }, res: Response) => 
 // @access  Private
 export const getLeadById = async (req: Request & { user?: any }, res: Response) => {
   try {
-    const lead = await Lead.findById(req.params.id);
+    const leadDocument = await Lead.findById(req.params.id);
 
-    if (!lead) {
+    if (!leadDocument) {
       return res.status(404).json({ message: 'Lead not found' });
     }
+
+    // Transform lead to include both _id and id properties for client compatibility
+    const lead = {
+      ...leadDocument.toObject(),
+      id: leadDocument._id.toString(),
+    };
 
     return res.status(200).json(lead);
   } catch (error) {
@@ -159,7 +183,13 @@ export const updateLead = async (req: Request & { user?: any }, res: Response) =
     if (notes !== undefined) lead.notes = notes;
     if (tags) lead.tags = tags;
 
-    const updatedLead = await lead.save();
+    const updatedLeadDocument = await lead.save();
+
+    // Transform lead to include both _id and id properties for client compatibility
+    const updatedLead = {
+      ...updatedLeadDocument.toObject(),
+      id: updatedLeadDocument._id.toString(),
+    };
 
     return res.status(200).json(updatedLead);
   } catch (error) {
