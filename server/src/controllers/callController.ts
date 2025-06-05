@@ -8,6 +8,7 @@ import mongoose from 'mongoose';
 import { handleError } from '../utils/errorHandling';
 import twilio from 'twilio';
 import { EnhancedVoiceAIService } from '../services/enhancedVoiceAIService';
+import { unifiedAnalyticsService } from '../services/unifiedAnalyticsService';
 
 // Initialize Voice AI Service
 let voiceAIService = null as EnhancedVoiceAIService | null;
@@ -171,45 +172,19 @@ export const getCallHistory = async (req: Request & { user?: any }, res: Respons
       outcome
     } = req.query;
 
-    const pageNum = Number(page);
-    const limitNum = Number(limit);
-    const skip = (pageNum - 1) * limitNum;
-
-    // Build query
-    const query: any = {};
-
-    if (status) query.status = status;
-    if (campaignId) query.campaignId = campaignId;
-    if (leadId) query.leadId = leadId;
-    if (outcome) query.outcome = outcome;
-
-    // Date range filtering
-    if (startDate || endDate) {
-      query.startTime = {};
-      if (startDate) query.startTime.$gte = new Date(startDate as string);
-      if (endDate) query.startTime.$lte = new Date(endDate as string);
-    }
-
-    // Execute query with population
-    const calls = await Call.find(query)
-      .sort({ startTime: -1 })
-      .skip(skip)
-      .limit(limitNum)
-      .populate('leadId', 'name phoneNumber company')
-      .populate('campaignId', 'name');
-
-    // Get total count for pagination
-    const total = await Call.countDocuments(query);
-
-    return res.status(200).json({
-      calls,
-      pagination: {
-        total,
-        page: pageNum,
-        limit: limitNum,
-        pages: Math.ceil(total / limitNum)
-      }
+    // Use unified analytics service for consistent call history
+    const result = await unifiedAnalyticsService.getCallHistory({
+      page: Number(page),
+      limit: Number(limit),
+      status: status as string,
+      campaignId: campaignId as string,
+      leadId: leadId as string,
+      startDate: startDate ? new Date(startDate as string) : undefined,
+      endDate: endDate ? new Date(endDate as string) : undefined,
+      outcome: outcome as string
     });
+
+    return res.status(200).json(result);
   } catch (error) {
     logger.error('Error in getCallHistory:', error);
     return res.status(500).json({
@@ -392,146 +367,22 @@ export const getCallAnalytics = async (req: Request, res: Response): Promise<Res
   try {
     const { campaignId, startDate, endDate } = req.query;
 
-    // Date range for analytics
-    const dateQuery: any = {};
-    if (startDate) dateQuery.$gte = new Date(startDate as string);
-    if (endDate) dateQuery.$lte = new Date(endDate as string);
+    // Parse dates
+    const start = startDate ? new Date(startDate as string) : undefined;
+    const end = endDate ? new Date(endDate as string) : undefined;
 
-    // Base match criteria
-    const matchCriteria: any = {};
-    if (Object.keys(dateQuery).length > 0) {
-      matchCriteria.startTime = dateQuery;
-    }
-    if (campaignId) {
-      matchCriteria.campaign = new mongoose.Types.ObjectId(campaignId as string);
-    }
-
-    // Aggregate call data for analytics
-    const analytics = await Call.aggregate([
-      { $match: matchCriteria },
-      {
-        $group: {
-          _id: null,
-          totalCalls: { $sum: 1 },
-          completedCalls: { 
-            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] }
-          },
-          failedCalls: { 
-            $sum: { $cond: [{ $eq: ["$status", "failed"] }, 1, 0] }
-          },
-          averageDuration: { $avg: "$duration" },
-          totalDuration: { $sum: "$duration" },
-          positiveOutcomes: {
-            $sum: { 
-              $cond: [
-                { $in: ["$outcome", ["interested", "callback-requested"]] }, 
-                1, 
-                0
-              ] 
-            }
-          },
-          negativeOutcomes: {
-            $sum: { 
-              $cond: [
-                { $in: ["$outcome", ["not-interested", "do-not-call"]] }, 
-                1, 
-                0
-              ] 
-            }
-          },
-          // Count by outcome
-          outcomeStats: {
-            $push: "$outcome"
-          }
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          totalCalls: 1,
-          completedCalls: 1,
-          failedCalls: 1,
-          averageDuration: { $round: ["$averageDuration", 0] },
-          totalDuration: 1,
-          successRate: {
-            $cond: [
-              { $eq: ["$totalCalls", 0] },
-              0,
-              { $multiply: [{ $divide: ["$completedCalls", "$totalCalls"] }, 100] }
-            ]
-          },
-          conversionRate: {
-            $cond: [
-              { $eq: ["$completedCalls", 0] },
-              0,
-              { $multiply: [{ $divide: ["$positiveOutcomes", "$completedCalls"] }, 100] }
-            ]
-          },
-          negativeRate: {
-            $cond: [
-              { $eq: ["$completedCalls", 0] },
-              0,
-              { $multiply: [{ $divide: ["$negativeOutcomes", "$completedCalls"] }, 100] }
-            ]
-          },
-          outcomeStats: 1
-        }
-      }
-    ]);
-
-    // Process outcome stats to get counts by category
-    const result = analytics.length > 0 ? analytics[0] : {
-      totalCalls: 0,
-      completedCalls: 0,
-      failedCalls: 0,
-      averageDuration: 0,
-      totalDuration: 0,
-      successRate: 0,
-      conversionRate: 0,
-      negativeRate: 0,
-      outcomeStats: []
-    };
-
-    // Calculate outcome distribution
-    if (result.outcomeStats && result.outcomeStats.length > 0) {
-      const outcomeCount: Record<string, number> = {};
-      result.outcomeStats.forEach((outcome: string) => {
-        if (outcome) {
-          outcomeCount[outcome] = (outcomeCount[outcome] || 0) + 1;
-        }
-      });
-      (result as any).outcomes = outcomeCount;
-    }
-    delete result.outcomeStats;
-
-    // Get call volume by day
-    const callsByDay = await Call.aggregate([
-      { $match: matchCriteria },
-      {
-        $group: {
-          _id: { 
-            $dateToString: { format: "%Y-%m-%d", date: "$startTime" } 
-          },
-          count: { $sum: 1 },
-          completed: { 
-            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] }
-          },
-          successful: {
-            $sum: { 
-              $cond: [
-                { $in: ["$outcome", ["interested", "callback-requested"]] }, 
-                1, 
-                0
-              ] 
-            }
-          }
-        }
-      },
-      { $sort: { _id: 1 } }
+    // Use unified analytics service for consistent metrics
+    const [summary, callsByDay] = await Promise.all([
+      unifiedAnalyticsService.getCallMetrics(start, end, campaignId as string),
+      unifiedAnalyticsService.getCallTimeline(
+        start || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Default to last 30 days
+        end || new Date(),
+        campaignId as string
+      )
     ]);
 
     return res.status(200).json({
-      summary: result,
+      summary,
       callsByDay
     });
   } catch (error) {

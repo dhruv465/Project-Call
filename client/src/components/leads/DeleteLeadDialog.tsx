@@ -9,7 +9,7 @@ import {
   AlertDialogTitle,
 } from '../ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/useToast';
 import { leadsApi } from '@/services/leadsApi';
 
 interface DeleteLeadDialogProps {

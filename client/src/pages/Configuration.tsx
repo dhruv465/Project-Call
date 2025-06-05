@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import {
   Select,
   SelectContent,
@@ -27,11 +28,10 @@ import {
   AlertTriangle,
   Zap,
   Trash2,
-  Check,
-  X,
-  PhoneCall
+  PhoneCall,
+  Info
 } from 'lucide-react';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/useToast';
 import { configApi } from '@/services/configApi';
 import { PasswordInput } from '@/components/PasswordInput';
 
@@ -152,7 +152,6 @@ Keep the conversation natural and engaging. If they're not interested, politely 
   const [availableVoices, setAvailableVoices] = useState<{voiceId: string, name: string, previewUrl?: string}[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{type: string; name?: string} | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState<boolean | null>(null);
   const [availableModels, setAvailableModels] = useState<{ [provider: string]: ModelInfo[] }>({});
   const [loadingModels, setLoadingModels] = useState(false);
   const [apiKeyDebounceTimer, setApiKeyDebounceTimer] = useState<NodeJS.Timeout | null>(null);
@@ -173,43 +172,40 @@ Keep the conversation natural and engaging. If they're not interested, politely 
   // Load available voices
   const loadVoices = useCallback(async () => {
     try {
-      // Start with prebuilt voices
+      // Always start with prebuilt voices
       setAvailableVoices(prebuiltVoices);
       
-      // Check if API key is set and not masked
-      console.log('ElevenLabs API key status:', {
-        key: config.elevenLabsApiKey ? 'SET' : 'NOT SET',
-        length: config.elevenLabsApiKey?.length
-      });
+      // Use a direct access method without closures to avoid circular dependencies
+      const apiKey = config.elevenLabsApiKey;
       
-      // Try to fetch custom voices if API key is set
-      if (config.elevenLabsApiKey) {
+      // Check if API key is set
+      if (apiKey) {
         console.log('Fetching available voices from ElevenLabs...');
-        const result = await configApi.testElevenLabsConnection({
-          apiKey: config.elevenLabsApiKey
-        });
-        
-        if (result.success && result.details?.availableVoices) {
-          console.log(`Received ${result.details.availableVoices.length} voices from ElevenLabs`);
-          // Add custom voices if available
-          setAvailableVoices([
-            ...prebuiltVoices,
-            ...result.details.availableVoices
-          ]);
+        try {
+          const result = await configApi.testElevenLabsConnection({
+            apiKey: apiKey
+          });
+          
+          if (result.success && result.details?.availableVoices) {
+            console.log(`Received ${result.details.availableVoices.length} voices from ElevenLabs`);
+            // Add custom voices if available
+            setAvailableVoices([
+              ...prebuiltVoices,
+              ...result.details.availableVoices
+            ]);
+          }
+        } catch (err) {
+          console.error('Error fetching ElevenLabs voices:', err);
         }
       }
     } catch (error) {
       console.error('Error loading voices:', error);
       // Keep prebuilt voices as fallback
     }
-  }, [config.elevenLabsApiKey]);
+  }, []); // Remove all dependencies
 
   // Fetch available models from the API (for saved configurations)
   const fetchAvailableModels = useCallback(async () => {
-    if (!config.llmApiKey) {
-      return;
-    }
-
     try {
       setLoadingModels(true);
       const response = await api.get('/configuration/llm-models');
@@ -222,7 +218,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
     } finally {
       setLoadingModels(false);
     }
-  }, [config.llmApiKey]);
+  }, []);
 
   // Dynamically fetch models when user enters an API key
   const fetchModelsWithApiKey = useCallback(async (provider: string, apiKey: string) => {
@@ -237,18 +233,26 @@ Keep the conversation natural and engaging. If they're not interested, politely 
 
     try {
       setLoadingModels(true);
+      console.log(`Fetching models for provider: ${provider}`);
+      
+      // Use provider name as is - we no longer need to map 'gemini' to 'google'
       const response = await configApi.fetchModelsWithApiKey(provider, apiKey);
       
       if (response.success && response.models) {
+        // Store models under the original provider name requested
         setAvailableModels(prev => ({
           ...prev,
           [provider]: response.models
         }));
         
         // If no model is currently selected and models are available, select the first one
-        if (!config.llmModel && response.models.length > 0) {
-          updateConfig('llmModel', response.models[0].id);
-        }
+        // Use a separate function to avoid circular dependencies
+        setConfig(prevConfig => {
+          if (!prevConfig.llmModel && response.models.length > 0) {
+            return { ...prevConfig, llmModel: response.models[0].id };
+          }
+          return prevConfig;
+        });
       }
     } catch (error) {
       console.error(`Failed to fetch models for ${provider}:`, error);
@@ -267,7 +271,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
     } finally {
       setLoadingModels(false);
     }
-  }, [config.llmModel, toast]);
+  }, [toast]);
 
   // Clean up debounce timer on unmount
   useEffect(() => {
@@ -279,19 +283,23 @@ Keep the conversation natural and engaging. If they're not interested, politely 
   }, [apiKeyDebounceTimer]);
 
   useEffect(() => {
-    // Load voices when API key changes or on initial load
+    // Initial load of voices when component mounts
     loadVoices();
-  }, [config.elevenLabsApiKey, loadVoices]);
+    
+    // Set up an interval to refresh voices periodically
+    const interval = setInterval(() => {
+      loadVoices();
+    }, 60000); // Refresh every minute
+    
+    return () => clearInterval(interval);
+  }, []); // No dependencies to avoid infinite loops
 
   useEffect(() => {
-    // Fetch available models when provider or API key changes
-    fetchAvailableModels();
-  }, [config.llmProvider, config.llmApiKey, fetchAvailableModels]);
-
-  useEffect(() => {
-    // Fetch available models when provider or API key changes
-    fetchAvailableModels();
-  }, [config.llmProvider, config.llmApiKey, fetchAvailableModels]);
+    // Initial fetch of available models when component mounts
+    if (config.llmApiKey) {
+      fetchAvailableModels();
+    }
+  }, []); // No dependencies to avoid infinite loops
 
   useEffect(() => {
     // Fetch configuration from API
@@ -373,7 +381,6 @@ Keep the conversation natural and engaging. If they're not interested, politely 
 
   const handleSave = async () => {
     setSaving(true);
-    setSaveSuccess(null); // Reset save state
     try {
       // Debug log before save
       console.log('Saving configuration with voice settings:', {
@@ -420,21 +427,23 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             {
               name: 'openai',
               apiKey: config.llmProvider === 'openai' ? config.llmApiKey : '',
-              availableModels: ['gpt-3.5-turbo', 'gpt-4'],
+              availableModels: availableModels['openai']?.length > 0 ? availableModels['openai'].map(m => m.id) : [],
               isEnabled: config.llmProvider === 'openai',
               status: config.llmProvider === 'openai' ? config.llmStatus : 'unverified'
             },
             {
               name: 'anthropic',
               apiKey: config.llmProvider === 'anthropic' ? config.llmApiKey : '',
-              availableModels: ['claude-instant-1', 'claude-2'],
+              availableModels: availableModels['anthropic']?.length > 0 ? availableModels['anthropic'].map(m => m.id) : [],
               isEnabled: config.llmProvider === 'anthropic',
               status: config.llmProvider === 'anthropic' ? config.llmStatus : 'unverified'
             },
             {
               name: 'google',
               apiKey: config.llmProvider === 'google' ? config.llmApiKey : '',
-              availableModels: ['gemini-pro'],
+              availableModels: availableModels[config.llmProvider]?.length > 0 ? 
+                availableModels[config.llmProvider].map(m => m.id) : 
+                [],
               isEnabled: config.llmProvider === 'google',
               status: config.llmProvider === 'google' ? config.llmStatus : 'unverified'
             }
@@ -570,18 +579,12 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           };
       });
       
-      // Show success toast and update state
+      // Show success toast
       toast({
         title: "Configuration Saved",
         description: "Your settings have been successfully updated and applied.",
         variant: "default",
       });
-      setSaveSuccess(true);
-      
-      // Auto-hide the success indicator after 3 seconds
-      setTimeout(() => {
-        setSaveSuccess(null);
-      }, 3000);
     } catch (error) {
       console.error('Error saving configuration:', error);
       toast({
@@ -589,12 +592,6 @@ Keep the conversation natural and engaging. If they're not interested, politely 
         description: "Failed to save configuration. Please try again.",
         variant: "destructive",
       });
-      setSaveSuccess(false);
-      
-      // Auto-hide the error indicator after 5 seconds
-      setTimeout(() => {
-        setSaveSuccess(null);
-      }, 5000);
     } finally {
       setSaving(false);
     }
@@ -824,26 +821,20 @@ Keep the conversation natural and engaging. If they're not interested, politely 
 
   // Handle LLM provider changes
   const handleProviderChange = useCallback((newProvider: 'openai' | 'anthropic' | 'google') => {
-    // Update the provider
-    updateConfig('llmProvider', newProvider);
+    // Update the provider and reset related state
+    setConfig(prevConfig => ({
+      ...prevConfig,
+      llmProvider: newProvider,
+      llmModel: '', // Reset model when provider changes
+      llmStatus: 'unverified' // Reset status
+    }));
     
     // Clear current models for the new provider
     setAvailableModels(prev => ({
       ...prev,
       [newProvider]: []
     }));
-    
-    // Clear selected model if it doesn't exist for the new provider
-    if (config.llmModel && (!availableModels[newProvider] || !availableModels[newProvider].some(model => model.id === config.llmModel))) {
-      updateConfig('llmModel', '');
-    }
-    
-    // If we have an API key, trigger dynamic model fetching for the new provider
-    if (config.llmApiKey) {
-      console.log(`Provider changed to ${newProvider}, fetching models with existing API key`);
-      fetchModelsWithApiKey(newProvider, config.llmApiKey);
-    }
-  }, [updateConfig, config.llmModel, config.llmApiKey, availableModels, fetchModelsWithApiKey]);
+  }, []);
 
   // Handler for API key changes with debouncing
   const handleApiKeyChange = useCallback((value: string) => {
@@ -857,11 +848,15 @@ Keep the conversation natural and engaging. If they're not interested, politely 
     
     // Set a new timer to fetch models after user stops typing
     const timer = setTimeout(() => {
-      fetchModelsWithApiKey(config.llmProvider, value);
+      if (value && value.length >= 10) {
+        // Get the current provider state when the timer executes
+        const currentProvider = config.llmProvider;
+        fetchModelsWithApiKey(currentProvider, value);
+      }
     }, 1000); // 1 second delay
     
     setApiKeyDebounceTimer(timer);
-  }, [config.llmProvider, fetchModelsWithApiKey, apiKeyDebounceTimer, updateConfig]);
+  }, []); // Remove all dependencies to break circular references
 
   const handleDeleteItem = (type: string, name?: string) => {
     setItemToDelete({ type, name });
@@ -1052,12 +1047,13 @@ Keep the conversation natural and engaging. If they're not interested, politely 
     setTestLLMResponse("");
     
     try {
-      // Use correct provider name - map to server expected names
+      // Use provider name as is - we no longer need to map 'gemini' to 'google'
       const providerName = config.llmProvider.toLowerCase();
-      const serverProviderName = providerName; // No mapping needed now since frontend uses 'google'
+      
+      console.log(`Testing LLM chat with provider: ${providerName}`);
       
       const result = await configApi.testLLMChat({
-        provider: serverProviderName,
+        provider: providerName,
         model: config.llmModel,
         prompt: testLLMPrompt,
         temperature: config.temperature,
@@ -1154,7 +1150,25 @@ Keep the conversation natural and engaging. If they're not interested, politely 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Voice Provider</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-medium">Voice Provider</CardTitle>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <button className="h-5 w-5 text-muted-foreground hover:text-foreground">
+                    <Info className="h-4 w-4" />
+                  </button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Voice Provider</h4>
+                    <p className="text-sm text-muted-foreground">
+                      The AI voice synthesis service used to generate natural-sounding speech for phone calls. 
+                      ElevenLabs provides high-quality voice synthesis with emotional expression capabilities.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
             <Mic className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -1186,7 +1200,25 @@ Keep the conversation natural and engaging. If they're not interested, politely 
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">LLM Provider</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-medium">LLM Provider</CardTitle>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <button className="h-5 w-5 text-muted-foreground hover:text-foreground">
+                    <Info className="h-4 w-4" />
+                  </button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">LLM Provider</h4>
+                    <p className="text-sm text-muted-foreground">
+                      The Large Language Model provider that powers the AI's conversation abilities. 
+                      This includes understanding customer responses, generating appropriate replies, and handling objections during calls.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
             <Zap className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -1218,7 +1250,25 @@ Keep the conversation natural and engaging. If they're not interested, politely 
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Phone Service</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-medium">Phone Service</CardTitle>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <button className="h-5 w-5 text-muted-foreground hover:text-foreground">
+                    <Info className="h-4 w-4" />
+                  </button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Phone Service</h4>
+                    <p className="text-sm text-muted-foreground">
+                      The telephony service used to make outbound phone calls. Twilio provides reliable call connectivity, 
+                      call routing, and phone number management for the AI calling system.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
             <Phone className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -1253,10 +1303,28 @@ Keep the conversation natural and engaging. If they're not interested, politely 
       {/* AI Voice Settings */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Volume2 className="h-5 w-5" />
-            AI Voice Settings
-          </CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2">
+              <Volume2 className="h-5 w-5" />
+              AI Voice Settings
+            </CardTitle>
+            <HoverCard>
+              <HoverCardTrigger asChild>
+                <button className="h-5 w-5 text-muted-foreground hover:text-foreground">
+                  <Info className="h-4 w-4" />
+                </button>
+              </HoverCardTrigger>
+              <HoverCardContent className="w-80">
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold">AI Voice Settings</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Configure voice synthesis parameters including provider, voice selection, speed, stability, and clarity. 
+                    These settings control how natural and expressive the AI voice sounds during phone conversations.
+                  </p>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
+          </div>
           <CardDescription>
             Configure the voice synthesis for your AI calls
           </CardDescription>
@@ -1379,6 +1447,21 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           <CardTitle className="flex items-center gap-2">
             <Phone className="h-5 w-5" />
             Phone Integration
+            <HoverCard>
+              <HoverCardTrigger asChild>
+                <button className="ml-1 h-5 w-5 text-muted-foreground hover:text-foreground transition-colors">
+                  <Info className="h-5 w-5" />
+                </button>
+              </HoverCardTrigger>
+              <HoverCardContent className="w-80">
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold">Phone Integration</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Configure Twilio telephony service for making outbound calls. This includes account credentials and phone number settings for call routing and delivery.
+                  </p>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
           </CardTitle>
           <CardDescription>
             Configure Twilio settings for making calls
@@ -1454,6 +1537,21 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
             AI Model Configuration
+            <HoverCard>
+              <HoverCardTrigger asChild>
+                <button className="ml-1 h-5 w-5 text-muted-foreground hover:text-foreground transition-colors">
+                  <Info className="h-5 w-5" />
+                </button>
+              </HoverCardTrigger>
+              <HoverCardContent className="w-80">
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold">AI Model Configuration</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Configure the Large Language Model (LLM) provider and settings that power conversation intelligence. Includes model selection, response parameters, and system prompts.
+                  </p>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
           </CardTitle>
           <CardDescription>
             Configure the language model for conversations
@@ -1473,7 +1571,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                 <SelectContent>
                   <SelectItem value="openai">OpenAI</SelectItem>
                   <SelectItem value="anthropic">Anthropic</SelectItem>
-                  <SelectItem value="google">Google Gemini</SelectItem>
+                  <SelectItem value="google">Google AI</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1599,6 +1697,21 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           <CardTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5" />
             Call Settings
+            <HoverCard>
+              <HoverCardTrigger asChild>
+                <button className="ml-1 h-5 w-5 text-muted-foreground hover:text-foreground transition-colors">
+                  <Info className="h-5 w-5" />
+                </button>
+              </HoverCardTrigger>
+              <HoverCardContent className="w-80">
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold">Call Settings</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Configure call behavior parameters including maximum duration, retry logic, and timezone settings for optimal call management and scheduling.
+                  </p>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
           </CardTitle>
           <CardDescription>
             Configure call behavior and retry logic
@@ -1661,6 +1774,21 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           <CardTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5" />
             Webhook Integration
+            <HoverCard>
+              <HoverCardTrigger asChild>
+                <button className="ml-1 h-5 w-5 text-muted-foreground hover:text-foreground transition-colors">
+                  <Info className="h-5 w-5" />
+                </button>
+              </HoverCardTrigger>
+              <HoverCardContent className="w-80">
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold">Webhook Integration</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Configure webhook endpoints to receive real-time notifications about call events, status updates, and completion data for external system integration.
+                  </p>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
           </CardTitle>
           <CardDescription>
             Configure webhook for receiving call events
@@ -1729,22 +1857,6 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Save Success Indicator */}
-      {saveSuccess !== null && (
-        <div className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-lg transition-opacity duration-500 flex items-center gap-2 ${
-          saveSuccess ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-red-100 text-red-800 border border-red-300'
-        }`}>
-          {saveSuccess ? (
-            <Check className="h-5 w-5 text-green-600" />
-          ) : (
-            <X className="h-5 w-5 text-red-600" />
-          )}
-          {saveSuccess 
-            ? 'Configuration saved successfully!' 
-            : 'Failed to save configuration. Please try again.'}
-        </div>
-      )}
 
       {/* Test Call Dialog */}
       <AlertDialog open={openTestCallDialog} onOpenChange={setOpenTestCallDialog}>

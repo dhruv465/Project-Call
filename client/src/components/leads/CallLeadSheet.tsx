@@ -20,7 +20,7 @@ import {
   SelectValue 
 } from '../ui/select';
 
-import { useToast } from '../ui/use-toast';
+import { useToast } from '@/hooks/useToast';
 import { checkTelephonyConfiguration, ConfigurationStatus } from '../../utils/configurationUtils';
 import { callsApi } from '../../services/callsApi';
 import api from '../../services/api';

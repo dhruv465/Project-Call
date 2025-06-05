@@ -6,7 +6,8 @@ import {
   getCallDistribution,
   getConversationMetrics,
   getDetailedCallMetrics,
-  getSystemHealth
+  getSystemHealth,
+  getUnifiedCallMetrics
 } from '../controllers/analyticsController';
 
 const router = express.Router();
@@ -15,6 +16,7 @@ const router = express.Router();
 router.use(authenticate);
 
 // Analytics routes
+router.get('/unified-metrics', getUnifiedCallMetrics);
 router.get('/call-timeline', getCallTimeline);
 router.get('/campaign-performance', getCampaignPerformance);
 router.get('/call-distribution', getCallDistribution);

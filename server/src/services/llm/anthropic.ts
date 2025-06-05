@@ -194,128 +194,33 @@ export class AnthropicClient implements ILLMProviderClient {
   }
   
   async listModels(): Promise<string[]> {
-    // Anthropic doesn't have a list models API, so we'll return the known models
-    return [
-      'claude-3-opus-20240229',
-      'claude-3-sonnet-20240229',
-      'claude-3-haiku-20240307',
-      'claude-2.1',
-      'claude-2.0',
-      'claude-instant-1.2'
-    ];
+    // Anthropic doesn't have a list models API, and we avoid hardcoded fallbacks
+    // Users need to manually enter their preferred model names
+    try {
+      // Test if the API key works by making a small request
+      await this.testConnection();
+      // If connection works, return empty array since Anthropic doesn't provide model listing
+      logger.info('Anthropic API key is valid, but no model listing API is available');
+      return [];
+    } catch (error) {
+      logger.error(`Failed to validate Anthropic API key: ${error instanceof Error ? error.message : String(error)}`);
+      return [];
+    }
   }
 
   async getAvailableModels(): Promise<ModelInfo[]> {
-    // Anthropic model information with current pricing and capabilities
-    const models: ModelInfo[] = [
-      {
-        id: 'claude-3-opus-20240229',
-        name: 'Claude 3 Opus',
-        description: 'Most powerful model for highly complex tasks, with superior performance on reasoning, math, coding, and creative writing.',
-        maxTokens: 4096,
-        contextWindow: 200000,
-        pricing: {
-          input: 0.015,   // $15 per 1M tokens
-          output: 0.075   // $75 per 1M tokens
-        },
-        capabilities: {
-          chat: true,
-          completion: true,
-          streaming: true,
-          functionCalling: false,
-          vision: true
-        }
-      },
-      {
-        id: 'claude-3-sonnet-20240229',
-        name: 'Claude 3 Sonnet',
-        description: 'Ideal balance of intelligence and speed for enterprise workloads, with strong performance across a wide range of tasks.',
-        maxTokens: 4096,
-        contextWindow: 200000,
-        pricing: {
-          input: 0.003,   // $3 per 1M tokens
-          output: 0.015   // $15 per 1M tokens
-        },
-        capabilities: {
-          chat: true,
-          completion: true,
-          streaming: true,
-          functionCalling: false,
-          vision: true
-        }
-      },
-      {
-        id: 'claude-3-haiku-20240307',
-        name: 'Claude 3 Haiku',
-        description: 'Fastest and most compact model for near-instant responsiveness and seamless AI experiences.',
-        maxTokens: 4096,
-        contextWindow: 200000,
-        pricing: {
-          input: 0.00025,  // $0.25 per 1M tokens
-          output: 0.00125  // $1.25 per 1M tokens
-        },
-        capabilities: {
-          chat: true,
-          completion: true,
-          streaming: true,
-          functionCalling: false,
-          vision: true
-        }
-      },
-      {
-        id: 'claude-2.1',
-        name: 'Claude 2.1',
-        description: 'Previous generation model with strong performance on text-based tasks.',
-        maxTokens: 4096,
-        contextWindow: 200000,
-        pricing: {
-          input: 0.008,   // $8 per 1M tokens
-          output: 0.024   // $24 per 1M tokens
-        },
-        capabilities: {
-          chat: true,
-          completion: true,
-          streaming: true,
-          functionCalling: false
-        }
-      },
-      {
-        id: 'claude-2.0',
-        name: 'Claude 2.0',
-        description: 'Earlier version of Claude 2 with good performance on various tasks.',
-        maxTokens: 4096,
-        contextWindow: 100000,
-        pricing: {
-          input: 0.008,
-          output: 0.024
-        },
-        capabilities: {
-          chat: true,
-          completion: true,
-          streaming: true,
-          functionCalling: false
-        }
-      },
-      {
-        id: 'claude-instant-1.2',
-        name: 'Claude Instant 1.2',
-        description: 'Fast and cost-effective model for simple tasks and quick responses.',
-        maxTokens: 4096,
-        contextWindow: 100000,
-        pricing: {
-          input: 0.0008,   // $0.8 per 1M tokens
-          output: 0.0024   // $2.4 per 1M tokens
-        },
-        capabilities: {
-          chat: true,
-          completion: true,
-          streaming: true,
-          functionCalling: false
-        }
-      }
-    ];
-
-    return models;
+    // Anthropic doesn't have a public API to fetch model information dynamically
+    // We avoid hardcoded fallbacks and return empty array
+    try {
+      // Test if the API key works
+      await this.testConnection();
+      // If connection works, return empty array since Anthropic doesn't provide model info API
+      logger.info('Anthropic API key is valid, but no model information API is available');
+      return [];
+    } catch (error) {
+      logger.error(`Failed to validate Anthropic API key: ${error instanceof Error ? error.message : String(error)}`);
+      return [];
+    }
   }
   
   private convertMessages(messages: LLMMessage[]): { 

@@ -4,46 +4,17 @@ import Lead from '../models/Lead';
 import Campaign from '../models/Campaign';
 import { logger } from '../index';
 import { handleError } from '../utils/errorHandling';
+import { unifiedAnalyticsService } from '../services/unifiedAnalyticsService';
 
 // @desc    Get dashboard overview
 // @route   GET /api/dashboard/overview
 // @access  Private
 export const getDashboardOverview = async (req: Request & { user?: any }, res: Response) => {
   try {
-    // Get counts for various entities
-    const campaignCount = await Campaign.countDocuments({ createdBy: req.user.id });
-    const leadCount = await Lead.countDocuments();
-    const callCount = await Call.countDocuments();
-    const successfulCallCount = await Call.countDocuments({ status: 'completed' });
+    // Use unified analytics service for consistent metrics
+    const overview = await unifiedAnalyticsService.getDashboardOverview(req.user?.id);
     
-    // Calculate conversion rate
-    const conversionRate = callCount > 0 ? (successfulCallCount / callCount) : 0;
-    
-    // Get recent calls
-    const recentCalls = await Call.find()
-      .sort({ startTime: -1 })
-      .limit(5)
-      .populate('lead', 'name phoneNumber')
-      .populate('campaign', 'name');
-      
-    // Get active campaigns
-    const activeCampaigns = await Campaign.find({ createdBy: req.user.id })
-      .sort({ createdAt: -1 })
-      .limit(5);
-    
-    res.status(200).json({
-      stats: {
-        campaigns: campaignCount,
-        leads: leadCount,
-        calls: callCount,
-        successfulCalls: successfulCallCount,
-        conversionRate: conversionRate
-      },
-      recentActivity: {
-        calls: recentCalls,
-        campaigns: activeCampaigns
-      }
-    });
+    res.status(200).json(overview);
   } catch (error) {
     logger.error('Error in getDashboardOverview:', error);
     res.status(500).json({
@@ -58,28 +29,25 @@ export const getDashboardOverview = async (req: Request & { user?: any }, res: R
 // @access  Private
 export const getCallMetrics = async (_req: Request & { user?: any }, res: Response) => {
   try {
-    // Get call status distribution
-    const callStatusDistribution = await Call.aggregate([
-      { $group: { _id: '$status', count: { $sum: 1 } } }
-    ]);
+    // Use unified analytics service for consistent call metrics
+    const metrics = await unifiedAnalyticsService.getCallMetrics();
     
-    // Get call outcome distribution
-    const callOutcomeDistribution = await Call.aggregate([
-      { $group: { _id: '$outcome', count: { $sum: 1 } } }
-    ]);
+    // Transform to expected format for backward compatibility
+    const callStatusDistribution = [
+      { _id: 'completed', count: metrics.completedCalls },
+      { _id: 'failed', count: metrics.failedCalls },
+      { _id: 'other', count: metrics.totalCalls - metrics.completedCalls - metrics.failedCalls }
+    ].filter(item => item.count > 0);
     
-    // Get average call duration
-    const averageDurationResult = await Call.aggregate([
-      { $match: { duration: { $gt: 0 } } },
-      { $group: { _id: null, average: { $avg: '$duration' } } }
-    ]);
-    
-    const averageDuration = averageDurationResult.length > 0 ? averageDurationResult[0].average : 0;
+    const callOutcomeDistribution = Object.entries(metrics.outcomes).map(([outcome, count]) => ({
+      _id: outcome,
+      count
+    }));
     
     res.status(200).json({
       statusDistribution: callStatusDistribution,
       outcomeDistribution: callOutcomeDistribution,
-      averageDuration
+      averageDuration: metrics.averageDuration
     });
   } catch (error) {
     logger.error('Error in getCallMetrics:', error);

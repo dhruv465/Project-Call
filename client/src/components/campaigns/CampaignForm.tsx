@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import api from "@/services/api";
 import { configApi } from "@/services/configApi";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/hooks/useToast";
 
 // Custom styles with consistent spacing
 const inputStyles =

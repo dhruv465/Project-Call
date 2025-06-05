@@ -2,34 +2,28 @@ import { useState, useEffect } from 'react';
 import { useQuery } from 'react-query';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { LineChart, PieChart, Phone, Users, Calendar, Clock, CheckCircle } from 'lucide-react';
-import { useToast } from '@/components/ui/use-toast';
+import { LineChart, PieChart, Phone, Users, Calendar, Clock, CheckCircle, Info } from 'lucide-react';
+import { useToast } from '@/hooks/useToast';
 import { Skeleton } from "@/components/ui/skeleton";
-import { useSocketIO } from '@/hooks/useSocketIO';
-import { Line, Pie } from 'react-chartjs-2';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement
-} from 'chart.js';
-
-// Register Chart.js components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement
-);
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+} from '@/components/ui/chart';
+import { useSocketIO } from '@/hooks/useSocketIO';
+import api from '@/services/api';
+import {
+  Area,
+  AreaChart,
+  Pie,
+  PieChart as RechartsPieChart,
+  Cell,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 // Type definitions
 interface RecentCall {
@@ -59,6 +53,26 @@ interface DashboardData {
   conversionRate: number;
   recentCalls: RecentCall[];
   upcomingCallbacks: UpcomingCallback[];
+  // Optional additional metrics from consolidated analytics
+  metrics?: {
+    totalCalls: number;
+    completedCalls: number;
+    successfulCalls: number;
+    failedCalls: number;
+    averageDuration: number;
+    totalDuration: number;
+    successRate: number;
+    conversionRate: number;
+    negativeRate: number;
+    outcomes: Record<string, number>;
+  };
+  timeline?: Array<{
+    date: string;
+    totalCalls: number;
+    completedCalls: number;
+    successfulCalls: number;
+    averageDuration: number;
+  }>;
 }
 
 // Dashboard data will be fetched from the server
@@ -73,32 +87,43 @@ const Dashboard = () => {
     ['dashboardOverview', timeframe],
     async () => {
       try {
-        // Fetch data from API
-        const response = await fetch(`/api/dashboard/overview?timeframe=${timeframe}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        if (!response.ok) {
-          // For 404 Not Found errors, return empty data instead of throwing
-          if (response.status === 404) {
-            return {
-              totalCalls: 0,
-              connectedCalls: 0,
-              activeLeads: 0,
-              callsToday: 0,
-              averageCallDuration: "0",
-              conversionRate: 0,
-              recentCalls: [],
-              upcomingCallbacks: []
-            };
-          }
-          throw new Error('Failed to fetch dashboard data');
+        // Use the consolidated analytics endpoint for consistent data
+        const params = new URLSearchParams();
+        if (timeframe !== 'all') {
+          const startDate = new Date();
+          // Map timeframe to days
+          const timeframeDays = {
+            'week': 7,
+            'month': 30,
+            'quarter': 90,
+            'year': 365
+          };
+          const days = timeframeDays[timeframe as keyof typeof timeframeDays] || 30;
+          startDate.setDate(startDate.getDate() - days);
+          params.append('startDate', startDate.toISOString());
         }
         
-        return await response.json();
+        const response = await api.get(`/analytics/unified-metrics?${params.toString()}`);
+        
+        if (response.data?.data) {
+          // Transform analytics data to dashboard format for compatibility
+          const analyticsData = response.data.data;
+          return {
+            totalCalls: analyticsData.summary.totalCalls,
+            connectedCalls: analyticsData.summary.completedCalls,
+            activeLeads: 0, // This would need to be fetched separately if needed
+            callsToday: analyticsData.summary.totalCalls, // Simplified for now
+            averageCallDuration: `${Math.floor(analyticsData.summary.averageDuration / 60)}:${(analyticsData.summary.averageDuration % 60).toString().padStart(2, '0')}`,
+            conversionRate: Math.round(analyticsData.summary.conversionRate),
+            recentCalls: [],
+            upcomingCallbacks: [],
+            // Add the comprehensive metrics from analytics
+            metrics: analyticsData.summary,
+            timeline: analyticsData.timeline
+          };
+        }
+        
+        throw new Error('No data received from API');
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         // Return empty data for new installations
@@ -176,95 +201,116 @@ const Dashboard = () => {
 
   // Generate chart data based on dashboard state
   const generateChartData = () => {
-    // Default empty data
-    const defaultLineData = {
-      labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-      datasets: [
-        {
-          label: 'Calls',
-          data: [0, 0, 0, 0, 0, 0, 0],
-          borderColor: 'rgb(59, 130, 246)',
-          backgroundColor: 'rgba(59, 130, 246, 0.5)',
-          tension: 0.3,
-        }
-      ]
-    };
-
-    const defaultPieData = {
-      labels: ['Connected', 'Not Connected', 'Voicemail'],
-      datasets: [
-        {
-          data: [0, 0, 0],
-          backgroundColor: [
-            'rgba(34, 197, 94, 0.7)',
-            'rgba(239, 68, 68, 0.7)',
-            'rgba(234, 179, 8, 0.7)',
-          ],
-          borderColor: [
-            'rgb(34, 197, 94)',
-            'rgb(239, 68, 68)',
-            'rgb(234, 179, 8)',
-          ],
-          borderWidth: 1,
-        },
-      ],
-    };
-
-    // If we have no data, return default empty charts
+    // No default data for empty state - we want to show only real data
+    // If we have no data, return empty arrays with proper typing
     if (!dashboardState) {
-      return { lineData: defaultLineData, pieData: defaultPieData };
+      return { 
+        areaData: [] as { day: string, calls: number }[], 
+        pieData: [] as { name: string, value: number, fill: string }[] 
+      };
     }
 
-    // Generate mock data based on our available metrics
-    // In a real app, this would come from the API
-    let totalCalls = dashboardState.totalCalls;
-    if (totalCalls === 0 && systemMetrics?.totalCalls24h) {
-      totalCalls = systemMetrics.totalCalls24h;
-    }
-
-    // Generate some random but reasonable data for the line chart
-    const callsPerDay = Array(7).fill(0).map(() => 
-      Math.max(0, Math.floor(totalCalls / 7 * (0.7 + Math.random() * 0.6)))
-    );
+    // Generate area chart data from timeline
+    let areaData: { day: string, calls: number }[] = [];
     
-    // Ensure the sum is close to the total calls
-    const sum = callsPerDay.reduce((a, b) => a + b, 0);
-    if (sum > 0) {
-      const ratio = totalCalls / sum;
-      callsPerDay.forEach((_, i) => {
-        callsPerDay[i] = Math.floor(callsPerDay[i] * ratio);
+    if (dashboardState?.timeline && dashboardState.timeline.length > 0) {
+      // If we have timeline data from the API, use it (same as Analytics page)
+      const recentData = dashboardState.timeline.slice(-7);
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      
+      // Generate data for the area chart based on timeline
+      areaData = recentData.map((item) => {
+        const date = new Date(item.date);
+        const dayName = dayNames[date.getDay()];
+        return {
+          day: dayName,
+          calls: item.totalCalls || 0
+        };
       });
     }
     
-    const lineData = {
-      ...defaultLineData,
-      datasets: [
-        {
-          ...defaultLineData.datasets[0],
-          data: callsPerDay
+    // Pie chart data based on metrics
+    let pieData: { name: string, value: number, fill: string }[] = [];
+    
+    if (dashboardState?.metrics?.outcomes && Object.keys(dashboardState.metrics.outcomes).length > 0) {
+      // If we have outcome data from the API, use it (same format as Analytics page)
+      const outcomes = dashboardState.metrics.outcomes;
+      
+      pieData = Object.entries(outcomes).map(([outcome, value]) => {
+        const name = outcome.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
+        let fill: string;
+        
+        switch (outcome.toLowerCase()) {
+          case 'interested':
+          case 'callback-requested':
+            fill = '#22c55e';
+            break;
+          case 'not-interested':
+          case 'do-not-call':
+            fill = '#ef4444';
+            break;
+          case 'voicemail':
+            fill = '#eab308';
+            break;
+          case 'no-answer':
+            fill = '#9ca3af';
+            break;
+          default:
+            fill = '#3b82f6';
+            break;
         }
-      ]
-    };
+        
+        return { name, value, fill };
+      });
+    } else {
+      // We want to show only real data, so return empty array if no outcomes available
+      pieData = [];
+    }
     
-    // Pie chart data based on current metrics
-    const connectedCalls = dashboardState.connectedCalls || 0;
-    const notConnected = Math.max(0, totalCalls - connectedCalls - Math.floor(totalCalls * 0.2));
-    const voicemail = totalCalls - connectedCalls - notConnected;
-    
-    const pieData = {
-      ...defaultPieData,
-      datasets: [
-        {
-          ...defaultPieData.datasets[0],
-          data: [connectedCalls, notConnected, voicemail]
-        }
-      ]
-    };
-    
-    return { lineData, pieData };
+    return { areaData, pieData };
   };
   
-  const { lineData, pieData } = generateChartData();
+  const { areaData, pieData } = generateChartData();
+
+  // Chart configuration for shadcn/ui
+  const chartConfig = {
+    calls: {
+      label: "Calls",
+      color: "hsl(var(--chart-1))",
+    },
+    connected: {
+      label: "Connected",
+      color: "#22c55e",
+    },
+    "not-connected": {
+      label: "Not Connected",
+      color: "#ef4444",
+    },
+    voicemail: {
+      label: "Voicemail",
+      color: "#eab308",
+    },
+    interested: {
+      label: "Interested",
+      color: "#22c55e",
+    },
+    "callback-requested": {
+      label: "Callback Requested", 
+      color: "#22c55e",
+    },
+    "not-interested": {
+      label: "Not Interested",
+      color: "#ef4444",
+    },
+    "do-not-call": {
+      label: "Do Not Call",
+      color: "#ef4444",
+    },
+    "no-answer": {
+      label: "No Answer",
+      color: "#9ca3af",
+    },
+  };
 
   useEffect(() => {
     if (error) {
@@ -382,7 +428,25 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-4 flex flex-col">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-muted-foreground">Total Calls</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Total Calls</h3>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
+                    <Info className="h-3 w-3 text-muted-foreground" />
+                    <span className="sr-only">Info</span>
+                  </Button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Total Calls</h4>
+                    <p className="text-sm text-muted-foreground">
+                      The total number of outbound calls made across all campaigns and time periods.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
             <Phone className="h-4 w-4 text-muted-foreground" />
           </div>
           <p className="text-2xl font-bold mt-2">{displayData.totalCalls}</p>
@@ -395,7 +459,25 @@ const Dashboard = () => {
         
         <Card className="p-4 flex flex-col">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-muted-foreground">Active Leads</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Active Leads</h3>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
+                    <Info className="h-3 w-3 text-muted-foreground" />
+                    <span className="sr-only">Info</span>
+                  </Button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Active Leads</h4>
+                    <p className="text-sm text-muted-foreground">
+                      The number of leads currently available for calling and follow-up activities.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
             <Users className="h-4 w-4 text-muted-foreground" />
           </div>
           <p className="text-2xl font-bold mt-2">{displayData.activeLeads}</p>
@@ -406,7 +488,25 @@ const Dashboard = () => {
         
         <Card className="p-4 flex flex-col">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-muted-foreground">Avg. Call Duration</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Avg. Call Duration</h3>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
+                    <Info className="h-3 w-3 text-muted-foreground" />
+                    <span className="sr-only">Info</span>
+                  </Button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Average Call Duration</h4>
+                    <p className="text-sm text-muted-foreground">
+                      The average length of time for all completed calls, including talk time.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </div>
           <p className="text-2xl font-bold mt-2">{displayData.averageCallDuration}</p>
@@ -417,7 +517,25 @@ const Dashboard = () => {
         
         <Card className="p-4 flex flex-col">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-muted-foreground">Conversion Rate</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Conversion Rate</h3>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
+                    <Info className="h-3 w-3 text-muted-foreground" />
+                    <span className="sr-only">Info</span>
+                  </Button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Conversion Rate</h4>
+                    <p className="text-sm text-muted-foreground">
+                      The percentage of connected calls that resulted in a positive outcome or next step.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </div>
           <p className="text-2xl font-bold mt-2">{displayData.conversionRate}%</p>
@@ -432,38 +550,45 @@ const Dashboard = () => {
         {/* Main Chart */}
         <Card className="xl:col-span-2 p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base sm:text-lg font-medium">Call Volume Trends</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-medium">Call Volume Trends</h3>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
+                    <Info className="h-3 w-3 text-muted-foreground" />
+                    <span className="sr-only">Info</span>
+                  </Button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Call Volume Trends</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Weekly call volume trends showing the number of calls made over time to help identify patterns and optimize timing.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
             <LineChart className="h-5 w-5 text-muted-foreground" />
           </div>
           <div className="h-[250px] sm:h-[300px] flex items-center justify-center border-t pt-4">
-            {!dashboardState ? (
+            {(!dashboardState || areaData.length === 0) ? (
               <p className="text-muted-foreground text-xs sm:text-sm text-center px-4">No data available for chart visualization</p>
             ) : (
-              <Line 
-                data={lineData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: 'top' as const,
-                    },
-                    title: {
-                      display: true,
-                      text: 'Weekly Call Volume',
-                    },
-                  },
-                  scales: {
-                    y: {
-                      beginAtZero: true,
-                      ticks: {
-                        precision: 0
-                      }
-                    }
-                  }
-                }}
-                className="w-full h-full"
-              />
+              <ChartContainer config={chartConfig} className="h-full w-full">
+                <AreaChart data={areaData}>
+                  <XAxis dataKey="day" />
+                  <YAxis />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Area
+                    type="monotone"
+                    dataKey="calls"
+                    stroke="hsl(var(--chart-1))"
+                    fill="hsl(var(--chart-1))"
+                    fillOpacity={0.6}
+                  />
+                </AreaChart>
+              </ChartContainer>
             )}
           </div>
         </Card>
@@ -471,30 +596,56 @@ const Dashboard = () => {
         {/* Call Outcomes */}
         <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base sm:text-lg font-medium">Call Outcomes</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-medium">Call Outcomes</h3>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
+                    <Info className="h-3 w-3 text-muted-foreground" />
+                    <span className="sr-only">Info</span>
+                  </Button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Call Outcomes</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Distribution of call outcomes showing the proportion of interested, not interested, and other call results.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
             <PieChart className="h-5 w-5 text-muted-foreground" />
           </div>
-          <div className="h-[250px] sm:h-[300px] flex items-center justify-center border-t pt-4">
-            {!dashboardState ? (
-              <p className="text-muted-foreground text-xs sm:text-sm text-center px-4">No data available for chart visualization</p>
+          <div className="h-[250px] sm:h-[300px]">
+            {(!dashboardState || pieData.length === 0) ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <p className="text-xs sm:text-sm text-center px-4">No data available for chart visualization</p>
+              </div>
             ) : (
-              <Pie 
-                data={pieData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: 'right' as const,
-                    },
-                    title: {
-                      display: true,
-                      text: 'Call Outcomes Distribution',
-                    },
-                  }
-                }}
-                className="w-full h-full"
-              />
+              <ChartContainer config={chartConfig} className="h-full w-full">
+                <RechartsPieChart>
+                  <ChartTooltip
+                    cursor={false}
+                    content={<ChartTooltipContent hideLabel />}
+                  />
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={60}
+                    strokeWidth={5}
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <ChartLegend
+                    content={<ChartLegendContent nameKey="name" />}
+                    className="-translate-y-2 flex-wrap gap-2 [&>*]:basis-1/3 [&>*]:justify-center"
+                  />
+                </RechartsPieChart>
+              </ChartContainer>
             )}
           </div>
         </Card>

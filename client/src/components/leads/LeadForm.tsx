@@ -17,7 +17,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '../ui/select';
-import { useToast } from '../ui/use-toast';
+import { useToast } from '@/hooks/useToast';
 import { leadsApi } from '../../services/leadsApi';
 
 // Lead form props interface

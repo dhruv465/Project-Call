@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from 'react-query';
 import {
-  BarChart3,
   TrendingUp,
   Phone,
   Users,
@@ -14,6 +13,8 @@ import {
   RefreshCw,
   Info,
   CheckCircle,
+  PieChart,
+  LineChart,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,12 +29,29 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from '@/components/ui/hover-card';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+} from '@/components/ui/chart';
 import api from '@/services/api';
+import {
+  Area,
+  AreaChart,
+  Pie,
+  PieChart as RechartsPieChart,
+  Cell,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 interface AnalyticsData {
   summary: {
     totalCalls: number;
     completedCalls: number;
+    successfulCalls: number;
     failedCalls: number;
     averageDuration: number;
     totalDuration: number;
@@ -42,11 +60,12 @@ interface AnalyticsData {
     negativeRate: number;
     outcomes?: Record<string, number>;
   };
-  callsByDay: Array<{
-    _id: string;
-    count: number;
-    completed: number;
-    successful: number;
+  timeline: Array<{
+    date: string;
+    totalCalls: number;
+    completedCalls: number;
+    successfulCalls: number;
+    averageDuration: number;
   }>;
 }
 
@@ -65,8 +84,9 @@ const Analytics = () => {
           params.append('startDate', startDate.toISOString());
         }
 
-        const response = await api.get(`/calls/analytics?${params.toString()}`);
-        return response.data;
+        // Use the unified analytics endpoint for consistent data
+        const response = await api.get(`/analytics/unified-metrics?${params.toString()}`);
+        return response.data.data; // Extract data from the success response
       } catch (error) {
         console.error('Failed to fetch analytics:', error);
         // Clear any cached data that might be causing issues
@@ -82,6 +102,7 @@ const Analytics = () => {
           summary: {
             totalCalls: 0,
             completedCalls: 0,
+            successfulCalls: 0,
             failedCalls: 0,
             averageDuration: 0,
             totalDuration: 0,
@@ -90,7 +111,7 @@ const Analytics = () => {
             negativeRate: 0,
             outcomes: {}
           },
-          callsByDay: []
+          timeline: []
         };
       }
     },
@@ -109,18 +130,6 @@ const Analytics = () => {
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat().format(num);
-  };
-
-  const getOutcomeColor = (outcome: string) => {
-    const colors: Record<string, string> = {
-      'interested': 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100',
-      'callback-requested': 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100',
-      'not-interested': 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100',
-      'do-not-call': 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100',
-      'voicemail': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100',
-      'no-answer': 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100',
-    };
-    return colors[outcome] || 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100';
   };
 
   if (isLoading) {
@@ -171,6 +180,7 @@ const Analytics = () => {
     summary: {
       totalCalls: 0,
       completedCalls: 0,
+      successfulCalls: 0,
       failedCalls: 0,
       averageDuration: 0,
       totalDuration: 0,
@@ -179,7 +189,104 @@ const Analytics = () => {
       negativeRate: 0,
       outcomes: {}
     },
-    callsByDay: []
+    timeline: []
+  };
+
+  // Generate area chart data from timeline
+  const generateAreaChartData = () => {
+    if (!displayData?.timeline || displayData.timeline.length === 0) {
+      return []; // Return empty array instead of mock data
+    }
+
+    // If we have data, process it to show real data
+    const recentData = displayData.timeline.slice(-7);
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
+    // Generate data for the area chart based on timeline
+    return recentData.map((item) => {
+      const date = new Date(item.date);
+      const dayName = dayNames[date.getDay()];
+      return {
+        day: dayName,
+        calls: item.totalCalls || 0
+      };
+    });
+  };
+
+  // Generate pie chart data for call outcomes
+  const generatePieChartData = () => {
+    if (!displayData?.summary?.outcomes || Object.keys(displayData.summary.outcomes).length === 0) {
+      return []; // Return empty array instead of mock data
+    }
+
+    const outcomes = displayData.summary.outcomes;
+    
+    return Object.entries(outcomes).map(([outcome, value]) => {
+      const name = outcome.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
+      let fill: string;
+      
+      switch (outcome.toLowerCase()) {
+        case 'interested':
+        case 'callback-requested':
+          fill = '#22c55e';
+          break;
+        case 'not-interested':
+        case 'do-not-call':
+          fill = '#ef4444';
+          break;
+        case 'voicemail':
+          fill = '#eab308';
+          break;
+        case 'no-answer':
+          fill = '#9ca3af';
+          break;
+        default:
+          fill = '#3b82f6';
+          break;
+      }
+      
+      return { name, value, fill };
+    });
+  };
+
+  // Chart configuration for shadcn/ui
+  const chartConfig = {
+    calls: {
+      label: "Calls",
+      color: "hsl(var(--chart-1))",
+    },
+    connected: {
+      label: "Connected",
+      color: "#22c55e",
+    },
+    "not-connected": {
+      label: "Not Connected",
+      color: "#ef4444",
+    },
+    voicemail: {
+      label: "Voicemail",
+      color: "#eab308",
+    },
+    interested: {
+      label: "Interested",
+      color: "#22c55e",
+    },
+    "callback-requested": {
+      label: "Callback Requested", 
+      color: "#22c55e",
+    },
+    "not-interested": {
+      label: "Not Interested",
+      color: "#ef4444",
+    },
+    "do-not-call": {
+      label: "Do Not Call",
+      color: "#ef4444",
+    },
+    "no-answer": {
+      label: "No Answer",
+      color: "#9ca3af",
+    },
   };
 
   return (
@@ -213,17 +320,16 @@ const Analytics = () => {
         </div>
       </div>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
-        <Card className="p-4 sm:p-6">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="p-4 flex flex-col">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 min-w-0">
-              <Phone className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-              <h3 className="font-medium truncate">Total Calls</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Total Calls</h3>
               <HoverCard>
                 <HoverCardTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 p-0 flex-shrink-0">
-                    <Info className="h-4 w-4 text-muted-foreground" />
+                  <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
+                    <Info className="h-3 w-3 text-muted-foreground" />
                     <span className="sr-only">Info</span>
                   </Button>
                 </HoverCardTrigger>
@@ -237,22 +343,22 @@ const Analytics = () => {
                 </HoverCardContent>
               </HoverCard>
             </div>
-            <p className="text-xl sm:text-2xl font-bold">{formatNumber(displayData.summary.totalCalls)}</p>
+            <Phone className="h-4 w-4 text-muted-foreground" />
           </div>
-          <div className="text-xs text-muted-foreground">
+          <p className="text-2xl font-bold mt-2">{formatNumber(displayData.summary.totalCalls)}</p>
+          <p className="text-xs text-muted-foreground mt-1">
             {displayData.summary.completedCalls} completed, {displayData.summary.failedCalls} failed
-          </div>
+          </p>
         </Card>
 
-        <Card className="p-4 sm:p-6">
+        <Card className="p-4 flex flex-col">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 min-w-0">
-              <CheckCircle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-              <h3 className="font-medium truncate">Success Rate</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Success Rate</h3>
               <HoverCard>
                 <HoverCardTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 p-0 flex-shrink-0">
-                    <Info className="h-4 w-4 text-muted-foreground" />
+                  <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
+                    <Info className="h-3 w-3 text-muted-foreground" />
                     <span className="sr-only">Info</span>
                   </Button>
                 </HoverCardTrigger>
@@ -266,22 +372,22 @@ const Analytics = () => {
                 </HoverCardContent>
               </HoverCard>
             </div>
-            <p className="text-xl sm:text-2xl font-bold">{displayData.summary.successRate.toFixed(1)}%</p>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </div>
-          <div className="text-xs text-muted-foreground">
+          <p className="text-2xl font-bold mt-2">{displayData.summary.successRate.toFixed(1)}%</p>
+          <p className="text-xs text-muted-foreground mt-1">
             Based on {displayData.summary.completedCalls} completed calls
-          </div>
+          </p>
         </Card>
 
-        <Card className="p-4 sm:p-6">
+        <Card className="p-4 flex flex-col">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 min-w-0">
-              <Target className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-              <h3 className="font-medium truncate">Conversion Rate</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Conversion Rate</h3>
               <HoverCard>
                 <HoverCardTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 p-0 flex-shrink-0">
-                    <Info className="h-4 w-4 text-muted-foreground" />
+                  <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
+                    <Info className="h-3 w-3 text-muted-foreground" />
                     <span className="sr-only">Info</span>
                   </Button>
                 </HoverCardTrigger>
@@ -295,22 +401,22 @@ const Analytics = () => {
                 </HoverCardContent>
               </HoverCard>
             </div>
-            <p className="text-xl sm:text-2xl font-bold">{displayData.summary.conversionRate.toFixed(1)}%</p>
+            <Target className="h-4 w-4 text-muted-foreground" />
           </div>
-          <div className="text-xs text-muted-foreground">
+          <p className="text-2xl font-bold mt-2">{displayData.summary.conversionRate.toFixed(1)}%</p>
+          <p className="text-xs text-muted-foreground mt-1">
             Positive outcomes
-          </div>
+          </p>
         </Card>
 
-        <Card className="p-4 sm:p-6">
+        <Card className="p-4 flex flex-col">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 min-w-0">
-              <Clock className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-              <h3 className="font-medium truncate">Avg Duration</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Avg Duration</h3>
               <HoverCard>
                 <HoverCardTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 p-0 flex-shrink-0">
-                    <Info className="h-4 w-4 text-muted-foreground" />
+                  <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
+                    <Info className="h-3 w-3 text-muted-foreground" />
                     <span className="sr-only">Info</span>
                   </Button>
                 </HoverCardTrigger>
@@ -324,83 +430,127 @@ const Analytics = () => {
                 </HoverCardContent>
               </HoverCard>
             </div>
-            <p className="text-xl sm:text-2xl font-bold">{formatDuration(displayData.summary.averageDuration)}</p>
+            <Clock className="h-4 w-4 text-muted-foreground" />
           </div>
-          <div className="text-xs text-muted-foreground">
+          <p className="text-2xl font-bold mt-2">{formatDuration(displayData.summary.averageDuration)}</p>
+          <p className="text-xs text-muted-foreground mt-1">
             Per completed call
+          </p>
+        </Card>
+      </div>
+
+      {/* Charts and Data Section */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
+        {/* Main Chart - Call Volume Trends */}
+        <Card className="xl:col-span-2 p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-medium">Call Volume Trends</h3>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
+                    <Info className="h-3 w-3 text-muted-foreground" />
+                    <span className="sr-only">Info</span>
+                  </Button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Call Volume Trends</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Weekly call volume trends showing the number of calls made over time to help identify patterns and optimize timing.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
+            <LineChart className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <div className="h-[250px] sm:h-[300px] flex items-center justify-center border-t pt-4">
+            {!displayData?.timeline || displayData.timeline.length === 0 ? (
+              <p className="text-muted-foreground text-xs sm:text-sm text-center px-4">No data available for chart visualization</p>
+            ) : (
+              <ChartContainer config={chartConfig} className="h-full w-full">
+                <AreaChart data={generateAreaChartData()}>
+                  <XAxis dataKey="day" />
+                  <YAxis />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Area
+                    type="monotone"
+                    dataKey="calls"
+                    stroke="hsl(var(--chart-1))"
+                    fill="hsl(var(--chart-1))"
+                    fillOpacity={0.6}
+                  />
+                </AreaChart>
+              </ChartContainer>
+            )}
+          </div>
+        </Card>
+
+        {/* Call Outcomes Pie Chart */}
+        <Card className="p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-medium">Call Outcomes</h3>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
+                    <Info className="h-3 w-3 text-muted-foreground" />
+                    <span className="sr-only">Info</span>
+                  </Button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Call Outcomes</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Distribution of call outcomes showing the proportion of interested, not interested, and other call results.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
+            <PieChart className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <div className="h-[250px] sm:h-[300px]">
+            {!displayData?.summary?.outcomes || Object.keys(displayData.summary.outcomes).length === 0 ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <p className="text-xs sm:text-sm text-center px-4">No outcome data available for chart visualization</p>
+              </div>
+            ) : (
+              <ChartContainer config={chartConfig} className="h-full w-full">
+                <RechartsPieChart>
+                  <ChartTooltip
+                    cursor={false}
+                    content={<ChartTooltipContent hideLabel />}
+                  />
+                  <Pie
+                    data={generatePieChartData()}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={60}
+                    strokeWidth={5}
+                  >
+                    {generatePieChartData().map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <ChartLegend
+                    content={<ChartLegendContent nameKey="name" />}
+                    className="-translate-y-2 flex-wrap gap-2 [&>*]:basis-1/4 [&>*]:justify-center"
+                  />
+                </RechartsPieChart>
+              </ChartContainer>
+            )}
           </div>
         </Card>
       </div>
 
-      {/* Call Volume Chart */}
-      <Card className="p-4 sm:p-6">
-        <h3 className="text-lg font-semibold mb-4">Call Volume Trends</h3>
-        <div className="h-48 sm:h-64 flex items-end justify-center gap-1 overflow-x-auto">
-          {displayData.callsByDay.length > 0 ? (
-            displayData.callsByDay.slice(-14).map((day: { _id: string; count: number; completed: number; successful: number }) => {
-              const maxCount = Math.max(...displayData.callsByDay.map((d: { _id: string; count: number; completed: number; successful: number }) => d.count));
-              return (
-                <div key={day._id} className="flex flex-col items-center gap-1 flex-shrink-0">
-                  <div
-                    className="w-4 sm:w-6 bg-primary rounded-t"
-                    style={{
-                      height: `${Math.max(maxCount > 0 ? (day.count / maxCount) * 150 : 4, 4)}px`,
-                    }}
-                    title={`${day.count} calls on ${new Date(day._id).toLocaleDateString()}`}
-                  />
-                  <span className="text-xs text-muted-foreground transform -rotate-45 origin-left whitespace-nowrap">
-                    {new Date(day._id).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </span>
-                </div>
-              );
-            })
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <div className="text-center">
-                <BarChart3 className="h-8 sm:h-12 w-8 sm:w-12 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No call data available</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </Card>
-
-      {/* Outcome Distribution */}
-      {displayData.summary.outcomes && Object.keys(displayData.summary.outcomes).length > 0 ? (
-        <Card className="p-4 sm:p-6">
-          <h3 className="text-lg font-semibold mb-4">Call Outcomes</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-            {Object.entries(displayData.summary.outcomes).map(([outcome, count]) => (
-              <div key={outcome} className="text-center">
-                <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${getOutcomeColor(outcome)}`}>
-                  {outcome.replace('-', ' ')}
-                </span>
-                <p className="text-xl sm:text-2xl font-bold mt-2">{String(count)}</p>
-                <p className="text-xs text-muted-foreground">
-                  {displayData.summary.completedCalls > 0 
-                    ? (((count as number) / displayData.summary.completedCalls) * 100).toFixed(1)
-                    : '0.0'}%
-                </p>
-              </div>
-            ))}
-          </div>
-        </Card>
-      ) : (
-        <Card className="p-4 sm:p-6">
-          <h3 className="text-lg font-semibold mb-4">Call Outcomes</h3>
-          <div className="flex items-center justify-center h-32 text-muted-foreground">
-            <div className="text-center">
-              <Target className="h-8 sm:h-12 w-8 sm:w-12 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No outcome data available</p>
-            </div>
-          </div>
-        </Card>
-      )}
-
       {/* Performance Insights */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <Card className="p-4 sm:p-6">
-          <h3 className="text-lg font-semibold mb-4">Performance Summary</h3>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <h3 className="text-base sm:text-lg font-medium">Performance Summary</h3>
+          </div>
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-sm">Total Talk Time</span>
@@ -430,7 +580,9 @@ const Analytics = () => {
         </Card>
 
         <Card className="p-4 sm:p-6">
-          <h3 className="text-lg font-semibold mb-4">Quick Stats</h3>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <h3 className="text-base sm:text-lg font-medium">Quick Stats</h3>
+          </div>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-green-100 dark:bg-green-800 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -439,10 +591,10 @@ const Analytics = () => {
               <div className="min-w-0">
                 <p className="text-sm text-muted-foreground">Best performing day</p>
                 <p className="font-semibold truncate">
-                  {displayData.callsByDay.length > 0 
-                    ? new Date(displayData.callsByDay.reduce((best: any, day: any) => 
-                        day.successful > best.successful ? day : best
-                      )._id).toLocaleDateString()
+                  {displayData.timeline.length > 0 
+                    ? new Date(displayData.timeline.reduce((best, day) => 
+                        day.successfulCalls > best.successfulCalls ? day : best
+                      ).date).toLocaleDateString()
                     : 'No data available'}
                 </p>
               </div>

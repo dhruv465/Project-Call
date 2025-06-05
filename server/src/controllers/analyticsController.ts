@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { callAnalyticsService } from '../services';
+import { unifiedAnalyticsService } from '../services/unifiedAnalyticsService';
 import logger from '../utils/logger';
 
 /**
@@ -164,6 +165,37 @@ export const getSystemHealth = async (_req: Request, res: Response): Promise<voi
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve system health data'
+    });
+  }
+};
+
+/**
+ * Get unified call metrics for analytics page
+ */
+export const getUnifiedCallMetrics = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const startDate = req.query.startDate ? new Date(req.query.startDate as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const endDate = req.query.endDate ? new Date(req.query.endDate as string) : new Date();
+    const campaignId = req.query.campaignId as string;
+    
+    // Use unified analytics service for consistent metrics
+    const [metrics, timeline] = await Promise.all([
+      unifiedAnalyticsService.getCallMetrics(startDate, endDate, campaignId),
+      unifiedAnalyticsService.getCallTimeline(startDate, endDate, campaignId)
+    ]);
+    
+    res.json({
+      success: true,
+      data: {
+        summary: metrics,
+        timeline
+      }
+    });
+  } catch (error) {
+    logger.error('Error getting unified call metrics:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve unified call metrics'
     });
   }
 };

@@ -219,115 +219,65 @@ export class OpenAIClient implements ILLMProviderClient {
   }
 
   async getAvailableModels(): Promise<ModelInfo[]> {
-    // OpenAI model information with current pricing and capabilities
-    const models: ModelInfo[] = [
-      {
-        id: 'gpt-4-turbo',
-        name: 'GPT-4 Turbo',
-        description: 'Latest GPT-4 model with improved instruction following, JSON mode, reproducible outputs, parallel function calling, and more.',
-        maxTokens: 4096,
-        contextWindow: 128000,
-        pricing: {
-          input: 0.01,   // $0.01 per 1K tokens
-          output: 0.03   // $0.03 per 1K tokens
-        },
-        capabilities: {
-          chat: true,
-          completion: true,
-          streaming: true,
-          functionCalling: true,
-          vision: true
-        }
-      },
-      {
-        id: 'gpt-4-turbo-preview',
-        name: 'GPT-4 Turbo Preview',
-        description: 'Preview version of GPT-4 Turbo with the latest improvements.',
-        maxTokens: 4096,
-        contextWindow: 128000,
-        pricing: {
-          input: 0.01,
-          output: 0.03
-        },
-        capabilities: {
-          chat: true,
-          completion: true,
-          streaming: true,
-          functionCalling: true,
-          vision: true
-        }
-      },
-      {
-        id: 'gpt-4',
-        name: 'GPT-4',
-        description: 'More capable than any GPT-3.5 model, able to do more complex tasks, and optimized for chat.',
-        maxTokens: 8192,
-        contextWindow: 8192,
-        pricing: {
-          input: 0.03,
-          output: 0.06
-        },
-        capabilities: {
-          chat: true,
-          completion: true,
-          streaming: true,
-          functionCalling: true
-        }
-      },
-      {
-        id: 'gpt-4-32k',
-        name: 'GPT-4 32K',
-        description: 'Same capabilities as the base gpt-4 mode but with 4x the context length.',
-        maxTokens: 32768,
-        contextWindow: 32768,
-        pricing: {
-          input: 0.06,
-          output: 0.12
-        },
-        capabilities: {
-          chat: true,
-          completion: true,
-          streaming: true,
-          functionCalling: true
-        }
-      },
-      {
-        id: 'gpt-3.5-turbo',
-        name: 'GPT-3.5 Turbo',
-        description: 'Most capable GPT-3.5 model and optimized for chat at 1/10th the cost of text-davinci-003.',
-        maxTokens: 4096,
-        contextWindow: 16385,
-        pricing: {
-          input: 0.0015,
-          output: 0.002
-        },
-        capabilities: {
-          chat: true,
-          completion: true,
-          streaming: true,
-          functionCalling: true
-        }
-      },
-      {
-        id: 'gpt-3.5-turbo-16k',
-        name: 'GPT-3.5 Turbo 16K',
-        description: 'Same capabilities as the standard gpt-3.5-turbo model but with 4 times the context.',
-        maxTokens: 16384,
-        contextWindow: 16384,
-        pricing: {
-          input: 0.003,
-          output: 0.004
-        },
-        capabilities: {
-          chat: true,
-          completion: true,
-          streaming: true,
-          functionCalling: true
-        }
-      }
-    ];
+    try {
+      // Attempt to fetch models from OpenAI API
+      return await this.fetchOpenAIModels();
+    } catch (error) {
+      logger.error(`Failed to fetch OpenAI models details: ${error instanceof Error ? error.message : String(error)}`);
+      // Don't provide fallback model info, just return an empty array
+      return [];
+    }
+  }
 
-    return models;
+  private async fetchOpenAIModels(): Promise<ModelInfo[]> {
+    try {
+      const response = await this.client.models.list();
+      
+      if (!response.data || !Array.isArray(response.data)) {
+        throw new Error('Invalid response format from OpenAI API');
+      }
+      
+      // Filter to only include chat models and create ModelInfo objects
+      const chatModels = response.data
+        .filter(model => model.id.includes('gpt'))
+        .map(model => {
+          const displayName = this.formatModelName(model.id);
+          
+          return {
+            id: model.id,
+            name: displayName,
+            description: `${displayName} - OpenAI language model`,
+            // OpenAI API doesn't provide detailed model info, so we use minimal defaults
+            maxTokens: 4096, // Conservative default
+            contextWindow: 8192, // Conservative default
+            capabilities: {
+              chat: true,
+              completion: true,
+              streaming: true,
+              // Basic capability detection without hardcoded rules
+              functionCalling: model.id.includes('gpt-4') || model.id.includes('gpt-3.5'),
+              vision: model.id.includes('gpt-4') && model.id.includes('vision')
+            }
+          };
+        });
+      
+      return chatModels;
+    } catch (error) {
+      logger.error(`Error fetching OpenAI models: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
+  }
+
+  private formatModelName(modelId: string): string {
+    // Convert model ID like 'gpt-4-turbo' to 'GPT-4 Turbo'
+    return modelId
+      .split('-')
+      .map(part => {
+        if (part === 'gpt') return 'GPT';
+        if (part.match(/^\d/)) return part; // Keep version numbers as-is
+        return part.charAt(0).toUpperCase() + part.slice(1);
+      })
+      .join('-');
   }
   
   private handleError(error: any): never {

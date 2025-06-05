@@ -1,6 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster as UIToaster } from '@/components/ui/toaster';
-import { Toaster as SonnerToaster } from 'sonner';
+import { Toaster } from '@/components/ui/sonner';
 import { useAuth } from '@/hooks/useAuth';
 
 // Layouts
@@ -65,8 +64,7 @@ function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
 
-      <UIToaster />
-      <SonnerToaster />
+      <Toaster />
     </>
   );
 }

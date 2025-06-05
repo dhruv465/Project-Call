@@ -33,6 +33,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import CampaignForm from '@/components/campaigns/CampaignForm';
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -401,21 +402,85 @@ const Campaigns = () => {
                 
                 {campaign.metrics && (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t text-sm">
-                    <div>
+                    <div className="flex items-center gap-1">
                       <span className="font-medium">Total Calls:</span>
-                      <p className="text-muted-foreground">{campaign.metrics.totalCalls}</p>
+                      <HoverCard>
+                        <HoverCardTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-4 w-4 p-0">
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                            <span className="sr-only">Info</span>
+                          </Button>
+                        </HoverCardTrigger>
+                        <HoverCardContent className="w-60">
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-semibold">Total Calls</h4>
+                            <p className="text-sm text-muted-foreground">
+                              Total number of calls made for this campaign.
+                            </p>
+                          </div>
+                        </HoverCardContent>
+                      </HoverCard>
+                      <p className="text-muted-foreground ml-auto">{campaign.metrics.totalCalls}</p>
                     </div>
-                    <div>
+                    <div className="flex items-center gap-1">
                       <span className="font-medium">Successful:</span>
-                      <p className="text-muted-foreground">{campaign.metrics.successfulCalls}</p>
+                      <HoverCard>
+                        <HoverCardTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-4 w-4 p-0">
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                            <span className="sr-only">Info</span>
+                          </Button>
+                        </HoverCardTrigger>
+                        <HoverCardContent className="w-60">
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-semibold">Successful Calls</h4>
+                            <p className="text-sm text-muted-foreground">
+                              Number of calls that resulted in a positive outcome.
+                            </p>
+                          </div>
+                        </HoverCardContent>
+                      </HoverCard>
+                      <p className="text-muted-foreground ml-auto">{campaign.metrics.successfulCalls}</p>
                     </div>
-                    <div>
+                    <div className="flex items-center gap-1">
                       <span className="font-medium">Avg Duration:</span>
-                      <p className="text-muted-foreground">{campaign.metrics.avgCallDuration}m</p>
+                      <HoverCard>
+                        <HoverCardTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-4 w-4 p-0">
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                            <span className="sr-only">Info</span>
+                          </Button>
+                        </HoverCardTrigger>
+                        <HoverCardContent className="w-60">
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-semibold">Average Duration</h4>
+                            <p className="text-sm text-muted-foreground">
+                              Average call duration for this campaign.
+                            </p>
+                          </div>
+                        </HoverCardContent>
+                      </HoverCard>
+                      <p className="text-muted-foreground ml-auto">{campaign.metrics.avgCallDuration}m</p>
                     </div>
-                    <div>
+                    <div className="flex items-center gap-1">
                       <span className="font-medium">Conversion:</span>
-                      <p className="text-muted-foreground">{campaign.metrics.conversionRate}%</p>
+                      <HoverCard>
+                        <HoverCardTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-4 w-4 p-0">
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                            <span className="sr-only">Info</span>
+                          </Button>
+                        </HoverCardTrigger>
+                        <HoverCardContent className="w-60">
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-semibold">Conversion Rate</h4>
+                            <p className="text-sm text-muted-foreground">
+                              Percentage of calls that converted to positive outcomes.
+                            </p>
+                          </div>
+                        </HoverCardContent>
+                      </HoverCard>
+                      <p className="text-muted-foreground ml-auto">{campaign.metrics.conversionRate}%</p>
                     </div>
                   </div>
                 )}

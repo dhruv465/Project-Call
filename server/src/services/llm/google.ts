@@ -26,7 +26,7 @@ export class GoogleClient implements ILLMProviderClient {
     }
   ) {
     this.client = new GoogleGenerativeAI(apiKey);
-    this.defaultModel = options?.defaultModel || 'gemini-pro';
+    this.defaultModel = options?.defaultModel || 'gemini-1.5-pro';
   }
   
   getProviderName(): LLMProvider {
@@ -207,74 +207,28 @@ export class GoogleClient implements ILLMProviderClient {
   }
   
   async listModels(): Promise<string[]> {
-    // Google/Gemini doesn't have a list models API, so we'll return the known models
-    return [
-      'gemini-pro',
-      'gemini-pro-vision',
-      'gemini-ultra'
-    ];
+    try {
+      // Fetch available models from Gemini API
+      const modelData = await this.fetchGeminiModels();
+      return modelData.map(model => model.id);
+    } catch (error) {
+      logger.error(`Failed to fetch Gemini models: ${error instanceof Error ? error.message : String(error)}`);
+      // Don't provide fallback models, just return an empty array
+      return [];
+    }
   }
 
   async getAvailableModels(): Promise<ModelInfo[]> {
-    // Google/Gemini model information with current pricing and capabilities
-    const models: ModelInfo[] = [
-      {
-        id: 'gemini-pro',
-        name: 'Gemini Pro',
-        description: 'Most capable Google AI model for complex reasoning, planning, and understanding.',
-        maxTokens: 8192,
-        contextWindow: 32768,
-        pricing: {
-          input: 0.0005,   // $0.5 per 1M tokens
-          output: 0.0015   // $1.5 per 1M tokens
-        },
-        capabilities: {
-          chat: true,
-          completion: true,
-          streaming: true,
-          functionCalling: true
-        }
-      },
-      {
-        id: 'gemini-pro-vision',
-        name: 'Gemini Pro Vision',
-        description: 'Multimodal model that can understand both text and images for comprehensive analysis.',
-        maxTokens: 8192,
-        contextWindow: 32768,
-        pricing: {
-          input: 0.0005,
-          output: 0.0015
-        },
-        capabilities: {
-          chat: true,
-          completion: true,
-          streaming: true,
-          functionCalling: true,
-          vision: true
-        }
-      },
-      {
-        id: 'gemini-ultra',
-        name: 'Gemini Ultra',
-        description: 'Most capable and largest Google AI model, designed for highly complex tasks.',
-        maxTokens: 8192,
-        contextWindow: 32768,
-        pricing: {
-          input: 0.002,    // $2 per 1M tokens (estimated)
-          output: 0.006    // $6 per 1M tokens (estimated)
-        },
-        capabilities: {
-          chat: true,
-          completion: true,
-          streaming: true,
-          functionCalling: true,
-          vision: true
-        }
-      }
-    ];
-
-    return models;
+    try {
+      // Attempt to fetch models from Gemini API
+      return await this.fetchGeminiModels();
+    } catch (error) {
+      logger.error(`Failed to fetch Gemini models details: ${error instanceof Error ? error.message : String(error)}`);
+      // Don't provide fallback model info, just return an empty array
+      return [];
+    }
   }
+  
   
   private convertMessagesToGoogleFormat(messages: LLMMessage[]): { role: string, parts: { text: string }[] }[] {
     return messages
@@ -283,6 +237,67 @@ export class GoogleClient implements ILLMProviderClient {
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }]
       }));
+  }
+  
+  private async fetchGeminiModels(): Promise<ModelInfo[]> {
+    try {
+      // Use the Gemini API to fetch available models
+      // We need to make a direct request since the SDK doesn't expose a models.list method
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${
+        (this.client as any).apiKey
+      }`);
+      
+      if (!response.ok) {
+        throw new Error(`API returned status ${response.status}`);
+      }
+      
+      const data = await response.json() as { models: Array<{
+        name: string;
+        version: string;
+        displayName?: string;
+        description?: string;
+        inputTokenLimit?: number;
+        outputTokenLimit?: number;
+      }> };
+      
+      if (!data.models || !Array.isArray(data.models)) {
+        throw new Error('Invalid response format from Gemini API');
+      }
+      
+      // Transform the API response to our ModelInfo format
+      return data.models
+        .filter(model => model.name && model.name.includes('gemini'))
+        .map(model => {
+          const modelName = model.name.split('/').pop() || '';
+          const displayName = model.displayName || this.formatModelName(modelName);
+          
+          return {
+            id: modelName,
+            name: displayName,
+            description: model.description || `${displayName} - Gemini model by Google`,
+            maxTokens: model.inputTokenLimit || 8192,
+            contextWindow: model.outputTokenLimit || 32768,
+            capabilities: {
+              chat: true,
+              completion: true,
+              streaming: true,
+              vision: modelName.includes('vision'),
+              functionCalling: modelName.includes('pro')
+            }
+          };
+        });
+    } catch (error) {
+      logger.error(`Error fetching Gemini models: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
+  }
+  
+  private formatModelName(modelId: string): string {
+    // Convert model ID like 'gemini-2.0-flash' to 'Gemini 2.0 Flash'
+    return modelId
+      .split('-')
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
   }
   
   private handleError(error: any): never {
