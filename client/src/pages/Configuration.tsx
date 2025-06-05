@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -172,40 +172,52 @@ Keep the conversation natural and engaging. If they're not interested, politely 
   // Load available voices
   const loadVoices = useCallback(async () => {
     try {
-      // Always start with prebuilt voices
+      // Start with prebuilt voices
       setAvailableVoices(prebuiltVoices);
       
-      // Use a direct access method without closures to avoid circular dependencies
-      const apiKey = config.elevenLabsApiKey;
-      
-      // Check if API key is set
-      if (apiKey) {
-        console.log('Fetching available voices from ElevenLabs...');
-        try {
-          const result = await configApi.testElevenLabsConnection({
-            apiKey: apiKey
+      // Access current API key through config state
+      setConfig(currentConfig => {
+        const currentApiKey = currentConfig.elevenLabsApiKey;
+        
+        // Check if API key is set and not masked
+        console.log('ElevenLabs API key status:', {
+          key: currentApiKey ? 'SET' : 'NOT SET',
+          length: currentApiKey?.length
+        });
+        
+        // Try to fetch custom voices if API key is set
+        if (currentApiKey) {
+          console.log('Fetching available voices from ElevenLabs...');
+          configApi.testElevenLabsConnection({
+            apiKey: currentApiKey
+          }).then(result => {
+            if (result.success && result.details?.availableVoices) {
+              console.log(`Received ${result.details.availableVoices.length} voices from ElevenLabs`);
+              // Add custom voices if available
+              setAvailableVoices([
+                ...prebuiltVoices,
+                ...result.details.availableVoices
+              ]);
+            }
+          }).catch(error => {
+            console.error('Error loading voices:', error);
           });
-          
-          if (result.success && result.details?.availableVoices) {
-            console.log(`Received ${result.details.availableVoices.length} voices from ElevenLabs`);
-            // Add custom voices if available
-            setAvailableVoices([
-              ...prebuiltVoices,
-              ...result.details.availableVoices
-            ]);
-          }
-        } catch (err) {
-          console.error('Error fetching ElevenLabs voices:', err);
         }
-      }
+        
+        return currentConfig; // Don't change config, just access it
+      });
     } catch (error) {
       console.error('Error loading voices:', error);
       // Keep prebuilt voices as fallback
     }
-  }, []); // Remove all dependencies
+  }, []);
 
   // Fetch available models from the API (for saved configurations)
   const fetchAvailableModels = useCallback(async () => {
+    if (!config.llmApiKey) {
+      return;
+    }
+
     try {
       setLoadingModels(true);
       const response = await api.get('/configuration/llm-models');
@@ -218,7 +230,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
     } finally {
       setLoadingModels(false);
     }
-  }, []);
+  }, [config.llmApiKey]);
 
   // Dynamically fetch models when user enters an API key
   const fetchModelsWithApiKey = useCallback(async (provider: string, apiKey: string) => {
@@ -283,23 +295,16 @@ Keep the conversation natural and engaging. If they're not interested, politely 
   }, [apiKeyDebounceTimer]);
 
   useEffect(() => {
-    // Initial load of voices when component mounts
+    // Load voices when component mounts only
     loadVoices();
-    
-    // Set up an interval to refresh voices periodically
-    const interval = setInterval(() => {
-      loadVoices();
-    }, 60000); // Refresh every minute
-    
-    return () => clearInterval(interval);
-  }, []); // No dependencies to avoid infinite loops
+  }, []); // Remove loadVoices from dependencies to prevent infinite loop
 
   useEffect(() => {
-    // Initial fetch of available models when component mounts
+    // Fetch available models only when llmApiKey changes
     if (config.llmApiKey) {
       fetchAvailableModels();
     }
-  }, []); // No dependencies to avoid infinite loops
+  }, [config.llmApiKey]); // Remove fetchAvailableModels from dependencies
 
   useEffect(() => {
     // Fetch configuration from API
@@ -849,14 +854,14 @@ Keep the conversation natural and engaging. If they're not interested, politely 
     // Set a new timer to fetch models after user stops typing
     const timer = setTimeout(() => {
       if (value && value.length >= 10) {
-        // Get the current provider state when the timer executes
+        // Access the current provider without causing dependency issues
         const currentProvider = config.llmProvider;
         fetchModelsWithApiKey(currentProvider, value);
       }
     }, 1000); // 1 second delay
     
     setApiKeyDebounceTimer(timer);
-  }, []); // Remove all dependencies to break circular references
+  }, []);
 
   const handleDeleteItem = (type: string, name?: string) => {
     setItemToDelete({ type, name });

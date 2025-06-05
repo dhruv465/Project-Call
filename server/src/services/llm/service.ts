@@ -2,7 +2,7 @@
  * LLM Service - Main orchestration service
  * 
  * This service manages all LLM provider clients and provides a unified interface
- * for making LLM requests with fallback capabilities.
+ * for making LLM requests with fallback capabilities and circuit breaker protection.
  */
 import {
   LLMConfig,
@@ -21,10 +21,18 @@ import { OpenAIClient } from './openai';
 import { AnthropicClient } from './anthropic';
 import { GoogleClient } from './google';
 import { logger } from '../../index';
+import { 
+  RateLimitAwareCircuitBreaker, 
+  createRateLimitAwareCircuitBreaker,
+  RateLimitAwareOptions 
+} from '../../utils/circuitBreaker';
 
 export class LLMService {
   private providers: Map<LLMProvider, ILLMProviderClient> = new Map();
+  private circuitBreakers: Map<LLMProvider, RateLimitAwareCircuitBreaker<any[], any>> = new Map();
   private config: LLMConfig;
+  private failureTracker: Map<LLMProvider, { count: number; lastFailure: number }> = new Map();
+  private readonly FALLBACK_COOLDOWN = 5 * 60 * 1000; // 5 minutes
   
   constructor(config: LLMConfig) {
     this.config = config;
@@ -44,12 +52,58 @@ export class LLMService {
         const client = this.createProviderClient(providerConfig);
         if (client) {
           this.providers.set(providerConfig.name, client);
-          logger.info(`Initialized LLM provider: ${providerConfig.name}`);
+          
+          // Create circuit breaker for this provider
+          const circuitBreakerConfig: Partial<RateLimitAwareOptions> = {
+            timeout: 60000, // 1 minute timeout
+            errorThresholdPercentage: 70, // Higher threshold for LLM providers
+            resetTimeout: 5 * 60 * 1000, // 5 minutes reset
+            volumeThreshold: 5, // Need at least 5 requests
+            maxRetries: 2, // Limited retries for 429s
+            baseDelay: 2000, // 2 second base delay
+            maxDelay: 60000, // 1 minute max delay
+            jitter: true
+          };
+          
+          const circuitBreaker = createRateLimitAwareCircuitBreaker(
+            this.createProviderAction(client),
+            circuitBreakerConfig,
+            `LLM-${providerConfig.name}`
+          );
+          
+          this.circuitBreakers.set(providerConfig.name, circuitBreaker);
+          this.failureTracker.set(providerConfig.name, { count: 0, lastFailure: 0 });
+          
+          logger.info(`Initialized LLM provider with circuit breaker: ${providerConfig.name}`);
         }
       } catch (error) {
         logger.error(`Failed to initialize LLM provider ${providerConfig.name}:`, error);
       }
     }
+  }
+
+  /**
+   * Create a provider action function for circuit breaker
+   */
+  private createProviderAction(client: ILLMProviderClient) {
+    return async (action: string, ...args: any[]): Promise<any> => {
+      switch (action) {
+        case 'completion':
+          return await client.completion(args[0]);
+        case 'chat':
+          return await client.chat(args[0]);
+        case 'streamChat':
+          return await client.streamChat(args[0], args[1]);
+        case 'testConnection':
+          return await client.testConnection();
+        case 'getAvailableModels':
+          return await client.getAvailableModels();
+        case 'listModels':
+          return await client.listModels();
+        default:
+          throw new Error(`Unknown action: ${action}`);
+      }
+    };
   }
   
   /**
@@ -117,15 +171,57 @@ export class LLMService {
   }
   
   /**
-   * Test connection to a specific provider
+   * Check if a provider should be used for fallback
    */
-  async testProvider(name: LLMProvider): Promise<boolean> {
-    try {
-      const provider = this.getProvider(name);
-      return await provider.testConnection();
-    } catch (error) {
-      logger.error(`Failed to test provider ${name}:`, error);
+  private shouldUseProviderForFallback(providerName: LLMProvider): boolean {
+    const circuitBreaker = this.circuitBreakers.get(providerName);
+    const failureInfo = this.failureTracker.get(providerName);
+    
+    // Don't use if circuit breaker is open
+    if (circuitBreaker && circuitBreaker.isOpen()) {
+      logger.debug(`Skipping provider ${providerName}: circuit breaker is open`);
       return false;
+    }
+    
+    // Don't use if too many recent failures
+    if (failureInfo && failureInfo.count >= 3 && 
+        (Date.now() - failureInfo.lastFailure) < this.FALLBACK_COOLDOWN) {
+      logger.debug(`Skipping provider ${providerName}: too many recent failures`);
+      return false;
+    }
+    
+    return true;
+  }
+
+  /**
+   * Record a failure for fallback tracking
+   */
+  private recordFailure(providerName: LLMProvider, error: any): void {
+    const failureInfo = this.failureTracker.get(providerName);
+    if (failureInfo) {
+      failureInfo.count++;
+      failureInfo.lastFailure = Date.now();
+      
+      // Reset count after successful recovery period
+      if (failureInfo.count > 5) {
+        failureInfo.count = 5; // Cap at 5
+      }
+    }
+    
+    logger.warn(`Recorded failure for provider ${providerName}:`, {
+      error: error.message,
+      status: error.response?.status,
+      count: failureInfo?.count
+    });
+  }
+
+  /**
+   * Record a success for fallback tracking
+   */
+  private recordSuccess(providerName: LLMProvider): void {
+    const failureInfo = this.failureTracker.get(providerName);
+    if (failureInfo) {
+      failureInfo.count = Math.max(0, failureInfo.count - 1);
     }
   }
 

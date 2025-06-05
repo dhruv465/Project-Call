@@ -279,11 +279,11 @@ const Calls = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="p-4 flex flex-col">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <CardTitle className="text-sm font-medium">Total Calls</CardTitle>
+              <h3 className="text-sm font-medium text-muted-foreground">Total Calls</h3>
               <HoverCard>
                 <HoverCardTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
@@ -302,15 +302,19 @@ const Calls = () => {
               </HoverCard>
             </div>
             <Phone className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{calls.length}</div>
-          </CardContent>
+          </div>
+          <p className="text-2xl font-bold mt-2">{calls.length}</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {calls.length > 0 
+              ? `${Math.round((calls.filter((c: Call) => c.status === 'completed').length / calls.length) * 100)}%` 
+              : "0%"} Successful
+          </p>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        
+        <Card className="p-4 flex flex-col">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <CardTitle className="text-sm font-medium">Successful</CardTitle>
+              <h3 className="text-sm font-medium text-muted-foreground">Successful Calls</h3>
               <HoverCard>
                 <HoverCardTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
@@ -328,18 +332,20 @@ const Calls = () => {
                 </HoverCardContent>
               </HoverCard>
             </div>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {calls.filter((c: Call) => c.status === 'completed').length}
-            </div>
-          </CardContent>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <p className="text-2xl font-bold mt-2">
+            {calls.filter((c: Call) => c.status === 'completed').length}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            completed successfully
+          </p>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        
+        <Card className="p-4 flex flex-col">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <CardTitle className="text-sm font-medium">Average Duration</CardTitle>
+              <h3 className="text-sm font-medium text-muted-foreground">Avg. Call Duration</h3>
               <HoverCard>
                 <HoverCardTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
@@ -358,17 +364,19 @@ const Calls = () => {
               </HoverCard>
             </div>
             <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatDuration(Math.round(calls.reduce((acc: number, call: Call) => acc + (call.duration || 0), 0) / calls.length))}
-            </div>
-          </CardContent>
+          </div>
+          <p className="text-2xl font-bold mt-2">
+            {formatDuration(Math.round(calls.reduce((acc: number, call: Call) => acc + (call.duration || 0), 0) / calls.length))}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            per call
+          </p>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        
+        <Card className="p-4 flex flex-col">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <CardTitle className="text-sm font-medium">Interested Leads</CardTitle>
+              <h3 className="text-sm font-medium text-muted-foreground">Interested Leads</h3>
               <HoverCard>
                 <HoverCardTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
@@ -386,13 +394,14 @@ const Calls = () => {
                 </HoverCardContent>
               </HoverCard>
             </div>
-            <AlertCircle className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {calls.filter((c: Call) => c.outcome === 'interested').length}
-            </div>
-          </CardContent>
+            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <p className="text-2xl font-bold mt-2">
+            {calls.filter((c: Call) => c.outcome === 'interested').length}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            positive responses
+          </p>
         </Card>
       </div>
 
