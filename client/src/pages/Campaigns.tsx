@@ -15,7 +15,8 @@ import {
   Info,
   MessageSquare,
   BarChart3,
-  Zap
+  Zap,
+  X
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,7 +30,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Sheet,
   SheetContent,
-  SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
@@ -590,167 +590,219 @@ const Campaigns = () => {
 
       {/* Campaign Details Sheet */}
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent className="w-full sm:w-[600px] sm:max-w-[600px] overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <Info size={20} />
-              Campaign Details
-            </SheetTitle>
-          </SheetHeader>
-          
+        <SheetContent className="w-full sm:w-[600px] sm:max-w-[600px] p-0 overflow-hidden">
           {selectedCampaign && (
-            <ScrollArea className="h-[calc(100vh-8rem)] mt-6">
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-medium flex items-center gap-2">
-                    <Zap size={18} />
-                    Basic Information
-                  </h3>
-                  <div className="mt-3 space-y-2">
-                    <div>
-                      <span className="font-medium">Name:</span>
-                      <p className="text-muted-foreground">{selectedCampaign.name}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium">Description:</span>
-                      <p className="text-muted-foreground">{selectedCampaign.description}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium">Goal:</span>
-                      <p className="text-muted-foreground">{selectedCampaign.goal}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium">Target Audience:</span>
-                      <p className="text-muted-foreground">{selectedCampaign.targetAudience}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium">Lead Sources:</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {selectedCampaign.leadSources.map((source: string, idx: number) => (
-                          <Badge key={idx} variant="outline">{source}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="font-medium">Languages:</span>
-                      <p className="text-muted-foreground">
-                        Primary: {selectedCampaign.primaryLanguage}
-                      </p>
-                      {selectedCampaign.supportedLanguages.length > 1 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {selectedCampaign.supportedLanguages
-                            .filter((lang: string) => lang !== selectedCampaign.primaryLanguage)
-                            .map((lang: string, idx: number) => (
-                              <Badge key={idx} variant="secondary">{lang}</Badge>
-                            ))}
-                        </div>
-                      )}
-                    </div>
+            <div className="flex flex-col h-full">
+              {/* Header with status badge */}
+              <div className="px-6 pt-6 pb-4 border-b sticky top-0 bg-background z-10">
+                <div className="flex items-center justify-between mb-2">
+                  <SheetTitle className="text-xl font-bold">
+                    {selectedCampaign.name}
+                  </SheetTitle>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={getStatusBadgeVariant(selectedCampaign.status)}>
+                      {selectedCampaign.status}
+                    </Badge>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0 rounded-full"
+                      onClick={() => setIsSheetOpen(false)}
+                    >
+                      <span className="sr-only">Close</span>
+                      <X size={16} />
+                    </Button>
                   </div>
                 </div>
+                <p className="text-muted-foreground text-sm">
+                  {selectedCampaign.description}
+                </p>
+              </div>
 
-                <div>
-                  <h3 className="text-lg font-medium flex items-center gap-2">
-                    <MessageSquare size={18} />
-                    Call Script
-                  </h3>
-                  <div className="mt-3">
-                    <div>
-                      <span className="font-medium">Script Name:</span>
-                      <p className="text-muted-foreground">{selectedCampaign.script.name}</p>
-                    </div>
-                    <div className="mt-2">
-                      <span className="font-medium">Content:</span>
-                      <div className="mt-1 p-3 bg-muted rounded-xl text-sm">
-                        {selectedCampaign.script.content}
-                      </div>
-                    </div>
-                    {selectedCampaign.script.versions.length > 0 && (
-                      <div className="mt-3">
-                        <span className="font-medium">Versions:</span>
-                        {selectedCampaign.script.versions.map((version: any, idx: number) => (
-                          <div key={idx} className="mt-2 p-2 border rounded">
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium text-sm">{version.name}</span>
-                              {version.isActive && (
-                                <Badge variant="default">Active</Badge>
-                              )}
+              {/* Tabs for campaign details */}
+              <div className="flex-1 overflow-auto">
+                <ScrollArea className="h-[calc(100vh-12rem)]">
+                  <div className="px-6 py-4">
+                    <div className="grid gap-6">
+                      {/* Overview Section */}
+                      <div className="bg-card p-4 rounded-lg border">
+                        <h3 className="text-base font-medium flex items-center gap-2 mb-3 text-card-foreground">
+                          <Zap size={16} className="text-primary" />
+                          Overview
+                        </h3>
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">Goal</p>
+                            <p className="text-sm font-medium">{selectedCampaign.goal}</p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">Target Audience</p>
+                            <p className="text-sm font-medium">{selectedCampaign.targetAudience}</p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">Schedule</p>
+                            <p className="text-sm font-medium">
+                              {selectedCampaign.callTiming.daysOfWeek.join(', ')}
+                              <span className="block text-xs text-muted-foreground mt-1">
+                                {selectedCampaign.callTiming.startTime} - {selectedCampaign.callTiming.endTime} ({selectedCampaign.callTiming.timeZone})
+                              </span>
+                            </p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">Primary Language</p>
+                            <p className="text-sm font-medium">{selectedCampaign.primaryLanguage}</p>
+                          </div>
+                        </div>
+                        
+                        {selectedCampaign.leadSources.length > 0 && (
+                          <div className="mt-4 pt-3 border-t border-border">
+                            <p className="text-xs text-muted-foreground mb-2">Lead Sources</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {selectedCampaign.leadSources.map((source: string, idx: number) => (
+                                <Badge key={idx} variant="outline" className="text-xs">{source}</Badge>
+                              ))}
                             </div>
                           </div>
-                        ))}
+                        )}
+                        
+                        {selectedCampaign.supportedLanguages.length > 1 && (
+                          <div className="mt-4 pt-3 border-t border-border">
+                            <p className="text-xs text-muted-foreground mb-2">Supported Languages</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {selectedCampaign.supportedLanguages
+                                .filter((lang: string) => lang !== selectedCampaign.primaryLanguage)
+                                .map((lang: string, idx: number) => (
+                                  <Badge key={idx} variant="secondary" className="text-xs">{lang}</Badge>
+                                ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
 
-                <div>
-                  <h3 className="text-lg font-medium flex items-center gap-2">
-                    <Zap size={18} />
-                    Call Timing
-                  </h3>
-                  <div className="mt-3 space-y-2">
-                    <div>
-                      <span className="font-medium">Days:</span>
-                      <p className="text-muted-foreground">{selectedCampaign.callTiming.daysOfWeek.join(', ')}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium">Time:</span>
-                      <p className="text-muted-foreground">
-                        {selectedCampaign.callTiming.startTime} - {selectedCampaign.callTiming.endTime}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="font-medium">Timezone:</span>
-                      <p className="text-muted-foreground">{selectedCampaign.callTiming.timeZone}</p>
+                      {/* Metrics Section - Shown only when metrics exist */}
+                      {selectedCampaign.metrics && (
+                        <div className="bg-card p-4 rounded-lg border">
+                          <h3 className="text-base font-medium flex items-center gap-2 mb-3 text-card-foreground">
+                            <BarChart3 size={16} className="text-primary" />
+                            Performance Metrics
+                          </h3>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            <div className="p-3 bg-background rounded-md flex flex-col items-center justify-center">
+                              <span className="text-xs text-muted-foreground mb-1">Total Calls</span>
+                              <span className="text-2xl font-bold text-primary">{selectedCampaign.metrics.totalCalls}</span>
+                            </div>
+                            <div className="p-3 bg-background rounded-md flex flex-col items-center justify-center">
+                              <span className="text-xs text-muted-foreground mb-1">Successful</span>
+                              <span className="text-2xl font-bold text-green-600">{selectedCampaign.metrics.successfulCalls}</span>
+                            </div>
+                            <div className="p-3 bg-background rounded-md flex flex-col items-center justify-center">
+                              <span className="text-xs text-muted-foreground mb-1">Avg Duration</span>
+                              <span className="text-2xl font-bold text-blue-600">{selectedCampaign.metrics.avgCallDuration}m</span>
+                            </div>
+                            <div className="p-3 bg-background rounded-md flex flex-col items-center justify-center">
+                              <span className="text-xs text-muted-foreground mb-1">Conversion</span>
+                              <span className="text-2xl font-bold text-purple-600">{selectedCampaign.metrics.conversionRate}%</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Script Section */}
+                      <div className="bg-card p-4 rounded-lg border">
+                        <h3 className="text-base font-medium flex items-center gap-2 mb-3 text-card-foreground">
+                          <MessageSquare size={16} className="text-primary" />
+                          Script: {selectedCampaign.script.name}
+                        </h3>
+                        <div className="mt-3 p-4 bg-muted rounded-lg text-sm whitespace-pre-wrap max-h-48 overflow-y-auto">
+                          {selectedCampaign.script.content}
+                        </div>
+                        
+                        {selectedCampaign.script.versions.length > 0 && (
+                          <div className="mt-4 pt-3 border-t border-border">
+                            <p className="text-xs text-muted-foreground mb-2">Script Versions</p>
+                            <div className="space-y-2">
+                              {selectedCampaign.script.versions.map((version: any, idx: number) => (
+                                <div key={idx} className="flex items-center justify-between p-2 bg-background rounded-md">
+                                  <span className="text-sm">{version.name}</span>
+                                  {version.isActive && (
+                                    <Badge variant="default" className="text-xs">Active</Badge>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Configuration Sections */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="bg-card p-4 rounded-lg border">
+                          <h3 className="text-base font-medium flex items-center gap-2 mb-3 text-card-foreground">
+                            <Zap size={16} className="text-primary" />
+                            LLM Config
+                          </h3>
+                          <div className="space-y-2">
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">Model</p>
+                              <p className="text-sm font-medium">{selectedCampaign.llmConfiguration.model}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">Temperature</p>
+                              <p className="text-sm font-medium">{selectedCampaign.llmConfiguration.temperature}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">Max Tokens</p>
+                              <p className="text-sm font-medium">{selectedCampaign.llmConfiguration.maxTokens}</p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-card p-4 rounded-lg border">
+                          <h3 className="text-base font-medium flex items-center gap-2 mb-3 text-card-foreground">
+                            <Zap size={16} className="text-primary" />
+                            Voice Config
+                          </h3>
+                          <div className="space-y-2">
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">Provider</p>
+                              <p className="text-sm font-medium">{selectedCampaign.voiceConfiguration.provider}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">Voice ID</p>
+                              <p className="text-sm font-medium">{selectedCampaign.voiceConfiguration.voiceId}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">Speed / Pitch</p>
+                              <p className="text-sm font-medium">{selectedCampaign.voiceConfiguration.speed} / {selectedCampaign.voiceConfiguration.pitch}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-
-                {selectedCampaign.metrics && (
-                  <div>
-                    <h3 className="text-lg font-medium flex items-center gap-2">
-                      <BarChart3 size={18} />
-                      Performance Metrics
-                    </h3>
-                    <div className="mt-3 grid grid-cols-2 gap-4">
-                      <div>
-                        <span className="font-medium">Total Calls:</span>
-                        <p className="text-2xl font-bold text-primary">{selectedCampaign.metrics.totalCalls}</p>
-                      </div>
-                      <div>
-                        <span className="font-medium">Successful:</span>
-                        <p className="text-2xl font-bold text-green-600">{selectedCampaign.metrics.successfulCalls}</p>
-                      </div>
-                      <div>
-                        <span className="font-medium">Avg Duration:</span>
-                        <p className="text-2xl font-bold text-blue-600">{selectedCampaign.metrics.avgCallDuration}m</p>
-                      </div>
-                      <div>
-                        <span className="font-medium">Conversion Rate:</span>
-                        <p className="text-2xl font-bold text-purple-600">{selectedCampaign.metrics.conversionRate}%</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex gap-2 pt-4">
+                </ScrollArea>
+              </div>
+              
+              {/* Action buttons at bottom */}
+              <div className="px-6 py-4 border-t bg-background sticky bottom-0">
+                <div className="flex flex-wrap gap-3 justify-between">
                   <Button 
                     size="sm"
                     onClick={() => handleEditCampaign(selectedCampaign._id)}
-                    className="flex-1"
+                    className="flex-1 min-w-24"
                   >
                     <Edit size={16} className="mr-2" />
-                    Edit Campaign
+                    Edit
                   </Button>
                   
                   {selectedCampaign.status === 'Draft' && (
                     <Button 
                       size="sm"
                       onClick={() => handleChangeCampaignStatus(selectedCampaign._id, 'Active')}
-                      className="flex-1"
+                      className="flex-1 min-w-24"
                     >
                       <Play size={16} className="mr-2" />
-                      Start Campaign
+                      Start
                     </Button>
                   )}
                   
@@ -759,10 +811,10 @@ const Campaigns = () => {
                       size="sm"
                       variant="outline"
                       onClick={() => handleChangeCampaignStatus(selectedCampaign._id, 'Paused')}
-                      className="flex-1"
+                      className="flex-1 min-w-24"
                     >
                       <Pause size={16} className="mr-2" />
-                      Pause Campaign
+                      Pause
                     </Button>
                   )}
                   
@@ -770,15 +822,15 @@ const Campaigns = () => {
                     <Button 
                       size="sm"
                       onClick={() => handleChangeCampaignStatus(selectedCampaign._id, 'Active')}
-                      className="flex-1"
+                      className="flex-1 min-w-24"
                     >
                       <Play size={16} className="mr-2" />
-                      Resume Campaign
+                      Resume
                     </Button>
                   )}
                 </div>
               </div>
-            </ScrollArea>
+            </div>
           )}
         </SheetContent>
       </Sheet>

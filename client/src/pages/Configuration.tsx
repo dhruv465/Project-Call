@@ -1,14 +1,30 @@
-import { useState, useEffect, useCallback } from 'react';
-import api from '@/services/api';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Slider } from '@/components/ui/slider';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { PasswordInput } from "@/components/PasswordInput";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -16,60 +32,63 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
-  Settings, 
-  Save, 
-  Mic, 
-  Volume2, 
-  Phone, 
-  MessageSquare,
-  TestTube,
-  CheckCircle,
+import { Slider } from "@/components/ui/slider";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/useToast";
+import api from "@/services/api";
+import { configApi } from "@/services/configApi";
+import {
   AlertTriangle,
-  Zap,
-  Trash2,
+  CheckCircle,
+  Info,
+  MessageSquare,
+  Mic,
+  Phone,
   PhoneCall,
-  Info
-} from 'lucide-react';
-import { useToast } from '@/hooks/useToast';
-import { configApi } from '@/services/configApi';
-import { PasswordInput } from '@/components/PasswordInput';
+  Save,
+  Settings,
+  TestTube,
+  Trash2,
+  Volume2,
+  Zap,
+} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 interface Configuration {
   // AI Voice Settings
-  voiceProvider: 'elevenlabs' | 'openai' | 'google';
+  voiceProvider: "elevenlabs" | "openai" | "google";
   voiceId: string;
   voiceSpeed: number;
   voiceStability: number;
   voiceClarity: number;
   elevenLabsApiKey: string;
-  elevenLabsStatus?: 'unverified' | 'verified' | 'failed';
-  
+  elevenLabsStatus?: "unverified" | "verified" | "failed";
+
   // Phone Settings
   twilioAccountSid: string;
   twilioAuthToken: string;
   twilioPhoneNumber: string;
-  twilioStatus?: 'unverified' | 'verified' | 'failed';
-  
+  twilioStatus?: "unverified" | "verified" | "failed";
+
   // AI Model Settings
-  llmProvider: 'openai' | 'anthropic' | 'google';
+  llmProvider: "openai" | "anthropic" | "google";
   llmModel: string;
   llmApiKey: string;
-  llmStatus?: 'unverified' | 'verified' | 'failed';
+  llmStatus?: "unverified" | "verified" | "failed";
   systemPrompt: string;
   temperature: number;
   maxTokens: number;
-  
+
   // Call Settings
   maxCallDuration: number;
   retryAttempts: number;
   retryDelay: number;
   timeZone: string;
-  
+
   // Webhook Settings
   webhookUrl: string;
   webhookSecret: string;
-  webhookStatus?: 'unverified' | 'verified' | 'failed';
+  webhookStatus?: "unverified" | "verified" | "failed";
 }
 
 interface ModelInfo {
@@ -95,25 +114,25 @@ const Configuration = () => {
   const { toast } = useToast();
   const [config, setConfig] = useState<Configuration>({
     // AI Voice Settings
-    voiceProvider: 'elevenlabs',
-    voiceId: 'rachel',
+    voiceProvider: "elevenlabs",
+    voiceId: "", // Initialize with empty or a sensible default if no API voices yet
     voiceSpeed: 1.0,
     voiceStability: 0.8,
     voiceClarity: 0.9,
-    elevenLabsApiKey: '',
-    elevenLabsStatus: 'unverified',
-    
+    elevenLabsApiKey: "",
+    elevenLabsStatus: "unverified",
+
     // Phone Settings
-    twilioAccountSid: '',
-    twilioAuthToken: '',
-    twilioPhoneNumber: '',
-    twilioStatus: 'unverified',
-    
+    twilioAccountSid: "",
+    twilioAuthToken: "",
+    twilioPhoneNumber: "",
+    twilioStatus: "unverified",
+
     // AI Model Settings
-    llmProvider: 'openai',
-    llmModel: 'gpt-4',
-    llmApiKey: '',
-    llmStatus: 'unverified',
+    llmProvider: "openai",
+    llmModel: "gpt-4",
+    llmApiKey: "",
+    llmStatus: "unverified",
     systemPrompt: `You are a professional sales representative making cold calls. Be polite, respectful, and helpful. Your goal is to:
 1. Introduce yourself and your company
 2. Understand the prospect's needs
@@ -124,17 +143,17 @@ const Configuration = () => {
 Keep the conversation natural and engaging. If they're not interested, politely end the call.`,
     temperature: 0.7,
     maxTokens: 150,
-    
+
     // Call Settings
     maxCallDuration: 300, // 5 minutes
     retryAttempts: 3,
     retryDelay: 60, // 1 minute
-    timeZone: 'America/New_York',
-    
+    timeZone: "America/New_York",
+
     // Webhook Settings
-    webhookUrl: '',
-    webhookSecret: '',
-    webhookStatus: 'unverified'
+    webhookUrl: "",
+    webhookSecret: "",
+    webhookStatus: "unverified",
   });
 
   const [loading, setLoading] = useState(true);
@@ -144,146 +163,169 @@ Keep the conversation natural and engaging. If they're not interested, politely 
   const [testingCall, setTestingCall] = useState(false);
   const [openTestCallDialog, setOpenTestCallDialog] = useState(false);
   const [testCallNumber, setTestCallNumber] = useState("");
-  const [testCallMessage, setTestCallMessage] = useState("This is a test call from your AI calling system.");
+  const [testCallMessage, setTestCallMessage] = useState(
+    "This is a test call from your AI calling system."
+  );
   const [testingLLMChat, setTestingLLMChat] = useState(false);
   const [openTestLLMChatDialog, setOpenTestLLMChatDialog] = useState(false);
-  const [testLLMPrompt, setTestLLMPrompt] = useState("Hello, can you introduce yourself and tell me what you can do?");
+  const [testLLMPrompt, setTestLLMPrompt] = useState(
+    "Hello, can you introduce yourself and tell me what you can do?"
+  );
   const [testLLMResponse, setTestLLMResponse] = useState("");
-  const [availableVoices, setAvailableVoices] = useState<{voiceId: string, name: string, previewUrl?: string}[]>([]);
+  const [availableVoices, setAvailableVoices] = useState<
+    { voiceId: string; name: string; previewUrl?: string }[]
+  >([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<{type: string; name?: string} | null>(null);
-  const [availableModels, setAvailableModels] = useState<{ [provider: string]: ModelInfo[] }>({});
+  const [itemToDelete, setItemToDelete] = useState<{
+    type: string;
+    name?: string;
+  } | null>(null);
+  const [availableModels, setAvailableModels] = useState<{
+    [provider: string]: ModelInfo[];
+  }>({});
   const [loadingModels, setLoadingModels] = useState(false);
-  const [apiKeyDebounceTimer, setApiKeyDebounceTimer] = useState<NodeJS.Timeout | null>(null);
-  
-  // Pre-built ElevenLabs voices
-  const prebuiltVoices = [
-    { voiceId: 'pNInz6obpgDQGcFmaJgB', name: 'Adam (Male)' },
-    { voiceId: 'yoZ06aMxZJJ28mfd3POQ', name: 'Sam (Male)' },
-    { voiceId: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella (Female)' },
-    { voiceId: 'ErXwobaYiN019PkySvjV', name: 'Antoni (Male)' },
-    { voiceId: 'MF3mGyEYCl7XYWbV9V6O', name: 'Elli (Female)' },
-    { voiceId: 'TxGEqnHWrfWFTfGW9XjX', name: 'Josh (Male)' },
-    { voiceId: 'VR6AewLTigWG4xSOukaG', name: 'Arnold (Male)' },
-    { voiceId: '21m00Tcm4TlvDq8ikWAM', name: 'Jessica (Female)' },
-    { voiceId: 'AZnzlk1XvdvUeBnXmlld', name: 'Michael (Male)' }
-  ];
+  const [apiKeyDebounceTimer, setApiKeyDebounceTimer] =
+    useState<NodeJS.Timeout | null>(null);
+  const [elevenLabsDebounceTimer, setElevenLabsDebounceTimer] = useState<NodeJS.Timeout | null>(null);
 
   // Load available voices
   const loadVoices = useCallback(async () => {
     try {
-      // Start with prebuilt voices
-      setAvailableVoices(prebuiltVoices);
-      
-      // Access current API key through config state
-      setConfig(currentConfig => {
-        const currentApiKey = currentConfig.elevenLabsApiKey;
-        
-        // Check if API key is set and not masked
-        console.log('ElevenLabs API key status:', {
-          key: currentApiKey ? 'SET' : 'NOT SET',
-          length: currentApiKey?.length
-        });
-        
-        // Try to fetch custom voices if API key is set
-        if (currentApiKey) {
-          console.log('Fetching available voices from ElevenLabs...');
-          configApi.testElevenLabsConnection({
-            apiKey: currentApiKey
-          }).then(result => {
-            if (result.success && result.details?.availableVoices) {
-              console.log(`Received ${result.details.availableVoices.length} voices from ElevenLabs`);
-              // Add custom voices if available
-              setAvailableVoices([
-                ...prebuiltVoices,
-                ...result.details.availableVoices
-              ]);
-            }
-          }).catch(error => {
-            console.error('Error loading voices:', error);
-          });
-        }
-        
-        return currentConfig; // Don't change config, just access it
+      let currentVoices: {
+        voiceId: string;
+        name: string;
+        previewUrl?: string;
+      }[] = []; // Initialize as empty
+
+      const currentApiKey = config.elevenLabsApiKey;
+
+      // Check if API key is set
+      console.log("ElevenLabs API key status:", {
+        key: currentApiKey ? "SET" : "NOT SET",
+        length: currentApiKey?.length,
       });
+
+      // Try to fetch custom voices if API key is set
+      if (currentApiKey) {
+        console.log("Fetching available voices from ElevenLabs...");
+        try {
+          const result = await configApi.testElevenLabsConnection({
+            apiKey: currentApiKey,
+          });
+
+          if (result.success && result.details?.availableVoices) {
+            console.log(
+              `Received ${result.details.availableVoices.length} voices from ElevenLabs`
+            );
+            currentVoices = result.details.availableVoices; // Use only API voices
+          }
+        } catch (error) {
+          console.error("Error loading voices from API:", error);
+          // Keep currentVoices empty if API call fails
+        }
+      }
+      setAvailableVoices(currentVoices);
+      // If no voices are loaded and a voiceId was previously set,
+      // you might want to clear it or set it to the first available voice if any.
+      if (
+        currentVoices.length > 0 &&
+        !currentVoices.find((v) => v.voiceId === config.voiceId)
+      ) {
+        setConfig((prevConfig) => ({
+          ...prevConfig,
+          voiceId: currentVoices[0].voiceId,
+        }));
+      } else if (currentVoices.length === 0) {
+        setConfig((prevConfig) => ({ ...prevConfig, voiceId: "" }));
+      }
     } catch (error) {
-      console.error('Error loading voices:', error);
-      // Keep prebuilt voices as fallback
+      console.error("Error in loadVoices function:", error);
+      setAvailableVoices([]); // Ensure availableVoices is empty on error
+      setConfig((prevConfig) => ({ ...prevConfig, voiceId: "" }));
     }
-  }, []);
+  }, [config.elevenLabsApiKey, setConfig]); // Added setConfig to dependencies
 
   // Fetch available models from the API (for saved configurations)
+  // This function fetches a general list of models, possibly for all configured providers.
   const fetchAvailableModels = useCallback(async () => {
-    if (!config.llmApiKey) {
-      return;
-    }
-
     try {
       setLoadingModels(true);
-      const response = await api.get('/configuration/llm-models');
+      // This API call is expected to return models based on the overall server-side configuration
+      // or for all providers, not necessarily tied to the live-typed config.llmApiKey.
+      const response = await api.get("/configuration/llm-models");
 
       if (response.data.success) {
         setAvailableModels(response.data.models);
       }
     } catch (error) {
-      console.error('Failed to fetch available models:', error);
+      console.error("Failed to fetch available models:", error);
     } finally {
       setLoadingModels(false);
     }
-  }, [config.llmApiKey]);
+  // }, [config.llmApiKey]); // Removed config.llmApiKey from dependencies
+}, [api, setLoadingModels, setAvailableModels]); // Assuming 'api' is stable or memoized
 
   // Dynamically fetch models when user enters an API key
-  const fetchModelsWithApiKey = useCallback(async (provider: string, apiKey: string) => {
-    if (!apiKey || apiKey.length < 10) {
-      // Clear models for the provider if API key is invalid
-      setAvailableModels(prev => ({
-        ...prev,
-        [provider]: []
-      }));
-      return;
-    }
-
-    try {
-      setLoadingModels(true);
-      console.log(`Fetching models for provider: ${provider}`);
-      
-      // Use provider name as is - we no longer need to map 'gemini' to 'google'
-      const response = await configApi.fetchModelsWithApiKey(provider, apiKey);
-      
-      if (response.success && response.models) {
-        // Store models under the original provider name requested
-        setAvailableModels(prev => ({
+  const fetchModelsWithApiKey = useCallback(
+    async (provider: string, apiKey: string) => {
+      if (!apiKey || apiKey.length < 10) {
+        // Clear models for the provider if API key is invalid
+        setAvailableModels((prev) => ({
           ...prev,
-          [provider]: response.models
+          [provider]: [],
         }));
-        
-        // If no model is currently selected and models are available, select the first one
-        // Use a separate function to avoid circular dependencies
-        setConfig(prevConfig => {
-          if (!prevConfig.llmModel && response.models.length > 0) {
-            return { ...prevConfig, llmModel: response.models[0].id };
-          }
-          return prevConfig;
-        });
+        return;
       }
-    } catch (error) {
-      console.error(`Failed to fetch models for ${provider}:`, error);
-      // Clear models on error
-      setAvailableModels(prev => ({
-        ...prev,
-        [provider]: []
-      }));
-      
-      // Show toast error
-      toast({
-        title: "Failed to fetch models",
-        description: error instanceof Error ? error.message : "Please check your API key and try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingModels(false);
-    }
-  }, [toast]);
+
+      try {
+        setLoadingModels(true);
+        console.log(`Fetching models for provider: ${provider}`);
+
+        // Use provider name as is - we no longer need to map 'gemini' to 'google'
+        const response = await configApi.fetchModelsWithApiKey(
+          provider,
+          apiKey
+        );
+
+        if (response.success && response.models) {
+          // Store models under the original provider name requested
+          setAvailableModels((prev) => ({
+            ...prev,
+            [provider]: response.models,
+          }));
+
+          // If no model is currently selected and models are available, select the first one
+          // Use a separate function to avoid circular dependencies
+          setConfig((prevConfig) => {
+            if (!prevConfig.llmModel && response.models.length > 0) {
+              return { ...prevConfig, llmModel: response.models[0].id };
+            }
+            return prevConfig;
+          });
+        }
+      } catch (error) {
+        console.error(`Failed to fetch models for ${provider}:`, error);
+        // Clear models on error
+        setAvailableModels((prev) => ({
+          ...prev,
+          [provider]: [],
+        }));
+
+        // Show toast error
+        toast({
+          title: "Failed to fetch models",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Please check your API key and try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoadingModels(false);
+      }
+    },
+    [toast, setConfig, setAvailableModels, setLoadingModels]
+  );
 
   // Clean up debounce timer on unmount
   useEffect(() => {
@@ -291,20 +333,39 @@ Keep the conversation natural and engaging. If they're not interested, politely 
       if (apiKeyDebounceTimer) {
         clearTimeout(apiKeyDebounceTimer);
       }
+      if (elevenLabsDebounceTimer) { // Clean up elevenLabsDebounceTimer as well
+        clearTimeout(elevenLabsDebounceTimer);
+      }
     };
-  }, [apiKeyDebounceTimer]);
+  // }, [apiKeyDebounceTimer]);
+}, [apiKeyDebounceTimer, elevenLabsDebounceTimer]);
 
   useEffect(() => {
-    // Load voices when component mounts only
-    loadVoices();
-  }, []); // Remove loadVoices from dependencies to prevent infinite loop
-
-  useEffect(() => {
-    // Fetch available models only when llmApiKey changes
-    if (config.llmApiKey) {
-      fetchAvailableModels();
+    // Load voices only on component mount or when elevenLabsApiKey changes, with debounce
+    if (elevenLabsDebounceTimer) {
+      clearTimeout(elevenLabsDebounceTimer);
     }
-  }, [config.llmApiKey]); // Remove fetchAvailableModels from dependencies
+
+    // loadVoices will use the latest config.elevenLabsApiKey due to its own useCallback dependency.
+    const newTimer = setTimeout(() => {
+      console.log("Debounced: Calling loadVoices for ElevenLabs API key.");
+      loadVoices();
+    }, 1000); // 1-second debounce
+
+    setElevenLabsDebounceTimer(newTimer);
+
+    return () => {
+      clearTimeout(newTimer);
+    };
+  }, [config.elevenLabsApiKey, loadVoices]); // Keep loadVoices in deps
+
+  // Fetch available models (general list) when component mounts or when the LLM provider changes.
+  // This should not run on every keystroke of the llmApiKey.
+  useEffect(() => {
+    console.log("Effect: Calling fetchAvailableModels (general list) due to mount or provider change.");
+    fetchAvailableModels();
+  // }, [config.llmApiKey, fetchAvailableModels]); // Old dependencies
+  }, [fetchAvailableModels, config.llmProvider]); // New dependencies
 
   useEffect(() => {
     // Fetch configuration from API
@@ -312,7 +373,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
       try {
         setLoading(true);
         const data = await configApi.getConfiguration();
-        console.log('Fetched configuration from server:', {
+        console.log("Fetched configuration from server:", {
           elevenLabsConfig: {
             voiceSpeed: data.elevenLabsConfig?.voiceSpeed,
             voiceStability: data.elevenLabsConfig?.voiceStability,
@@ -327,49 +388,68 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           },
           generalSettings: {
             maxCallDuration: data.generalSettings?.maxCallDuration,
-            defaultSystemPrompt: data.generalSettings?.defaultSystemPrompt ? 'SET' : 'NOT SET',
+            defaultSystemPrompt: data.generalSettings?.defaultSystemPrompt
+              ? "SET"
+              : "NOT SET",
             defaultTimeZone: data.generalSettings?.defaultTimeZone,
           },
           webhookConfig: {
-            url: data.webhookConfig?.url ? 'SET' : 'NOT SET',
-          }
+            url: data.webhookConfig?.url ? "SET" : "NOT SET",
+          },
         });
-        
+
         setConfig({
           // Set defaults for any missing properties
-          voiceProvider: data.elevenLabsConfig?.isEnabled ? 'elevenlabs' : 
-                        (data.llmConfig?.providers.find((p: any) => p.name === 'openai' && p.isEnabled) ? 'openai' : 'google'),
-          voiceId: data.elevenLabsConfig?.availableVoices?.[0]?.voiceId || 'rachel',
+          voiceProvider: data.elevenLabsConfig?.isEnabled
+            ? "elevenlabs"
+            : data.llmConfig?.providers.find(
+                (p: any) => p.name === "openai" && p.isEnabled
+              )
+            ? "openai"
+            : "google",
+          voiceId:
+            data.elevenLabsConfig?.availableVoices?.[0]?.voiceId || "rachel",
           voiceSpeed: data.elevenLabsConfig?.voiceSpeed || 1.0,
           voiceStability: data.elevenLabsConfig?.voiceStability || 0.8,
           voiceClarity: data.elevenLabsConfig?.voiceClarity || 0.9,
-          elevenLabsApiKey: data.elevenLabsConfig?.apiKey || '',
-          elevenLabsStatus: data.elevenLabsConfig?.status || 'unverified',
-          
-          twilioAccountSid: data.twilioConfig?.accountSid || '',
-          twilioAuthToken: data.twilioConfig?.authToken || '',
-          twilioPhoneNumber: data.twilioConfig?.phoneNumbers?.[0] || '',
-          twilioStatus: data.twilioConfig?.status || 'unverified',
-          
-          llmProvider: data.llmConfig?.defaultProvider || 'openai',
-          llmModel: data.llmConfig?.defaultModel || 'gpt-4',
-          llmApiKey: data.llmConfig?.providers.find((p: any) => p.name === data.llmConfig?.defaultProvider)?.apiKey || '',
-          llmStatus: data.llmConfig?.providers.find((p: any) => p.name === data.llmConfig?.defaultProvider)?.status || 'unverified',
-          systemPrompt: data.generalSettings?.defaultSystemPrompt || `You are a professional sales representative making cold calls. Be polite, respectful, and helpful.`,
+          elevenLabsApiKey: data.elevenLabsConfig?.apiKey || "",
+          elevenLabsStatus: data.elevenLabsConfig?.status || "unverified",
+
+          twilioAccountSid: data.twilioConfig?.accountSid || "",
+          twilioAuthToken: data.twilioConfig?.authToken || "",
+          twilioPhoneNumber: data.twilioConfig?.phoneNumbers?.[0] || "",
+          twilioStatus: data.twilioConfig?.status || "unverified",
+
+          llmProvider: data.llmConfig?.defaultProvider || "openai",
+          llmModel: data.llmConfig?.defaultModel || "gpt-4",
+          llmApiKey:
+            data.llmConfig?.providers.find(
+              (p: any) => p.name === data.llmConfig?.defaultProvider
+            )?.apiKey || "",
+          llmStatus:
+            data.llmConfig?.providers.find(
+              (p: any) => p.name === data.llmConfig?.defaultProvider
+            )?.status || "unverified",
+          systemPrompt:
+            data.generalSettings?.defaultSystemPrompt ||
+            `You are a professional sales representative making cold calls. Be polite, respectful, and helpful.`,
           temperature: data.llmConfig?.temperature || 0.7,
           maxTokens: data.llmConfig?.maxTokens || 150,
-          
+
           maxCallDuration: data.generalSettings?.maxCallDuration || 300,
           retryAttempts: data.generalSettings?.callRetryAttempts || 3,
           retryDelay: 60,
-          timeZone: data.generalSettings?.defaultTimeZone || data.generalSettings?.workingHours?.timeZone || 'America/New_York',
-          
-          webhookUrl: data.webhookConfig?.url || '',
-          webhookSecret: data.webhookConfig?.secret || '',
-          webhookStatus: data.webhookConfig?.status || 'unverified'
+          timeZone:
+            data.generalSettings?.defaultTimeZone ||
+            data.generalSettings?.workingHours?.timeZone ||
+            "America/New_York",
+
+          webhookUrl: data.webhookConfig?.url || "",
+          webhookSecret: data.webhookConfig?.secret || "",
+          webhookStatus: data.webhookConfig?.status || "unverified",
         });
       } catch (error) {
-        console.error('Error fetching configuration:', error);
+        console.error("Error fetching configuration:", error);
         toast({
           title: "Error",
           description: "Failed to load configuration. Using default settings.",
@@ -382,46 +462,54 @@ Keep the conversation natural and engaging. If they're not interested, politely 
     };
 
     fetchConfiguration();
-  }, [toast]);
+  }, []); // Keep toast out of dependencies for now, assuming useToast provides a stable function
 
   const handleSave = async () => {
     setSaving(true);
     try {
       // Debug log before save
-      console.log('Saving configuration with voice settings:', {
+      console.log("Saving configuration with voice settings:", {
         voiceProvider: config.voiceProvider,
         voiceId: config.voiceId,
         voiceSpeed: config.voiceSpeed,
         voiceStability: config.voiceStability,
         voiceClarity: config.voiceClarity,
-        elevenLabsApiKey: config.elevenLabsApiKey ? `${config.elevenLabsApiKey.slice(0, 4)}...${config.elevenLabsApiKey.slice(-4)}` : 'NOT SET',
+        elevenLabsApiKey: config.elevenLabsApiKey
+          ? `${config.elevenLabsApiKey.slice(
+              0,
+              4
+            )}...${config.elevenLabsApiKey.slice(-4)}`
+          : "NOT SET",
       });
-      
-      console.log('Saving configuration with LLM settings:', {
+
+      console.log("Saving configuration with LLM settings:", {
         llmProvider: config.llmProvider,
         llmModel: config.llmModel,
         temperature: config.temperature,
         maxTokens: config.maxTokens,
-        llmApiKey: config.llmApiKey ? 'SET' : 'NOT SET',
+        llmApiKey: config.llmApiKey ? "SET" : "NOT SET",
       });
-      
+
       // Transform the flat config object into the structured API format
       const apiConfig = {
         twilioConfig: {
           accountSid: config.twilioAccountSid,
           authToken: config.twilioAuthToken,
-          phoneNumbers: config.twilioPhoneNumber ? [config.twilioPhoneNumber] : [],
+          phoneNumbers: config.twilioPhoneNumber
+            ? [config.twilioPhoneNumber]
+            : [],
           isEnabled: !!config.twilioAccountSid && !!config.twilioAuthToken,
-          status: config.twilioStatus
+          status: config.twilioStatus,
         },
         elevenLabsConfig: {
           apiKey: config.elevenLabsApiKey,
-          isEnabled: config.voiceProvider === 'elevenlabs' && !!config.elevenLabsApiKey,
+          isEnabled:
+            config.voiceProvider === "elevenlabs" && !!config.elevenLabsApiKey,
           voiceSpeed: config.voiceSpeed,
           voiceStability: config.voiceStability,
           voiceClarity: config.voiceClarity,
           status: config.elevenLabsStatus,
-          availableVoices: availableVoices.length > 0 ? availableVoices : []
+          availableVoices: availableVoices.length > 0 ? availableVoices : [],
         },
         llmConfig: {
           defaultProvider: config.llmProvider,
@@ -430,79 +518,96 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           maxTokens: config.maxTokens,
           providers: [
             {
-              name: 'openai',
-              apiKey: config.llmProvider === 'openai' ? config.llmApiKey : '',
-              availableModels: availableModels['openai']?.length > 0 ? availableModels['openai'].map(m => m.id) : [],
-              isEnabled: config.llmProvider === 'openai',
-              status: config.llmProvider === 'openai' ? config.llmStatus : 'unverified'
+              name: "openai",
+              apiKey: config.llmProvider === "openai" ? config.llmApiKey : "",
+              availableModels:
+                availableModels["openai"]?.length > 0
+                  ? availableModels["openai"].map((m) => m.id)
+                  : [],
+              isEnabled: config.llmProvider === "openai",
+              status:
+                config.llmProvider === "openai"
+                  ? config.llmStatus
+                  : "unverified",
             },
             {
-              name: 'anthropic',
-              apiKey: config.llmProvider === 'anthropic' ? config.llmApiKey : '',
-              availableModels: availableModels['anthropic']?.length > 0 ? availableModels['anthropic'].map(m => m.id) : [],
-              isEnabled: config.llmProvider === 'anthropic',
-              status: config.llmProvider === 'anthropic' ? config.llmStatus : 'unverified'
+              name: "anthropic",
+              apiKey:
+                config.llmProvider === "anthropic" ? config.llmApiKey : "",
+              availableModels:
+                availableModels["anthropic"]?.length > 0
+                  ? availableModels["anthropic"].map((m) => m.id)
+                  : [],
+              isEnabled: config.llmProvider === "anthropic",
+              status:
+                config.llmProvider === "anthropic"
+                  ? config.llmStatus
+                  : "unverified",
             },
             {
-              name: 'google',
-              apiKey: config.llmProvider === 'google' ? config.llmApiKey : '',
-              availableModels: availableModels[config.llmProvider]?.length > 0 ? 
-                availableModels[config.llmProvider].map(m => m.id) : 
-                [],
-              isEnabled: config.llmProvider === 'google',
-              status: config.llmProvider === 'google' ? config.llmStatus : 'unverified'
-            }
-          ]
+              name: "google",
+              apiKey: config.llmProvider === "google" ? config.llmApiKey : "",
+              availableModels:
+                availableModels[config.llmProvider]?.length > 0
+                  ? availableModels[config.llmProvider].map((m) => m.id)
+                  : [],
+              isEnabled: config.llmProvider === "google",
+              status:
+                config.llmProvider === "google"
+                  ? config.llmStatus
+                  : "unverified",
+            },
+          ],
         },
         generalSettings: {
           maxCallDuration: config.maxCallDuration,
           callRetryAttempts: config.retryAttempts,
           defaultTimeZone: config.timeZone,
-          defaultSystemPrompt: config.systemPrompt
+          defaultSystemPrompt: config.systemPrompt,
         },
         webhookConfig: {
           url: config.webhookUrl,
           secret: config.webhookSecret,
-          status: config.webhookStatus
-        }
+          status: config.webhookStatus,
+        },
       };
-      
+
       await configApi.updateConfiguration(apiConfig);
-      
+
       // Debug log - check what was sent to server
-      console.log('API Config sent to server:', {
+      console.log("API Config sent to server:", {
         twilioConfig: {
-          accountSid: apiConfig.twilioConfig.accountSid ? 'SET' : 'NOT SET',
-          authToken: apiConfig.twilioConfig.authToken ? 'SET' : 'NOT SET',
+          accountSid: apiConfig.twilioConfig.accountSid ? "SET" : "NOT SET",
+          authToken: apiConfig.twilioConfig.authToken ? "SET" : "NOT SET",
           phoneNumbers: apiConfig.twilioConfig.phoneNumbers || [],
-          isEnabled: apiConfig.twilioConfig.isEnabled
+          isEnabled: apiConfig.twilioConfig.isEnabled,
         },
         elevenLabsConfig: {
-          apiKey: apiConfig.elevenLabsConfig.apiKey ? 'SET' : 'NOT SET',
+          apiKey: apiConfig.elevenLabsConfig.apiKey ? "SET" : "NOT SET",
           voiceSpeed: apiConfig.elevenLabsConfig.voiceSpeed,
           voiceStability: apiConfig.elevenLabsConfig.voiceStability,
           voiceClarity: apiConfig.elevenLabsConfig.voiceClarity,
-          isEnabled: apiConfig.elevenLabsConfig.isEnabled
+          isEnabled: apiConfig.elevenLabsConfig.isEnabled,
         },
         llmConfig: {
           providers: apiConfig.llmConfig.providers.map((p: any) => ({
             name: p.name,
-            apiKey: p.apiKey ? 'SET' : 'NOT SET',
-            isEnabled: p.isEnabled
+            apiKey: p.apiKey ? "SET" : "NOT SET",
+            isEnabled: p.isEnabled,
           })),
           defaultProvider: apiConfig.llmConfig.defaultProvider,
           temperature: apiConfig.llmConfig.temperature,
-          maxTokens: apiConfig.llmConfig.maxTokens
-        }
+          maxTokens: apiConfig.llmConfig.maxTokens,
+        },
       });
-      
+
       // Fetch the updated configuration to ensure we have the latest data
       const updatedConfigData = await configApi.getConfiguration();
-      
+
       // Update the local state with the fresh data
-      setConfig(prevConfig => {
+      setConfig((prevConfig) => {
         // Log what we're receiving from the server
-        console.log('Received updated configuration from server:', {
+        console.log("Received updated configuration from server:", {
           elevenLabsConfig: {
             voiceSpeed: updatedConfigData.elevenLabsConfig?.voiceSpeed,
             voiceStability: updatedConfigData.elevenLabsConfig?.voiceStability,
@@ -514,84 +619,119 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           },
           generalSettings: {
             maxCallDuration: updatedConfigData.generalSettings?.maxCallDuration,
-            defaultSystemPrompt: updatedConfigData.generalSettings?.defaultSystemPrompt ? 'SET' : 'NOT SET',
+            defaultSystemPrompt: updatedConfigData.generalSettings
+              ?.defaultSystemPrompt
+              ? "SET"
+              : "NOT SET",
             defaultTimeZone: updatedConfigData.generalSettings?.defaultTimeZone,
           },
           webhookConfig: {
-            url: updatedConfigData.webhookConfig?.url ? 'SET' : 'NOT SET',
-          }
-        });          // Get the LLM API key - preserve the one we have if the server returns a masked key
-          const currentProvider = updatedConfigData.llmConfig?.defaultProvider || prevConfig.llmProvider;
-          const serverProviderKey = updatedConfigData.llmConfig?.providers?.find(
+            url: updatedConfigData.webhookConfig?.url ? "SET" : "NOT SET",
+          },
+        }); // Get the LLM API key - preserve the one we have if the server returns a masked key
+        const currentProvider =
+          updatedConfigData.llmConfig?.defaultProvider ||
+          prevConfig.llmProvider;
+        const serverProviderKey = updatedConfigData.llmConfig?.providers?.find(
+          (p: any) => p.name === currentProvider
+        )?.apiKey;
+
+        // Get current provider status
+        const currentProviderStatus =
+          updatedConfigData.llmConfig?.providers?.find(
             (p: any) => p.name === currentProvider
-          )?.apiKey;
-          
-          // Get current provider status
-          const currentProviderStatus = updatedConfigData.llmConfig?.providers?.find(
-            (p: any) => p.name === currentProvider
-          )?.status || 'unverified';
-          
-          const llmApiKey = serverProviderKey || prevConfig.llmApiKey;
-          
-          return {
-            ...prevConfig,
-            // Update ElevenLabs API key and status
-            elevenLabsApiKey: updatedConfigData.elevenLabsConfig?.apiKey || prevConfig.elevenLabsApiKey,
-            
-            // Update status values from server
-            elevenLabsStatus: updatedConfigData.elevenLabsConfig?.status || prevConfig.elevenLabsStatus,
-            
-            // Always take the updated voice settings, even if they're 0
-            voiceSpeed: updatedConfigData.elevenLabsConfig?.voiceSpeed !== undefined
+          )?.status || "unverified";
+
+        const llmApiKey = serverProviderKey || prevConfig.llmApiKey;
+
+        return {
+          ...prevConfig,
+          // Update ElevenLabs API key and status
+          elevenLabsApiKey:
+            updatedConfigData.elevenLabsConfig?.apiKey ||
+            prevConfig.elevenLabsApiKey,
+
+          // Update status values from server
+          elevenLabsStatus:
+            updatedConfigData.elevenLabsConfig?.status ||
+            prevConfig.elevenLabsStatus,
+
+          // Always take the updated voice settings, even if they're 0
+          voiceSpeed:
+            updatedConfigData.elevenLabsConfig?.voiceSpeed !== undefined
               ? updatedConfigData.elevenLabsConfig.voiceSpeed
               : prevConfig.voiceSpeed,
-              
-            voiceStability: updatedConfigData.elevenLabsConfig?.voiceStability !== undefined
+
+          voiceStability:
+            updatedConfigData.elevenLabsConfig?.voiceStability !== undefined
               ? updatedConfigData.elevenLabsConfig.voiceStability
               : prevConfig.voiceStability,
-              
-            voiceClarity: updatedConfigData.elevenLabsConfig?.voiceClarity !== undefined
+
+          voiceClarity:
+            updatedConfigData.elevenLabsConfig?.voiceClarity !== undefined
               ? updatedConfigData.elevenLabsConfig.voiceClarity
               : prevConfig.voiceClarity,
-              
-            // Twilio config
-            twilioAccountSid: updatedConfigData.twilioConfig?.accountSid || prevConfig.twilioAccountSid,
-            twilioAuthToken: updatedConfigData.twilioConfig?.authToken || prevConfig.twilioAuthToken,
-            twilioPhoneNumber: updatedConfigData.twilioConfig?.phoneNumbers?.[0] || prevConfig.twilioPhoneNumber,
-            twilioStatus: updatedConfigData.twilioConfig?.status || prevConfig.twilioStatus,
-            
-            // LLM config
-            llmProvider: updatedConfigData.llmConfig?.defaultProvider || prevConfig.llmProvider,
-            llmModel: updatedConfigData.llmConfig?.defaultModel || prevConfig.llmModel,
-            llmApiKey,
-            llmStatus: currentProviderStatus,
-            temperature: updatedConfigData.llmConfig?.temperature !== undefined
+
+          // Twilio config
+          twilioAccountSid:
+            updatedConfigData.twilioConfig?.accountSid ||
+            prevConfig.twilioAccountSid,
+          twilioAuthToken:
+            updatedConfigData.twilioConfig?.authToken ||
+            prevConfig.twilioAuthToken,
+          twilioPhoneNumber:
+            updatedConfigData.twilioConfig?.phoneNumbers?.[0] ||
+            prevConfig.twilioPhoneNumber,
+          twilioStatus:
+            updatedConfigData.twilioConfig?.status || prevConfig.twilioStatus,
+
+          // LLM config
+          llmProvider:
+            updatedConfigData.llmConfig?.defaultProvider ||
+            prevConfig.llmProvider,
+          llmModel:
+            updatedConfigData.llmConfig?.defaultModel || prevConfig.llmModel,
+          llmApiKey,
+          llmStatus: currentProviderStatus,
+          temperature:
+            updatedConfigData.llmConfig?.temperature !== undefined
               ? updatedConfigData.llmConfig.temperature
               : prevConfig.temperature,
-            maxTokens: updatedConfigData.llmConfig?.maxTokens !== undefined
+          maxTokens:
+            updatedConfigData.llmConfig?.maxTokens !== undefined
               ? updatedConfigData.llmConfig.maxTokens
               : prevConfig.maxTokens,
-            
-            // General settings
-            maxCallDuration: updatedConfigData.generalSettings?.maxCallDuration ?? prevConfig.maxCallDuration,
-            systemPrompt: updatedConfigData.generalSettings?.defaultSystemPrompt || prevConfig.systemPrompt,
-            timeZone: updatedConfigData.generalSettings?.defaultTimeZone || prevConfig.timeZone,
-            
-            // Webhook config
-            webhookUrl: updatedConfigData.webhookConfig?.url || prevConfig.webhookUrl,
-            webhookSecret: updatedConfigData.webhookConfig?.secret || prevConfig.webhookSecret,
-            webhookStatus: updatedConfigData.webhookConfig?.status || prevConfig.webhookStatus,
-          };
+
+          // General settings
+          maxCallDuration:
+            updatedConfigData.generalSettings?.maxCallDuration ??
+            prevConfig.maxCallDuration,
+          systemPrompt:
+            updatedConfigData.generalSettings?.defaultSystemPrompt ||
+            prevConfig.systemPrompt,
+          timeZone:
+            updatedConfigData.generalSettings?.defaultTimeZone ||
+            prevConfig.timeZone,
+
+          // Webhook config
+          webhookUrl:
+            updatedConfigData.webhookConfig?.url || prevConfig.webhookUrl,
+          webhookSecret:
+            updatedConfigData.webhookConfig?.secret || prevConfig.webhookSecret,
+          webhookStatus:
+            updatedConfigData.webhookConfig?.status || prevConfig.webhookStatus,
+        };
       });
-      
+
       // Show success toast
       toast({
         title: "Configuration Saved",
-        description: "Your settings have been successfully updated and applied.",
+        description:
+          "Your settings have been successfully updated and applied.",
         variant: "default",
       });
     } catch (error) {
-      console.error('Error saving configuration:', error);
+      console.error("Error saving configuration:", error);
       toast({
         title: "Error",
         description: "Failed to save configuration. Please try again.",
@@ -605,58 +745,61 @@ Keep the conversation natural and engaging. If they're not interested, politely 
   const handleTestVoice = async () => {
     setTestingVoice(true);
     try {
-      if (config.voiceProvider === 'elevenlabs') {
-        const testText = "Hello! This is a test of the voice synthesis system. The voice sounds clear and natural.";
+      if (config.voiceProvider === "elevenlabs") {
+        const testText =
+          "Hello! This is a test of the voice synthesis system. The voice sounds clear and natural.";
         console.log(`Testing voice with ID: ${config.voiceId}`);
-        
+
         // Make sure we have a valid API key
         const apiKey = config.elevenLabsApiKey;
         if (!apiKey) {
-          throw new Error('Please enter a valid API key.');
+          throw new Error("Please enter a valid API key.");
         }
-        
+
         if (!config.voiceId) {
-          throw new Error('Please select a voice to test.');
+          throw new Error("Please select a voice to test.");
         }
-        
+
         try {
-          const result = await configApi.testVoiceSynthesis({ 
+          const result = await configApi.testVoiceSynthesis({
             voiceId: config.voiceId,
             text: testText,
-            apiKey: apiKey
+            apiKey: apiKey,
           });
-          
+
           // Update status to verified on successful test
-          setConfig(prev => ({
+          setConfig((prev) => ({
             ...prev,
-            elevenLabsStatus: 'verified'
+            elevenLabsStatus: "verified",
           }));
-          
+
           // Play the synthesized audio
           if (result.audioData) {
             const audio = new Audio(result.audioData);
             await audio.play();
-            
+
             toast({
               title: "Voice Test Successful",
-              description: "Voice synthesis is working correctly and audio is playing.",
+              description:
+                "Voice synthesis is working correctly and audio is playing.",
             });
           }
         } catch (error: any) {
-          console.error('Voice synthesis test error:', error);
-          
+          console.error("Voice synthesis test error:", error);
+
           // Update status to failed
-          setConfig(prev => ({
+          setConfig((prev) => ({
             ...prev,
-            elevenLabsStatus: 'failed'
+            elevenLabsStatus: "failed",
           }));
-          
+
           // Check for voice limit reached error
           const errorDetails = error.response?.data?.details;
-          if (errorDetails && errorDetails.includes('voice_limit_reached')) {
+          if (errorDetails && errorDetails.includes("voice_limit_reached")) {
             toast({
               title: "Voice Limit Reached",
-              description: "You've reached your custom voice limit on ElevenLabs. Try using pre-built voices instead.",
+              description:
+                "You've reached your custom voice limit on ElevenLabs. Try using pre-built voices instead.",
               variant: "destructive",
             });
           } else {
@@ -665,17 +808,18 @@ Keep the conversation natural and engaging. If they're not interested, politely 
         }
       }
     } catch (error: any) {
-      console.error('Voice test error:', error);
-      
+      console.error("Voice test error:", error);
+
       // Update status to failed on any error
-      setConfig(prev => ({
+      setConfig((prev) => ({
         ...prev,
-        elevenLabsStatus: 'failed'
+        elevenLabsStatus: "failed",
       }));
-      
+
       toast({
         title: "Voice Test Failed",
-        description: error.message || "Please check your ElevenLabs API key and voice ID.",
+        description:
+          error.message || "Please check your ElevenLabs API key and voice ID.",
         variant: "destructive",
       });
     } finally {
@@ -692,70 +836,71 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           const twilioResult = await configApi.testTwilioConnection({
             accountSid: config.twilioAccountSid,
             authToken: config.twilioAuthToken,
-            phoneNumber: config.twilioPhoneNumber
+            phoneNumber: config.twilioPhoneNumber,
           });
-          
+
           // Update Twilio status based on test result
-          setConfig(prev => ({
+          setConfig((prev) => ({
             ...prev,
-            twilioStatus: twilioResult.success ? 'verified' : 'failed'
+            twilioStatus: twilioResult.success ? "verified" : "failed",
           }));
         } catch (error) {
-          setConfig(prev => ({
+          setConfig((prev) => ({
             ...prev,
-            twilioStatus: 'failed'
+            twilioStatus: "failed",
           }));
         }
       }
-      
+
       // Test LLM connection
       if (config.llmApiKey) {
         try {
           const llmResult = await configApi.testLLMConnection({
             provider: config.llmProvider,
             apiKey: config.llmApiKey,
-            model: config.llmModel
+            model: config.llmModel,
           });
-          
+
           // Update LLM status based on test result
-          setConfig(prev => ({
+          setConfig((prev) => ({
             ...prev,
-            llmStatus: llmResult.success ? 'verified' : 'failed'
+            llmStatus: llmResult.success ? "verified" : "failed",
           }));
         } catch (error) {
-          setConfig(prev => ({
+          setConfig((prev) => ({
             ...prev,
-            llmStatus: 'failed'
+            llmStatus: "failed",
           }));
         }
       }
-      
+
       // Test ElevenLabs connection if it's the current voice provider
-      if (config.voiceProvider === 'elevenlabs' && config.elevenLabsApiKey) {
+      if (config.voiceProvider === "elevenlabs" && config.elevenLabsApiKey) {
         try {
           const elevenLabsResult = await configApi.testElevenLabsConnection({
-            apiKey: config.elevenLabsApiKey
+            apiKey: config.elevenLabsApiKey,
           });
-          
+
           // Update ElevenLabs status based on test result
-          setConfig(prev => ({
+          setConfig((prev) => ({
             ...prev,
-            elevenLabsStatus: elevenLabsResult.success ? 'verified' : 'failed'
+            elevenLabsStatus: elevenLabsResult.success ? "verified" : "failed",
           }));
         } catch (error) {
-          setConfig(prev => ({
+          setConfig((prev) => ({
             ...prev,
-            elevenLabsStatus: 'failed'
+            elevenLabsStatus: "failed",
           }));
         }
       }
-      
+
       toast({
         title: "Connection Test Completed",
-        description: "All services have been tested. Check status indicators for results.",
+        description:
+          "All services have been tested. Check status indicators for results.",
       });
     } catch (error) {
-      console.error('Connection test error:', error);
+      console.error("Connection test error:", error);
       toast({
         title: "Connection Test Failed",
         description: "An error occurred while testing connections.",
@@ -767,101 +912,134 @@ Keep the conversation natural and engaging. If they're not interested, politely 
   };
 
   // Updates the API key and resets verification status
-  const updateApiKey = (field: keyof Configuration, value: string) => {
-    console.log(`Updating API key for ${field}`);
-    
-    // Reset verification status when API key changes
-    let statusField: keyof Configuration | null = null;
-    
-    if (field === 'elevenLabsApiKey') {
-      statusField = 'elevenLabsStatus';
-    } else if (field === 'twilioAuthToken') {
-      statusField = 'twilioStatus';
-    } else if (field === 'llmApiKey') {
-      statusField = 'llmStatus';
-    } else if (field === 'webhookSecret') {
-      statusField = 'webhookStatus';
-    }
-    
-    setConfig(prev => {
-      const updates: Partial<Configuration> = { [field]: value };
-      
-      // Reset status to unverified when API key changes
-      if (statusField) {
-        updates[statusField] = 'unverified';
+  const updateApiKey = useCallback(
+    (field: keyof Configuration, value: string) => {
+      console.log(`Updating API key for ${field}`);
+
+      // Reset verification status when API key changes
+      let statusField: keyof Configuration | null = null;
+
+      if (field === "elevenLabsApiKey") {
+        statusField = "elevenLabsStatus";
+      } else if (field === "twilioAuthToken") {
+        statusField = "twilioStatus";
+      } else if (field === "llmApiKey") {
+        statusField = "llmStatus";
+      } else if (field === "webhookSecret") {
+        statusField = "webhookStatus";
       }
-      
-      return { ...prev, ...updates };
-    });
-  };
+
+      setConfig((prev) => {
+        const updates: Partial<Configuration> = { [field]: value };
+
+        // Reset status to unverified when API key changes
+        if (statusField) {
+          updates[statusField] = "unverified";
+        }
+
+        return { ...prev, ...updates };
+      });
+    },
+    []
+  );
 
   // Updates a single field in the config state
-  const updateConfig = (field: keyof Configuration, value: any) => {
-    console.log(`Updating configuration field: ${field} with value:`, 
-      field.includes('ApiKey') || field.includes('AuthToken') ? '[MASKED]' : value);
-    
-    // Special handling for API keys to reset verification status
-    if (field === 'elevenLabsApiKey' || field === 'twilioAuthToken' || 
-        field === 'llmApiKey' || field === 'webhookSecret') {
-      updateApiKey(field, value);
-      return;
-    }
-    
-    setConfig((prev: Configuration) => {
-      const newConfig = { ...prev, [field]: value };
-      
-      // Add additional logging for voice settings specifically
-      if (field === 'voiceSpeed' || field === 'voiceStability' || field === 'voiceClarity') {
-        console.log(`Voice setting updated - ${field}: ${value} (previous: ${prev[field]})`);
+  const updateConfig = useCallback(
+    (field: keyof Configuration, value: any) => {
+      console.log(
+        `Updating configuration field: ${field} with value:`,
+        field.includes("ApiKey") || field.includes("AuthToken")
+          ? "[MASKED]"
+          : value
+      );
+
+      // Special handling for API keys to reset verification status
+      if (
+        field === "elevenLabsApiKey" ||
+        field === "twilioAuthToken" ||
+        field === "llmApiKey" ||
+        field === "webhookSecret"
+      ) {
+        updateApiKey(field, value);
+        return;
       }
-      
-      // Special handling for LLM provider changes
-      if (field === 'llmProvider' && prev.llmProvider !== value) {
-        console.log(`LLM provider changed from ${prev.llmProvider} to ${value}`);
-      }
-      
-      return newConfig;
-    });
-  };
+
+      setConfig((prev: Configuration) => {
+        const newConfig = { ...prev, [field]: value };
+
+        // Add additional logging for voice settings specifically
+        if (
+          field === "voiceSpeed" ||
+          field === "voiceStability" ||
+          field === "voiceClarity"
+        ) {
+          console.log(
+            `Voice setting updated - ${field}: ${value} (previous: ${prev[field]})`
+          );
+        }
+
+        // Special handling for LLM provider changes
+        if (field === "llmProvider" && prev.llmProvider !== value) {
+          console.log(
+            `LLM provider changed from ${prev.llmProvider} to ${value}`
+          );
+        }
+
+        return newConfig;
+      });
+    },
+    [updateApiKey]
+  );
 
   // Handle LLM provider changes
-  const handleProviderChange = useCallback((newProvider: 'openai' | 'anthropic' | 'google') => {
-    // Update the provider and reset related state
-    setConfig(prevConfig => ({
-      ...prevConfig,
-      llmProvider: newProvider,
-      llmModel: '', // Reset model when provider changes
-      llmStatus: 'unverified' // Reset status
-    }));
-    
-    // Clear current models for the new provider
-    setAvailableModels(prev => ({
-      ...prev,
-      [newProvider]: []
-    }));
-  }, []);
+  const handleProviderChange = useCallback(
+    (newProvider: "openai" | "anthropic" | "google") => {
+      // Update the provider and reset related state
+      setConfig((prevConfig) => ({
+        ...prevConfig,
+        llmProvider: newProvider,
+        llmModel: "", // Reset model when provider changes
+        llmStatus: "unverified", // Reset status
+      }));
+
+      // Clear current models for the new provider
+      setAvailableModels((prev) => ({
+        ...prev,
+        [newProvider]: [],
+      }));
+    },
+    [setConfig, setAvailableModels]
+  );
 
   // Handler for API key changes with debouncing
-  const handleApiKeyChange = useCallback((value: string) => {
-    // Update the config immediately for UI responsiveness
-    updateConfig('llmApiKey', value);
-    
-    // Clear any existing timer
-    if (apiKeyDebounceTimer) {
-      clearTimeout(apiKeyDebounceTimer);
-    }
-    
-    // Set a new timer to fetch models after user stops typing
-    const timer = setTimeout(() => {
-      if (value && value.length >= 10) {
-        // Access the current provider without causing dependency issues
-        const currentProvider = config.llmProvider;
-        fetchModelsWithApiKey(currentProvider, value);
+  const handleApiKeyChange = useCallback(
+    (value: string) => {
+      // Update the config immediately for UI responsiveness
+      updateConfig("llmApiKey", value);
+
+      // Clear any existing timer
+      if (apiKeyDebounceTimer) {
+        clearTimeout(apiKeyDebounceTimer);
       }
-    }, 1000); // 1 second delay
-    
-    setApiKeyDebounceTimer(timer);
-  }, []);
+
+      // Set a new timer to fetch models after user stops typing
+      const timer = setTimeout(() => {
+        if (value && value.length >= 10) {
+          // Access the current provider without causing dependency issues
+          const currentProvider = config.llmProvider;
+          fetchModelsWithApiKey(currentProvider, value);
+        }
+      }, 1000); // 1 second delay
+
+      setApiKeyDebounceTimer(timer);
+    },
+    [
+      apiKeyDebounceTimer,
+      config.llmProvider,
+      fetchModelsWithApiKey,
+      updateConfig,
+    ]
+  );
 
   const handleDeleteItem = (type: string, name?: string) => {
     setItemToDelete({ type, name });
@@ -870,81 +1048,86 @@ Keep the conversation natural and engaging. If they're not interested, politely 
 
   const confirmDelete = async () => {
     if (!itemToDelete) return;
-    
+
     setDeleteDialogOpen(false);
     try {
       // Perform delete action based on the type
-      if (itemToDelete.type === 'twilio') {
-        await configApi.deleteApiKey({ provider: 'twilio' });
+      if (itemToDelete.type === "twilio") {
+        await configApi.deleteApiKey({ provider: "twilio" });
         toast({
           title: "Twilio Configuration Deleted",
           description: "Your Twilio settings have been removed.",
           variant: "destructive",
         });
-      } else if (itemToDelete.type === 'elevenlabs') {
-        await configApi.deleteApiKey({ provider: 'elevenlabs' });
+      } else if (itemToDelete.type === "elevenlabs") {
+        await configApi.deleteApiKey({ provider: "elevenlabs" });
         toast({
           title: "ElevenLabs Configuration Deleted",
           description: "Your ElevenLabs settings have been removed.",
           variant: "destructive",
         });
-      } else if (itemToDelete.type === 'llm' && itemToDelete.name) {
-        await configApi.deleteApiKey({ provider: 'llm', name: itemToDelete.name });
+      } else if (itemToDelete.type === "llm" && itemToDelete.name) {
+        await configApi.deleteApiKey({
+          provider: "llm",
+          name: itemToDelete.name,
+        });
         toast({
           title: `${itemToDelete.name} API Key Deleted`,
           description: `Your ${itemToDelete.name} API key has been removed.`,
           variant: "destructive",
         });
-      } else if (itemToDelete.type === 'webhook') {
-        await configApi.deleteApiKey({ provider: 'webhook' });
+      } else if (itemToDelete.type === "webhook") {
+        await configApi.deleteApiKey({ provider: "webhook" });
         toast({
           title: "Webhook Secret Deleted",
           description: "Your webhook secret has been removed.",
           variant: "destructive",
         });
       }
-      
+
       // Refresh configuration to get updated state after deletion
       await configApi.getConfiguration();
-      
+
       // Update local state with updated configuration
-      setConfig(prevConfig => {
+      setConfig((prevConfig) => {
         // Reset API keys based on the type deleted
-        if (itemToDelete.type === 'twilio') {
+        if (itemToDelete.type === "twilio") {
           return {
             ...prevConfig,
-            twilioAccountSid: '',
-            twilioAuthToken: '',
-            twilioPhoneNumber: '',
-            twilioStatus: 'unverified'
+            twilioAccountSid: "",
+            twilioAuthToken: "",
+            twilioPhoneNumber: "",
+            twilioStatus: "unverified",
           };
-        } else if (itemToDelete.type === 'elevenlabs') {
+        } else if (itemToDelete.type === "elevenlabs") {
           return {
             ...prevConfig,
-            elevenLabsApiKey: '',
-            elevenLabsStatus: 'unverified'
+            elevenLabsApiKey: "",
+            elevenLabsStatus: "unverified",
           };
-        } else if (itemToDelete.type === 'llm' && itemToDelete.name) {
+        } else if (itemToDelete.type === "llm" && itemToDelete.name) {
           return {
             ...prevConfig,
-            ...(prevConfig.llmProvider === itemToDelete.name ? { 
-              llmApiKey: '',
-              llmStatus: 'unverified'
-            } : {})
+            ...(prevConfig.llmProvider === itemToDelete.name
+              ? {
+                  llmApiKey: "",
+                  llmStatus: "unverified",
+                }
+              : {}),
           };
-        } else if (itemToDelete.type === 'webhook') {
+        } else if (itemToDelete.type === "webhook") {
           return {
             ...prevConfig,
-            webhookSecret: '',
-            webhookStatus: 'unverified'
+            webhookSecret: "",
+            webhookStatus: "unverified",
           };
         }
         return prevConfig;
       });
-      
+
       setItemToDelete(null);
     } catch (error) {
-      console.error('Error deleting configuration:', error);
+      console.error("Error deleting configuration:", error);
       toast({
         title: "Error Deleting Configuration",
         description: "Failed to delete the configuration. Please try again.",
@@ -965,10 +1148,15 @@ Keep the conversation natural and engaging. If they're not interested, politely 
     }
 
     // Validate that Twilio credentials are set
-    if (!config.twilioAccountSid || !config.twilioAuthToken || !config.twilioPhoneNumber) {
+    if (
+      !config.twilioAccountSid ||
+      !config.twilioAuthToken ||
+      !config.twilioPhoneNumber
+    ) {
       toast({
         title: "Missing Twilio Configuration",
-        description: "Please configure your Twilio credentials and phone number first.",
+        description:
+          "Please configure your Twilio credentials and phone number first.",
         variant: "destructive",
       });
       return;
@@ -981,45 +1169,48 @@ Keep the conversation natural and engaging. If they're not interested, politely 
         authToken: config.twilioAuthToken,
         fromNumber: config.twilioPhoneNumber,
         toNumber: testCallNumber,
-        message: testCallMessage
+        message: testCallMessage,
       });
-      
+
       if (result.success) {
         toast({
           title: "Test Call Initiated",
           description: `A test call is being made to ${testCallNumber}. Status: ${result.status}`,
         });
-        
+
         // Update Twilio status to verified if successful
-        setConfig(prev => ({
+        setConfig((prev) => ({
           ...prev,
-          twilioStatus: 'verified'
+          twilioStatus: "verified",
         }));
       } else {
         toast({
           title: "Test Call Failed",
-          description: result.message || "Failed to make test call. Please check your Twilio configuration.",
+          description:
+            result.message ||
+            "Failed to make test call. Please check your Twilio configuration.",
           variant: "destructive",
         });
-        
+
         // Update Twilio status to failed
-        setConfig(prev => ({
+        setConfig((prev) => ({
           ...prev,
-          twilioStatus: 'failed'
+          twilioStatus: "failed",
         }));
       }
     } catch (error: any) {
-      console.error('Test call error:', error);
+      console.error("Test call error:", error);
       toast({
         title: "Test Call Error",
-        description: error.message || "An error occurred while making the test call.",
+        description:
+          error.message || "An error occurred while making the test call.",
         variant: "destructive",
       });
-      
+
       // Update Twilio status to failed
-      setConfig(prev => ({
+      setConfig((prev) => ({
         ...prev,
-        twilioStatus: 'failed'
+        twilioStatus: "failed",
       }));
     } finally {
       setTestingCall(false);
@@ -1050,60 +1241,63 @@ Keep the conversation natural and engaging. If they're not interested, politely 
 
     setTestingLLMChat(true);
     setTestLLMResponse("");
-    
+
     try {
       // Use provider name as is - we no longer need to map 'gemini' to 'google'
       const providerName = config.llmProvider.toLowerCase();
-      
+
       console.log(`Testing LLM chat with provider: ${providerName}`);
-      
+
       const result = await configApi.testLLMChat({
         provider: providerName,
         model: config.llmModel,
         prompt: testLLMPrompt,
         temperature: config.temperature,
-        apiKey: config.llmApiKey // Pass the current API key from the input
+        apiKey: config.llmApiKey, // Pass the current API key from the input
       });
-      
+
       if (result.success) {
         setTestLLMResponse(result.response.content);
-        
+
         toast({
           title: "Test Successful",
           description: "The LLM responded successfully to your prompt.",
         });
-        
+
         // Update LLM status to verified if successful
-        setConfig(prev => ({
+        setConfig((prev) => ({
           ...prev,
-          llmStatus: 'verified'
+          llmStatus: "verified",
         }));
       } else {
         toast({
           title: "Test Failed",
-          description: result.message || "Failed to get a response from the LLM. Please check your configuration.",
+          description:
+            result.message ||
+            "Failed to get a response from the LLM. Please check your configuration.",
           variant: "destructive",
         });
-        
+
         // Update LLM status to failed
-        setConfig(prev => ({
+        setConfig((prev) => ({
           ...prev,
-          llmStatus: 'failed'
+          llmStatus: "failed",
         }));
       }
     } catch (error: any) {
-      console.error('LLM chat test error:', error);
+      console.error("LLM chat test error:", error);
       setTestLLMResponse("");
       toast({
         title: "Test Error",
-        description: error.message || "An error occurred while testing the LLM.",
+        description:
+          error.message || "An error occurred while testing the LLM.",
         variant: "destructive",
       });
-      
+
       // Update LLM status to failed
-      setConfig(prev => ({
+      setConfig((prev) => ({
         ...prev,
-        llmStatus: 'failed'
+        llmStatus: "failed",
       }));
     } finally {
       setTestingLLMChat(false);
@@ -1126,13 +1320,20 @@ Keep the conversation natural and engaging. If they're not interested, politely 
       {/* Header */}
       <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
         <div className="min-w-0 flex-shrink-0">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight truncate">Configuration</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight truncate">
+            Configuration
+          </h1>
           <p className="text-muted-foreground text-sm sm:text-base">
             Configure your AI calling system settings
           </p>
         </div>
         <div className="flex flex-row gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={handleTestConnection} disabled={testingConnection}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleTestConnection}
+            disabled={testingConnection}
+          >
             {testingConnection ? (
               <TestTube className="h-4 w-4 mr-2 animate-spin" />
             ) : (
@@ -1156,7 +1357,9 @@ Keep the conversation natural and engaging. If they're not interested, politely 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="flex items-center gap-2">
-              <CardTitle className="text-sm font-medium">Voice Provider</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Voice Provider
+              </CardTitle>
               <HoverCard>
                 <HoverCardTrigger asChild>
                   <button className="h-5 w-5 text-muted-foreground hover:text-foreground">
@@ -1167,8 +1370,10 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                   <div className="space-y-2">
                     <h4 className="text-sm font-semibold">Voice Provider</h4>
                     <p className="text-sm text-muted-foreground">
-                      The AI voice synthesis service used to generate natural-sounding speech for phone calls. 
-                      ElevenLabs provides high-quality voice synthesis with emotional expression capabilities.
+                      The AI voice synthesis service used to generate
+                      natural-sounding speech for phone calls. ElevenLabs
+                      provides high-quality voice synthesis with emotional
+                      expression capabilities.
                     </p>
                   </div>
                 </HoverCardContent>
@@ -1177,14 +1382,16 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             <Mic className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold capitalize">{config.voiceProvider}</div>
+            <div className="text-2xl font-bold capitalize">
+              {config.voiceProvider}
+            </div>
             <Badge variant="outline" className="mt-1">
-              {config.elevenLabsStatus === 'verified' ? (
+              {config.elevenLabsStatus === "verified" ? (
                 <>
                   <CheckCircle className="h-3 w-3 mr-1" />
                   Connected
                 </>
-              ) : config.elevenLabsStatus === 'failed' ? (
+              ) : config.elevenLabsStatus === "failed" ? (
                 <>
                   <AlertTriangle className="h-3 w-3 mr-1 text-red-500" />
                   Failed
@@ -1206,7 +1413,9 @@ Keep the conversation natural and engaging. If they're not interested, politely 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="flex items-center gap-2">
-              <CardTitle className="text-sm font-medium">LLM Provider</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                LLM Provider
+              </CardTitle>
               <HoverCard>
                 <HoverCardTrigger asChild>
                   <button className="h-5 w-5 text-muted-foreground hover:text-foreground">
@@ -1217,8 +1426,10 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                   <div className="space-y-2">
                     <h4 className="text-sm font-semibold">LLM Provider</h4>
                     <p className="text-sm text-muted-foreground">
-                      The Large Language Model provider that powers the AI's conversation abilities. 
-                      This includes understanding customer responses, generating appropriate replies, and handling objections during calls.
+                      The Large Language Model provider that powers the AI's
+                      conversation abilities. This includes understanding
+                      customer responses, generating appropriate replies, and
+                      handling objections during calls.
                     </p>
                   </div>
                 </HoverCardContent>
@@ -1227,14 +1438,16 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             <Zap className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold capitalize">{config.llmProvider}</div>
+            <div className="text-2xl font-bold capitalize">
+              {config.llmProvider}
+            </div>
             <Badge variant="outline" className="mt-1">
-              {config.llmStatus === 'verified' ? (
+              {config.llmStatus === "verified" ? (
                 <>
                   <CheckCircle className="h-3 w-3 mr-1" />
                   Active
                 </>
-              ) : config.llmStatus === 'failed' ? (
+              ) : config.llmStatus === "failed" ? (
                 <>
                   <AlertTriangle className="h-3 w-3 mr-1 text-red-500" />
                   Failed
@@ -1256,7 +1469,9 @@ Keep the conversation natural and engaging. If they're not interested, politely 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="flex items-center gap-2">
-              <CardTitle className="text-sm font-medium">Phone Service</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Phone Service
+              </CardTitle>
               <HoverCard>
                 <HoverCardTrigger asChild>
                   <button className="h-5 w-5 text-muted-foreground hover:text-foreground">
@@ -1267,8 +1482,9 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                   <div className="space-y-2">
                     <h4 className="text-sm font-semibold">Phone Service</h4>
                     <p className="text-sm text-muted-foreground">
-                      The telephony service used to make outbound phone calls. Twilio provides reliable call connectivity, 
-                      call routing, and phone number management for the AI calling system.
+                      The telephony service used to make outbound phone calls.
+                      Twilio provides reliable call connectivity, call routing,
+                      and phone number management for the AI calling system.
                     </p>
                   </div>
                 </HoverCardContent>
@@ -1279,12 +1495,12 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           <CardContent>
             <div className="text-2xl font-bold">Twilio</div>
             <Badge variant="outline" className="mt-1">
-              {config.twilioStatus === 'verified' ? (
+              {config.twilioStatus === "verified" ? (
                 <>
                   <CheckCircle className="h-3 w-3 mr-1" />
                   Connected
                 </>
-              ) : config.twilioStatus === 'failed' ? (
+              ) : config.twilioStatus === "failed" ? (
                 <>
                   <AlertTriangle className="h-3 w-3 mr-1 text-red-500" />
                   Failed
@@ -1323,8 +1539,10 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                 <div className="space-y-2">
                   <h4 className="text-sm font-semibold">AI Voice Settings</h4>
                   <p className="text-sm text-muted-foreground">
-                    Configure voice synthesis parameters including provider, voice selection, speed, stability, and clarity. 
-                    These settings control how natural and expressive the AI voice sounds during phone conversations.
+                    Configure voice synthesis parameters including provider,
+                    voice selection, speed, stability, and clarity. These
+                    settings control how natural and expressive the AI voice
+                    sounds during phone conversations.
                   </p>
                 </div>
               </HoverCardContent>
@@ -1340,9 +1558,12 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               <Label htmlFor="voiceProvider">Voice Provider</Label>
               <Select
                 value={config.voiceProvider}
-                onValueChange={(value) => updateConfig('voiceProvider', value)}
+                onValueChange={(value) => updateConfig("voiceProvider", value)}
               >
-                <SelectTrigger id="voiceProvider" className="w-full h-10 rounded-xl">
+                <SelectTrigger
+                  id="voiceProvider"
+                  className="w-full h-10 rounded-xl"
+                >
                   <SelectValue placeholder="Select voice provider" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1356,29 +1577,35 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               <Label htmlFor="voiceId">Voice</Label>
               <Select
                 value={config.voiceId}
-                onValueChange={(value) => updateConfig('voiceId', value)}
+                onValueChange={(value) => updateConfig("voiceId", value)}
               >
                 <SelectTrigger id="voiceId" className="w-full h-10 rounded-xl">
                   <SelectValue placeholder="Select a voice" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableVoices.map((voice) => (
-                    <SelectItem key={voice.voiceId} value={voice.voiceId}>
-                      {voice.name}
-                    </SelectItem>
-                  ))}
+                  {availableVoices && availableVoices.length > 0 ? (
+                    availableVoices.map((voice) => (
+                      <SelectItem key={voice.voiceId} value={voice.voiceId}>
+                        {voice.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <p className="p-2 text-sm text-muted-foreground text-center">
+                      No voices available. Check provider & API key.
+                    </p>
+                  )}
                 </SelectContent>
               </Select>
             </div>
-            {config.voiceProvider === 'elevenlabs' && (
+            {config.voiceProvider === "elevenlabs" && (
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <Label htmlFor="elevenLabsApiKey">ElevenLabs API Key</Label>
                   {config.elevenLabsApiKey && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => handleDeleteItem('elevenlabs')}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteItem("elevenlabs")}
                       className="text-red-500 hover:text-red-700"
                     >
                       <Trash2 className="h-4 w-4 mr-1" />
@@ -1389,59 +1616,76 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                 <PasswordInput
                   id="elevenLabsApiKey"
                   value={config.elevenLabsApiKey}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateConfig('elevenLabsApiKey', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    updateConfig("elevenLabsApiKey", e.target.value)
+                  }
                   placeholder="Enter your ElevenLabs API key"
                 />
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="voiceSpeed">Voice Speed ({config.voiceSpeed}x)</Label>
+              <Label htmlFor="voiceSpeed">
+                Voice Speed ({config.voiceSpeed}x)
+              </Label>
               <Slider
                 id="voiceSpeed"
                 min={0.5}
                 max={2.0}
                 step={0.1}
                 value={[config.voiceSpeed]}
-                onValueChange={(value) => updateConfig('voiceSpeed', value[0])}
+                onValueChange={(value) => updateConfig("voiceSpeed", value[0])}
                 className="py-4"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="voiceStability">Voice Stability ({Math.round(config.voiceStability * 100)}%)</Label>
+              <Label htmlFor="voiceStability">
+                Voice Stability ({Math.round(config.voiceStability * 100)}%)
+              </Label>
               <Slider
                 id="voiceStability"
                 min={0}
                 max={1}
                 step={0.1}
                 value={[config.voiceStability]}
-                onValueChange={(value) => updateConfig('voiceStability', value[0])}
+                onValueChange={(value) =>
+                  updateConfig("voiceStability", value[0])
+                }
                 className="py-4"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="voiceClarity">Voice Clarity ({Math.round(config.voiceClarity * 100)}%)</Label>
+              <Label htmlFor="voiceClarity">
+                Voice Clarity ({Math.round(config.voiceClarity * 100)}%)
+              </Label>
               <Slider
                 id="voiceClarity"
                 min={0}
                 max={1}
                 step={0.1}
                 value={[config.voiceClarity]}
-                onValueChange={(value) => updateConfig('voiceClarity', value[0])}
+                onValueChange={(value) =>
+                  updateConfig("voiceClarity", value[0])
+                }
                 className="py-4"
               />
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={handleTestVoice} disabled={testingVoice}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleTestVoice}
+            disabled={testingVoice}
+          >
             {testingVoice ? (
               <Mic className="h-4 w-4 mr-2 animate-pulse" />
             ) : (
               <Mic className="h-4 w-4 mr-2" />
             )}
-            {testingVoice ? 'Testing...' : 'Test Voice'}
+            {testingVoice ? "Testing..." : "Test Voice"}
           </Button>
           <div className="text-xs text-muted-foreground mt-2">
-            Make sure you've entered a valid API key and voice ID before testing. 
-            Voice IDs can be found in your ElevenLabs dashboard.
+            Make sure you've entered a valid API key and voice ID before
+            testing. Voice IDs can be found in your ElevenLabs dashboard.
           </div>
         </CardContent>
       </Card>
@@ -1462,7 +1706,9 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                 <div className="space-y-2">
                   <h4 className="text-sm font-semibold">Phone Integration</h4>
                   <p className="text-sm text-muted-foreground">
-                    Configure Twilio telephony service for making outbound calls. This includes account credentials and phone number settings for call routing and delivery.
+                    Configure Twilio telephony service for making outbound
+                    calls. This includes account credentials and phone number
+                    settings for call routing and delivery.
                   </p>
                 </div>
               </HoverCardContent>
@@ -1478,10 +1724,10 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               <div className="flex justify-between items-center">
                 <Label htmlFor="twilioAccountSid">Twilio Account SID</Label>
                 {config.twilioAccountSid && config.twilioAuthToken && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => handleDeleteItem('twilio')}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteItem("twilio")}
                     className="text-red-500 hover:text-red-700"
                   >
                     <Trash2 className="h-4 w-4 mr-1" />
@@ -1492,7 +1738,9 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               <PasswordInput
                 id="twilioAccountSid"
                 value={config.twilioAccountSid}
-                onChange={(e) => updateConfig('twilioAccountSid', e.target.value)}
+                onChange={(e) =>
+                  updateConfig("twilioAccountSid", e.target.value)
+                }
                 placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
               />
             </div>
@@ -1501,7 +1749,9 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               <PasswordInput
                 id="twilioAuthToken"
                 value={config.twilioAuthToken}
-                onChange={(e) => updateConfig('twilioAuthToken', e.target.value)}
+                onChange={(e) =>
+                  updateConfig("twilioAuthToken", e.target.value)
+                }
                 placeholder="your-auth-token"
               />
             </div>
@@ -1510,28 +1760,36 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               <Input
                 id="twilioPhoneNumber"
                 value={config.twilioPhoneNumber}
-                onChange={(e) => updateConfig('twilioPhoneNumber', e.target.value)}
+                onChange={(e) =>
+                  updateConfig("twilioPhoneNumber", e.target.value)
+                }
                 placeholder="+1234567890"
               />
             </div>
           </div>
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setOpenTestCallDialog(true)} 
-              disabled={!config.twilioAccountSid || !config.twilioAuthToken || !config.twilioPhoneNumber || testingCall}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setOpenTestCallDialog(true)}
+              disabled={
+                !config.twilioAccountSid ||
+                !config.twilioAuthToken ||
+                !config.twilioPhoneNumber ||
+                testingCall
+              }
             >
               {testingCall ? (
                 <PhoneCall className="h-4 w-4 mr-2 animate-pulse" />
               ) : (
                 <PhoneCall className="h-4 w-4 mr-2" />
               )}
-              {testingCall ? 'Making Call...' : 'Test Call'}
+              {testingCall ? "Making Call..." : "Test Call"}
             </Button>
           </div>
           <div className="text-xs text-muted-foreground mt-2">
-            Make sure you've entered valid Twilio credentials and a phone number before testing.
+            Make sure you've entered valid Twilio credentials and a phone number
+            before testing.
           </div>
         </CardContent>
       </Card>
@@ -1550,9 +1808,13 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               </HoverCardTrigger>
               <HoverCardContent className="w-80">
                 <div className="space-y-2">
-                  <h4 className="text-sm font-semibold">AI Model Configuration</h4>
+                  <h4 className="text-sm font-semibold">
+                    AI Model Configuration
+                  </h4>
                   <p className="text-sm text-muted-foreground">
-                    Configure the Large Language Model (LLM) provider and settings that power conversation intelligence. Includes model selection, response parameters, and system prompts.
+                    Configure the Large Language Model (LLM) provider and
+                    settings that power conversation intelligence. Includes
+                    model selection, response parameters, and system prompts.
                   </p>
                 </div>
               </HoverCardContent>
@@ -1568,9 +1830,16 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               <Label htmlFor="llmProvider">LLM Provider</Label>
               <Select
                 value={config.llmProvider}
-                onValueChange={(value) => handleProviderChange(value as 'openai' | 'anthropic' | 'google')}
+                onValueChange={(value) =>
+                  handleProviderChange(
+                    value as "openai" | "anthropic" | "google"
+                  )
+                }
               >
-                <SelectTrigger id="llmProvider" className="w-full h-10 rounded-xl">
+                <SelectTrigger
+                  id="llmProvider"
+                  className="w-full h-10 rounded-xl"
+                >
                   <SelectValue placeholder="Select LLM provider" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1584,13 +1853,15 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               <Label htmlFor="llmModel">Model</Label>
               <Select
                 value={config.llmModel}
-                onValueChange={(value) => updateConfig('llmModel', value)}
+                onValueChange={(value) => updateConfig("llmModel", value)}
               >
                 <SelectTrigger id="llmModel" className="w-full h-10 rounded-xl">
                   <SelectValue placeholder="Select a model">
                     {config.llmModel && availableModels[config.llmProvider] ? (
                       <span className="font-medium">
-                        {availableModels[config.llmProvider].find(model => model.id === config.llmModel)?.name || config.llmModel}
+                        {availableModels[config.llmProvider].find(
+                          (model) => model.id === config.llmModel
+                        )?.name || config.llmModel}
                       </span>
                     ) : (
                       "Select a model"
@@ -1599,7 +1870,9 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                 </SelectTrigger>
                 <SelectContent>
                   {loadingModels ? (
-                    <SelectItem value="" disabled>Loading models...</SelectItem>
+                    <SelectItem value="" disabled>
+                      Loading models...
+                    </SelectItem>
                   ) : availableModels[config.llmProvider]?.length > 0 ? (
                     availableModels[config.llmProvider].map((model) => (
                       <SelectItem key={model.id} value={model.id}>
@@ -1612,7 +1885,8 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                           )}
                           {model.pricing && (
                             <span className="text-xs text-muted-foreground">
-                              Input: ${model.pricing.input}/1K tokens, Output: ${model.pricing.output}/1K tokens
+                              Input: ${model.pricing.input}/1K tokens, Output: $
+                              {model.pricing.output}/1K tokens
                             </span>
                           )}
                         </div>
@@ -1620,46 +1894,47 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                     ))
                   ) : (
                     <SelectItem value="" disabled>
-                      {config.llmApiKey 
-                        ? 'No models available' 
-                        : 'Enter API key to see available models'
-                      }
+                      {config.llmApiKey
+                        ? "No models available"
+                        : "Enter API key to see available models"}
                     </SelectItem>
                   )}
                 </SelectContent>
               </Select>
             </div>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <Label htmlFor="llmApiKey">API Key</Label>
-                  {config.llmApiKey && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => handleDeleteItem('llm', config.llmProvider)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Delete Key
-                    </Button>
-                  )}
-                </div>
-                <PasswordInput
-                  id="llmApiKey"
-                  value={config.llmApiKey}
-                  onChange={(e) => handleApiKeyChange(e.target.value)}
-                  placeholder="sk-..."
-                />
-              </div>
             <div className="space-y-2">
-              <Label htmlFor="temperature">Temperature ({config.temperature})</Label>
+              <div className="flex justify-between items-center">
+                <Label htmlFor="llmApiKey">API Key</Label>
+                {config.llmApiKey && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteItem("llm", config.llmProvider)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete Key
+                  </Button>
+                )}
+              </div>
+              <PasswordInput
+                id="llmApiKey"
+                value={config.llmApiKey}
+                onChange={(e) => handleApiKeyChange(e.target.value)}
+                placeholder="sk-..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="temperature">
+                Temperature ({config.temperature})
+              </Label>
               <Slider
                 id="temperature"
                 min={0}
                 max={1}
                 step={0.1}
                 value={[config.temperature]}
-                onValueChange={(value) => updateConfig('temperature', value[0])}
+                onValueChange={(value) => updateConfig("temperature", value[0])}
                 className="py-4"
               />
             </div>
@@ -1669,17 +1944,17 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             <Textarea
               id="systemPrompt"
               value={config.systemPrompt}
-              onChange={(e) => updateConfig('systemPrompt', e.target.value)}
+              onChange={(e) => updateConfig("systemPrompt", e.target.value)}
               rows={8}
               placeholder="Enter the system prompt for your AI assistant..."
               className="min-h-[120px] sm:min-h-[200px]"
             />
           </div>
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setOpenTestLLMChatDialog(true)} 
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setOpenTestLLMChatDialog(true)}
               disabled={!config.llmApiKey || testingLLMChat}
             >
               {testingLLMChat ? (
@@ -1687,11 +1962,12 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               ) : (
                 <MessageSquare className="h-4 w-4 mr-2" />
               )}
-              {testingLLMChat ? 'Testing...' : 'Test AI Chat'}
+              {testingLLMChat ? "Testing..." : "Test AI Chat"}
             </Button>
           </div>
           <div className="text-xs text-muted-foreground mt-2">
-            Test your LLM configuration with a sample prompt to ensure it's working correctly.
+            Test your LLM configuration with a sample prompt to ensure it's
+            working correctly.
           </div>
         </CardContent>
       </Card>
@@ -1712,7 +1988,9 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                 <div className="space-y-2">
                   <h4 className="text-sm font-semibold">Call Settings</h4>
                   <p className="text-sm text-muted-foreground">
-                    Configure call behavior parameters including maximum duration, retry logic, and timezone settings for optimal call management and scheduling.
+                    Configure call behavior parameters including maximum
+                    duration, retry logic, and timezone settings for optimal
+                    call management and scheduling.
                   </p>
                 </div>
               </HoverCardContent>
@@ -1725,12 +2003,16 @@ Keep the conversation natural and engaging. If they're not interested, politely 
         <CardContent>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="maxCallDuration">Max Call Duration (seconds)</Label>
+              <Label htmlFor="maxCallDuration">
+                Max Call Duration (seconds)
+              </Label>
               <Input
                 id="maxCallDuration"
                 type="number"
                 value={config.maxCallDuration}
-                onChange={(e) => updateConfig('maxCallDuration', parseInt(e.target.value))}
+                onChange={(e) =>
+                  updateConfig("maxCallDuration", parseInt(e.target.value))
+                }
               />
             </div>
             <div className="space-y-2">
@@ -1739,7 +2021,9 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                 id="retryAttempts"
                 type="number"
                 value={config.retryAttempts}
-                onChange={(e) => updateConfig('retryAttempts', parseInt(e.target.value))}
+                onChange={(e) =>
+                  updateConfig("retryAttempts", parseInt(e.target.value))
+                }
               />
             </div>
             <div className="space-y-2">
@@ -1748,14 +2032,16 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                 id="retryDelay"
                 type="number"
                 value={config.retryDelay}
-                onChange={(e) => updateConfig('retryDelay', parseInt(e.target.value))}
+                onChange={(e) =>
+                  updateConfig("retryDelay", parseInt(e.target.value))
+                }
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="timeZone">Time Zone</Label>
               <Select
                 value={config.timeZone}
-                onValueChange={(value) => updateConfig('timeZone', value)}
+                onValueChange={(value) => updateConfig("timeZone", value)}
               >
                 <SelectTrigger id="timeZone" className="w-full h-10 rounded-xl">
                   <SelectValue placeholder="Select time zone" />
@@ -1764,7 +2050,9 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                   <SelectItem value="America/New_York">Eastern Time</SelectItem>
                   <SelectItem value="America/Chicago">Central Time</SelectItem>
                   <SelectItem value="America/Denver">Mountain Time</SelectItem>
-                  <SelectItem value="America/Los_Angeles">Pacific Time</SelectItem>
+                  <SelectItem value="America/Los_Angeles">
+                    Pacific Time
+                  </SelectItem>
                   <SelectItem value="UTC">UTC</SelectItem>
                 </SelectContent>
               </Select>
@@ -1789,7 +2077,9 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                 <div className="space-y-2">
                   <h4 className="text-sm font-semibold">Webhook Integration</h4>
                   <p className="text-sm text-muted-foreground">
-                    Configure webhook endpoints to receive real-time notifications about call events, status updates, and completion data for external system integration.
+                    Configure webhook endpoints to receive real-time
+                    notifications about call events, status updates, and
+                    completion data for external system integration.
                   </p>
                 </div>
               </HoverCardContent>
@@ -1806,7 +2096,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               <Input
                 id="webhookUrl"
                 value={config.webhookUrl}
-                onChange={(e) => updateConfig('webhookUrl', e.target.value)}
+                onChange={(e) => updateConfig("webhookUrl", e.target.value)}
                 placeholder="https://your-server.com/webhook"
               />
             </div>
@@ -1814,10 +2104,10 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               <div className="flex justify-between items-center">
                 <Label htmlFor="webhookSecret">Webhook Secret</Label>
                 {config.webhookSecret && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => handleDeleteItem('webhook')}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteItem("webhook")}
                     className="text-red-500 hover:text-red-700"
                   >
                     <Trash2 className="h-4 w-4 mr-1" />
@@ -1828,11 +2118,12 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               <PasswordInput
                 id="webhookSecret"
                 value={config.webhookSecret}
-                onChange={(e) => updateConfig('webhookSecret', e.target.value)}
+                onChange={(e) => updateConfig("webhookSecret", e.target.value)}
                 placeholder="Enter your webhook secret key"
               />
               <div className="text-xs text-muted-foreground mt-2">
-                The webhook secret is used to verify that requests are coming from our service.
+                The webhook secret is used to verify that requests are coming
+                from our service.
               </div>
             </div>
           </div>
@@ -1845,16 +2136,22 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
             <AlertDialogDescription>
-              {itemToDelete?.type === 'twilio' && 'Are you sure you want to delete your Twilio configuration?'}
-              {itemToDelete?.type === 'elevenlabs' && 'Are you sure you want to delete your ElevenLabs configuration?'}
-              {itemToDelete?.type === 'llm' && `Are you sure you want to delete your ${itemToDelete.name} API key?`}
-              {itemToDelete?.type === 'webhook' && 'Are you sure you want to delete your Webhook secret?'}
+              {itemToDelete?.type === "twilio" &&
+                "Are you sure you want to delete your Twilio configuration?"}
+              {itemToDelete?.type === "elevenlabs" &&
+                "Are you sure you want to delete your ElevenLabs configuration?"}
+              {itemToDelete?.type === "llm" &&
+                `Are you sure you want to delete your ${itemToDelete.name} API key?`}
+              {itemToDelete?.type === "webhook" &&
+                "Are you sure you want to delete your Webhook secret?"}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmDelete} 
+            <AlertDialogCancel onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
               className="bg-red-500 hover:bg-red-600 text-white"
             >
               Delete
@@ -1864,16 +2161,19 @@ Keep the conversation natural and engaging. If they're not interested, politely 
       </AlertDialog>
 
       {/* Test Call Dialog */}
-      <AlertDialog open={openTestCallDialog} onOpenChange={setOpenTestCallDialog}>
+      <AlertDialog
+        open={openTestCallDialog}
+        onOpenChange={setOpenTestCallDialog}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Make Test Call</AlertDialogTitle>
             <AlertDialogDescription>
-              This will make a test call using your Twilio configuration.
-              Enter the phone number that should receive the test call.
+              This will make a test call using your Twilio configuration. Enter
+              the phone number that should receive the test call.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="testCallNumber">Phone Number to Call</Label>
@@ -1883,9 +2183,11 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                 value={testCallNumber}
                 onChange={(e) => setTestCallNumber(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">Enter a phone number in E.164 format (e.g., +1234567890)</p>
+              <p className="text-xs text-muted-foreground">
+                Enter a phone number in E.164 format (e.g., +1234567890)
+              </p>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="testCallMessage">Test Message (Optional)</Label>
               <Textarea
@@ -1897,26 +2199,30 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               />
             </div>
           </div>
-          
+
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleTestCall} disabled={testingCall}>
-              {testingCall ? 'Making Call...' : 'Make Test Call'}
+              {testingCall ? "Making Call..." : "Make Test Call"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Test LLM Chat Dialog */}
-      <AlertDialog open={openTestLLMChatDialog} onOpenChange={setOpenTestLLMChatDialog}>
+      <AlertDialog
+        open={openTestLLMChatDialog}
+        onOpenChange={setOpenTestLLMChatDialog}
+      >
         <AlertDialogContent className="max-w-3xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Test AI Chat</AlertDialogTitle>
             <AlertDialogDescription>
-              Test your AI model with a sample prompt to verify it's working correctly.
+              Test your AI model with a sample prompt to verify it's working
+              correctly.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="testLLMPrompt">Test Prompt</Label>
@@ -1928,7 +2234,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                 rows={3}
               />
             </div>
-            
+
             {testLLMResponse && (
               <div className="space-y-2 mt-4">
                 <Label>AI Response</Label>
@@ -1938,11 +2244,14 @@ Keep the conversation natural and engaging. If they're not interested, politely 
               </div>
             )}
           </div>
-          
+
           <AlertDialogFooter>
             <AlertDialogCancel>Close</AlertDialogCancel>
-            <AlertDialogAction onClick={handleTestLLMChat} disabled={testingLLMChat}>
-              {testingLLMChat ? 'Testing...' : 'Test AI Response'}
+            <AlertDialogAction
+              onClick={handleTestLLMChat}
+              disabled={testingLLMChat}
+            >
+              {testingLLMChat ? "Testing..." : "Test AI Response"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
