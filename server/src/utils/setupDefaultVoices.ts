@@ -2,58 +2,58 @@ import mongoose from 'mongoose';
 import logger from './logger';
 import { IConfiguration } from '../models/Configuration';
 
-const defaultVoices = [
-  {
-    voiceId: 'EXAVITQu4vr4xnSDxMaL',
-    name: 'Rachel (Professional)',
-    previewUrl: 'https://storage.googleapis.com/eleven-public-prod/premade/voices/rachel/sample.mp3'
-  },
-  {
-    voiceId: '21m00Tcm4TlvDq8ikWAM',
-    name: 'Jessica (Friendly)',
-    previewUrl: 'https://storage.googleapis.com/eleven-public-prod/premade/voices/jessica/sample.mp3'
-  },
-  {
-    voiceId: 'VR6AewLTigWG4xSOukaG',
-    name: 'Alex (Empathetic)',
-    previewUrl: 'https://storage.googleapis.com/eleven-public-prod/premade/voices/alex/sample.mp3'
-  }
-];
-
-export async function ensureDefaultVoices() {
+/**
+ * Ensures basic configuration structure exists without hardcoded voices.
+ * Users should configure voices through the ElevenLabs API integration.
+ */
+export async function ensureDefaultConfiguration() {
   try {
     const Configuration = mongoose.model<IConfiguration>('Configuration');
     const config = await Configuration.findOne();
 
     if (!config) {
-      logger.warn('No configuration found. Creating new configuration with default voices.');
+      logger.warn('No configuration found. Creating new basic configuration structure.');
       const newConfig = new Configuration({
         elevenLabsConfig: {
-          availableVoices: defaultVoices,
-          isEnabled: true,
+          apiKey: '',          // Empty - user needs to provide API key
+          availableVoices: [], // Empty - will be populated when user configures ElevenLabs API
+          isEnabled: false,    // Disabled until user provides API key
           voiceSpeed: 1.0,
           voiceStability: 0.8,
           voiceClarity: 0.9
         }
       });
       await newConfig.save();
-      logger.info('Created new configuration with default voices');
+      logger.info('Created new configuration structure. Users need to configure ElevenLabs API key and voices.');
       return;
     }
 
-    // Check if we need to add any missing default voices
-    const existingVoiceIds = new Set(config.elevenLabsConfig.availableVoices.map(v => v.voiceId));
-    const missingVoices = defaultVoices.filter(v => !existingVoiceIds.has(v.voiceId));
-
-    if (missingVoices.length > 0) {
-      config.elevenLabsConfig.availableVoices.push(...missingVoices);
+    // Ensure the configuration has the necessary structure
+    if (!config.elevenLabsConfig) {
+      config.elevenLabsConfig = {
+        apiKey: '',          // Empty - user needs to provide API key
+        availableVoices: [],
+        isEnabled: false,
+        voiceSpeed: 1.0,
+        voiceStability: 0.8,
+        voiceClarity: 0.9
+      };
       await config.save();
-      logger.info(`Added ${missingVoices.length} missing default voices to configuration`);
+      logger.info('Updated configuration with ElevenLabs structure');
     } else {
-      logger.info('Default voices already present in configuration');
+      logger.info('Configuration structure already exists');
     }
   } catch (error) {
-    logger.error('Error ensuring default voices:', error);
+    logger.error('Error ensuring basic configuration:', error);
     throw error;
   }
+}
+
+// Keep the old function name for backwards compatibility, but mark it as deprecated
+/**
+ * @deprecated Use ensureDefaultConfiguration instead. This function no longer adds hardcoded voices.
+ */
+export async function ensureDefaultVoices() {
+  logger.warn('ensureDefaultVoices is deprecated. Use ensureDefaultConfiguration instead.');
+  return ensureDefaultConfiguration();
 }

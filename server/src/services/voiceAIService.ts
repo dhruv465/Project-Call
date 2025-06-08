@@ -1,4 +1,5 @@
 import axios from 'axios';
+import mongoose from 'mongoose';
 import { logger } from '../index';
 
 export interface VoicePersonality {
@@ -72,118 +73,121 @@ export class VoiceAIService {
     this.openAIApiKey = openAIApiKey;
   }
 
-  // Voice Personalities - Professional, Friendly, Empathetic
-  static getVoicePersonalities(): VoicePersonality[] {
-    return [
-      {
-        id: 'professional',
-        name: 'Professional',
-        description: 'Confident, authoritative, and business-focused',
-        voiceId: 'EXAVITQu4vr4xnSDxMaL', // Rachel
-        personality: 'professional',
-        style: 'business-formal',
-        emotionalRange: ['confident', 'authoritative', 'respectful', 'clear'],
-        languageSupport: ['English', 'Hindi'],
-        culturalAdaptations: {
-          English: {
-            greetings: ['Good morning', 'Good afternoon', 'Hello'],
-            closings: ['Thank you for your time', 'Have a great day'],
-            persuasionStyle: 'Direct and data-driven',
-            communicationPattern: 'Linear, fact-based, time-efficient'
-          },
-          Hindi: {
-            greetings: ['नमस्कार', 'नमस्ते', 'आदाब'],
-            closings: ['धन्यवाद', 'आपका दिन शुभ हो'],
-            persuasionStyle: 'Respectful with family consideration',
-            communicationPattern: 'Relationship-first, then business'
-          }
-        },
-        settings: {
-          stability: 0.85,
-          similarityBoost: 0.75,
-          style: 0.2,
-          useSpeakerBoost: true
-        },
-        trainingMetrics: {
-          emotionAccuracy: 0.92,
-          adaptationAccuracy: 0.89,
-          customerSatisfactionScore: 0.87,
-          conversionRate: 0.76
-        }
-      },
-      {
-        id: 'friendly',
-        name: 'Friendly',
-        description: 'Warm, approachable, and conversational',
-        voiceId: '21m00Tcm4TlvDq8ikWAM', // Jessica
-        personality: 'friendly',
-        style: 'casual-warm',
-        emotionalRange: ['warm', 'enthusiastic', 'approachable', 'energetic'],
-        languageSupport: ['English', 'Hindi'],
-        culturalAdaptations: {
-          English: {
-            greetings: ['Hi there!', 'Hey!', 'Hello!', 'How are you?'],
-            closings: ['Take care!', 'Have an awesome day!', 'Talk soon!'],
-            persuasionStyle: 'Enthusiastic and relatable',
-            communicationPattern: 'Casual, conversational, story-driven'
-          },
-          Hindi: {
-            greetings: ['हैलो!', 'नमस्ते!', 'कैसे हैं आप?'],
-            closings: ['अपना ख्याल रखिए!', 'आपका दिन शानदार हो!'],
-            persuasionStyle: 'Warm and family-friendly approach',
-            communicationPattern: 'Personal stories, emotional connection'
-          }
-        },
-        settings: {
-          stability: 0.75,
-          similarityBoost: 0.85,
-          style: 0.4,
-          useSpeakerBoost: true
-        },
-        trainingMetrics: {
-          emotionAccuracy: 0.88,
-          adaptationAccuracy: 0.91,
-          customerSatisfactionScore: 0.93,
-          conversionRate: 0.71
-        }
-      },
-      {
-        id: 'empathetic',
-        name: 'Empathetic',
-        description: 'Understanding, caring, and emotionally intelligent',
-        voiceId: 'VR6AewLTigWG4xSOukaG', // Alex
-        personality: 'empathetic',
-        style: 'caring-supportive',
-        emotionalRange: ['understanding', 'supportive', 'patient', 'compassionate'],
-        languageSupport: ['English', 'Hindi'],
-        culturalAdaptations: {
-          English: {
-            greetings: ['I understand', 'I hear you', 'Thank you for sharing'],
-            closings: ['I hope this helps', 'Please feel free to reach out', 'You\'re not alone in this'],
-            persuasionStyle: 'Gentle guidance with emotional support',
-            communicationPattern: 'Listen first, acknowledge feelings, then provide solutions'
-          },
-          Hindi: {
-            greetings: ['मैं समझता हूं', 'आपकी बात सुनी', 'साझा करने के लिए धन्यवाद'],
-            closings: ['मुझे उम्मीद है यह मदद करेगा', 'बेझिझक संपर्क करें'],
-            persuasionStyle: 'Understanding with family values respect',
-            communicationPattern: 'Emotional support first, then practical solutions'
-          }
-        },
-        settings: {
-          stability: 0.8,
-          similarityBoost: 0.8,
-          style: 0.3,
-          useSpeakerBoost: true
-        },
-        trainingMetrics: {
-          emotionAccuracy: 0.94,
-          adaptationAccuracy: 0.87,
-          customerSatisfactionScore: 0.95,
-          conversionRate: 0.68
-        }
+  // Voice Personalities - Dynamically generated from configuration
+  static async getVoicePersonalities(): Promise<VoicePersonality[]> {
+    try {
+      // Get system configuration to use configured voices instead of hardcoded ones
+      const configuration = await mongoose.model('Configuration').findOne();
+      if (!configuration || !configuration.elevenLabsConfig) {
+        throw new Error('ElevenLabs configuration not found');
       }
-    ];
+
+      const availableVoices = configuration.elevenLabsConfig.availableVoices || [];
+      if (availableVoices.length === 0) {
+        throw new Error('No voices configured in ElevenLabs. Please configure voices in the system settings.');
+      }
+
+      // Convert available voices to VoicePersonality format
+      return availableVoices.map((voice, index) => {
+        // Infer personality type from voice name
+        const personalityType = this.inferPersonalityFromVoiceName(voice.name);
+        
+        return {
+          id: personalityType,
+          name: voice.name,
+          description: `AI voice with ${personalityType} characteristics`,
+          voiceId: voice.voiceId, // Use voice ID from configuration
+          personality: personalityType,
+          style: this.getStyleForPersonality(personalityType),
+          emotionalRange: this.getEmotionalRangeForPersonality(personalityType),
+          languageSupport: ['English', 'Hindi'], // Default supported languages
+          culturalAdaptations: this.getCulturalAdaptations(personalityType),
+          settings: {
+            stability: 0.8,
+            similarityBoost: 0.8,
+            style: 0.3,
+            useSpeakerBoost: true
+          },
+          trainingMetrics: {
+            emotionAccuracy: 0.9,
+            adaptationAccuracy: 0.9,
+            customerSatisfactionScore: 0.85,
+            conversionRate: 0.75
+          }
+        };
+      });
+    } catch (error) {
+      logger.error('Error fetching voice personalities from configuration:', error);
+      throw new Error('Failed to fetch voice personalities from configuration');
+    }
+  }
+
+  private static inferPersonalityFromVoiceName(voiceName: string): string {
+    const name = voiceName.toLowerCase();
+    if (name.includes('professional') || name.includes('business') || name.includes('formal') || name.includes('rachel')) {
+      return 'professional';
+    } else if (name.includes('friendly') || name.includes('warm') || name.includes('casual') || name.includes('jessica')) {
+      return 'friendly';
+    } else if (name.includes('empathetic') || name.includes('caring') || name.includes('supportive') || name.includes('alex')) {
+      return 'empathetic';
+    }
+    // Default to professional for unknown names
+    return 'professional';
+  }
+
+  private static getStyleForPersonality(personality: string): string {
+    switch (personality) {
+      case 'professional': return 'business-formal';
+      case 'friendly': return 'casual-warm';
+      case 'empathetic': return 'caring-supportive';
+      default: return 'balanced-neutral';
+    }
+  }
+
+  private static getEmotionalRangeForPersonality(personality: string): string[] {
+    switch (personality) {
+      case 'professional': return ['confident', 'authoritative', 'respectful', 'clear'];
+      case 'friendly': return ['warm', 'enthusiastic', 'approachable', 'energetic'];
+      case 'empathetic': return ['understanding', 'supportive', 'patient', 'compassionate'];
+      default: return ['neutral', 'balanced', 'adaptable', 'clear'];
+    }
+  }
+
+  private static getCulturalAdaptations(personality: string): any {
+    const baseAdaptations = {
+      English: {
+        greetings: ['Hello', 'Good morning', 'Good afternoon'],
+        closings: ['Thank you', 'Have a great day', 'Take care'],
+        persuasionStyle: 'Direct and clear',
+        communicationPattern: 'Clear and respectful'
+      },
+      Hindi: {
+        greetings: ['नमस्कार', 'नमस्ते', 'आदाब'],
+        closings: ['धन्यवाद', 'आपका दिन शुभ हो', 'अपना ख्याल रखें'],
+        persuasionStyle: 'Respectful and relationship-focused',
+        communicationPattern: 'Contextual and family-oriented'
+      }
+    };
+
+    // Customize based on personality
+    switch (personality) {
+      case 'professional':
+        baseAdaptations.English.persuasionStyle = 'Direct and data-driven';
+        baseAdaptations.English.communicationPattern = 'Linear, fact-based, time-efficient';
+        break;
+      case 'friendly':
+        baseAdaptations.English.greetings = ['Hi there!', 'Hello!', 'Hey!'];
+        baseAdaptations.English.closings = ['Take care!', 'Have an awesome day!', 'Catch you later!'];
+        baseAdaptations.English.persuasionStyle = 'Enthusiastic and benefit-focused';
+        break;
+      case 'empathetic':
+        baseAdaptations.English.greetings = ['How are you doing?', 'I hope you\'re well', 'How can I help you today?'];
+        baseAdaptations.English.closings = ['I\'m here if you need anything', 'Take your time', 'You\'re in good hands'];
+        baseAdaptations.English.persuasionStyle = 'Understanding and solution-focused';
+        break;
+    }
+
+    return baseAdaptations;
   }
 
   // Emotion Detection from Speech

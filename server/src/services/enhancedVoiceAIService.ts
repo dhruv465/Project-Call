@@ -312,16 +312,26 @@ export class EnhancedVoiceAIService {
         return matchingVoice.voiceId;
       }
       
-      // If voice ID not found, use the first available voice
+      // If voice ID not found, use the first available voice from configuration
       const fallbackVoice = availableVoices[0];
-      logger.info(`Voice ID ${campaignVoiceId} not found, using fallback: ${fallbackVoice.name} (${fallbackVoice.voiceId})`);
+      logger.info(`Voice ID ${campaignVoiceId} not found, using configured fallback: ${fallbackVoice.name} (${fallbackVoice.voiceId})`);
       return fallbackVoice.voiceId;
     } catch (error) {
       logger.error(`Error in getValidVoiceId: ${getErrorMessage(error)}`);
       
-      // Return a hardcoded voice ID as ultimate fallback
-      // This is a standard voice ID in ElevenLabs that is likely to exist
-      return "21m00Tcm4TlvDq8ikWAM";
+      // Instead of hardcoded fallback, try to get any available voice from configuration
+      try {
+        const configuration = await mongoose.model('Configuration').findOne();
+        if (configuration?.elevenLabsConfig?.availableVoices?.length > 0) {
+          const emergency_fallback = configuration.elevenLabsConfig.availableVoices[0];
+          logger.warn(`Using emergency fallback voice from configuration: ${emergency_fallback.name}`);
+          return emergency_fallback.voiceId;
+        }
+      } catch (fallbackError) {
+        logger.error(`Emergency fallback also failed: ${getErrorMessage(fallbackError)}`);
+      }
+      
+      throw new Error('No voices available in configuration. Please configure voices in the system settings.');
     }
   }
 
