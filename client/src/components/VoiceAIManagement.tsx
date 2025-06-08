@@ -11,8 +11,6 @@ import {
   Mic, 
   Volume2, 
   Brain, 
-  Languages, 
-  Heart, 
   Zap, 
   TrendingUp, 
   RotateCcw
@@ -23,27 +21,15 @@ interface VoicePersonality {
   id: string;
   name: string;
   description: string;
-  emotionalRange: string[];
   languageSupport: string[];
   trainingMetrics: {
-    emotionAccuracy: number;
     adaptationAccuracy: number;
     customerSatisfactionScore: number;
     conversionRate: number;
   };
 }
 
-interface EmotionAnalysis {
-  primary: string;
-  confidence: number;
-  intensity: number;
-  context: string;
-  culturalContext?: string;
-  adaptationNeeded: boolean;
-}
-
 interface TrainingResults {
-  emotionAccuracy: number;
   personalityAccuracy: number;
   bilingualAccuracy: number;
   conversationalAccuracy: number;
@@ -54,14 +40,12 @@ interface TrainingResults {
 
 const VoiceAIManagement: React.FC = () => {
   const [personalities, setPersonalities] = useState<VoicePersonality[]>([]);
-  const [selectedPersonality, setSelectedPersonality] = useState<string>('professional');
+  const [selectedPersonality, setSelectedPersonality] = useState<string>('');
   const [selectedLanguage, setSelectedLanguage] = useState<'English' | 'Hindi'>('English');
   const [isModelTrained, setIsModelTrained] = useState(false);
   const [isTraining, setIsTraining] = useState(false);
   const [trainingProgress, setTrainingProgress] = useState(0);
   const [testText, setTestText] = useState('');
-  const [emotionAnalysis, setEmotionAnalysis] = useState<EmotionAnalysis | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [trainingResults, setTrainingResults] = useState<TrainingResults | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -76,6 +60,11 @@ const VoiceAIManagement: React.FC = () => {
       
       setPersonalities(response.data.personalities);
       setIsModelTrained(response.data.modelTrained);
+      
+      // Set first available personality as selected if none is selected
+      if (response.data.personalities.length > 0 && !selectedPersonality) {
+        setSelectedPersonality(response.data.personalities[0].id);
+      }
     } catch (error) {
       console.error('Error loading voice personalities:', error);
       toast.error('Failed to load voice personalities');
@@ -111,75 +100,34 @@ const VoiceAIManagement: React.FC = () => {
       toast.error('Failed to train voice model');
     } finally {
       setIsTraining(false);
-      setTimeout(() => setTrainingProgress(0), 2000);
     }
   };
 
-  const analyzeEmotion = async () => {
-    if (!testText.trim()) {
-      toast.error('Please enter text to analyze');
-      return;
-    }
-
-    setIsAnalyzing(true);
-    try {
-      const response = await api.post('/lumina-outreach/analyze-emotion', {
-        text: testText,
-        language: selectedLanguage
-      });
-
-      setEmotionAnalysis(response.data.emotionAnalysis);
-      toast.success('Emotion analysis completed');
-    } catch (error) {
-      console.error('Error analyzing emotion:', error);
-      toast.error('Failed to analyze emotion');
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const synthesizeSpeech = async () => {
+  const synthesizeVoice = async () => {
     if (!testText.trim()) {
       toast.error('Please enter text to synthesize');
       return;
     }
 
     setIsSynthesizing(true);
+    
     try {
-      const response = await api.post('/lumina-outreach/synthesize-speech', {
+      const response = await api.post('/lumina-outreach/synthesize-voice', {
         text: testText,
-        personalityId: selectedPersonality,
-        language: selectedLanguage,
-        emotionalContext: emotionAnalysis?.context
-      }, {
-        responseType: 'blob'
+        personality: selectedPersonality,
+        language: selectedLanguage
       });
 
-      const url = URL.createObjectURL(response.data);
-      setAudioUrl(url);
-      toast.success('Speech synthesized successfully');
+      if (response.data.audioUrl) {
+        setAudioUrl(response.data.audioUrl);
+        toast.success('Voice synthesis completed');
+      }
     } catch (error) {
-      console.error('Error synthesizing speech:', error);
-      toast.error('Failed to synthesize speech');
+      console.error('Error synthesizing voice:', error);
+      toast.error('Failed to synthesize voice');
     } finally {
       setIsSynthesizing(false);
     }
-  };
-
-  const getEmotionColor = (emotion: string) => {
-    const colors: Record<string, string> = {
-      'happy': 'bg-green-100 text-green-800',
-      'excited': 'bg-yellow-100 text-yellow-800',
-      'interested': 'bg-blue-100 text-blue-800',
-      'neutral': 'bg-gray-100 text-gray-800',
-      'confused': 'bg-orange-100 text-orange-800',
-      'frustrated': 'bg-red-100 text-red-800',
-      'angry': 'bg-red-200 text-red-900',
-      'sad': 'bg-purple-100 text-purple-800',
-      'worried': 'bg-indigo-100 text-indigo-800',
-      'skeptical': 'bg-pink-100 text-pink-800'
-    };
-    return colors[emotion] || 'bg-gray-100 text-gray-800';
   };
 
   const selectedPersonalityData = personalities.find(p => p.id === selectedPersonality);
@@ -189,154 +137,149 @@ const VoiceAIManagement: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Voice AI Management</h1>
-          <p className="text-gray-600">Advanced voice AI with perfect training and cultural intelligence</p>
+          <h2 className="text-2xl font-bold tracking-tight">Voice AI Management</h2>
+          <p className="text-muted-foreground">
+            Configure and train AI voice personalities for enhanced customer interactions
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={isModelTrained ? 'default' : 'secondary'} className="gap-1">
-            <Brain className="w-4 h-4" />
-            {isModelTrained ? 'Trained' : 'Not Trained'}
-          </Badge>
-        </div>
+        <Badge variant={isModelTrained ? "default" : "secondary"}>
+          {isModelTrained ? "Model Trained" : "Training Required"}
+        </Badge>
       </div>
 
       {/* Training Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="w-5 h-5" />
-            Model Training & Performance
-          </CardTitle>
-          <CardDescription>
-            Train the voice AI model with advanced emotional intelligence and cultural awareness
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!isModelTrained && (
+      {!isModelTrained && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Brain className="h-5 w-5" />
+              Voice AI Training
+            </CardTitle>
+            <CardDescription>
+              Train the voice AI model with advanced conversational abilities and cultural awareness
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <Alert>
-              <Brain className="w-4 h-4" />
+              <Zap className="h-4 w-4" />
               <AlertDescription>
-                The voice AI model needs to be trained before use. This will enable advanced emotion detection,
-                personality adaptation, and bilingual conversation capabilities.
+                The voice AI model needs to be trained before use. This will enable advanced conversation handling,
+                personality adaptation, and bilingual support.
               </AlertDescription>
             </Alert>
-          )}
-          
-          <div className="flex items-center justify-between">
-            <Button 
-              onClick={trainVoiceModel}
-              disabled={isTraining}
-              className="flex items-center gap-2"
-            >
-              {isTraining ? <RotateCcw className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
-              {isTraining ? 'Training Model...' : 'Train Voice AI Model'}
-            </Button>
             
-            {trainingResults && (
-              <div className="text-sm text-gray-600">
-                Model Version: {trainingResults.modelVersion}
+            {isTraining && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Training Progress</span>
+                  <span>{trainingProgress}%</span>
+                </div>
+                <Progress value={trainingProgress} className="w-full" />
               </div>
             )}
-          </div>
 
-          {isTraining && (
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Training Progress</span>
-                <span>{trainingProgress}%</span>
-              </div>
-              <Progress value={trainingProgress} className="h-2" />
-            </div>
-          )}
+            <Button 
+              onClick={trainVoiceModel} 
+              disabled={isTraining}
+              className="w-full"
+            >
+              {isTraining ? (
+                <>
+                  <RotateCcw className="mr-2 h-4 w-4 animate-spin" />
+                  Training Model...
+                </>
+              ) : (
+                <>
+                  <Brain className="mr-2 h-4 w-4" />
+                  Train Voice AI Model
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
-          {trainingResults && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">
-                  {Math.round(trainingResults.emotionAccuracy * 100)}%
-                </div>
-                <div className="text-sm text-gray-600">Emotion Accuracy</div>
-              </div>
-              <div className="text-center">
+      {/* Training Results */}
+      {trainingResults && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Training Results
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-4 border rounded-xl">
                 <div className="text-2xl font-bold text-green-600">
                   {Math.round(trainingResults.personalityAccuracy * 100)}%
                 </div>
                 <div className="text-sm text-gray-600">Personality Accuracy</div>
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600">
+              <div className="text-center p-4 border rounded-xl">
+                <div className="text-2xl font-bold text-blue-600">
                   {Math.round(trainingResults.bilingualAccuracy * 100)}%
                 </div>
                 <div className="text-sm text-gray-600">Bilingual Accuracy</div>
               </div>
-              <div className="text-center">
+              <div className="text-center p-4 border rounded-xl">
+                <div className="text-2xl font-bold text-purple-600">
+                  {Math.round(trainingResults.conversationalAccuracy * 100)}%
+                </div>
+                <div className="text-sm text-gray-600">Conversation Accuracy</div>
+              </div>
+              <div className="text-center p-4 border rounded-xl">
                 <div className="text-2xl font-bold text-orange-600">
                   {Math.round(trainingResults.overallAccuracy * 100)}%
                 </div>
                 <div className="text-sm text-gray-600">Overall Accuracy</div>
               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Voice Personalities */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Heart className="w-5 h-5" />
+            <Mic className="h-5 w-5" />
             Voice Personalities
           </CardTitle>
           <CardDescription>
-            Advanced AI personalities with cultural intelligence and emotional adaptation
+            Advanced AI personalities with cultural intelligence and conversational adaptation
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <CardContent className="space-y-4">
+          <div className="grid gap-4">
             {personalities.map((personality) => (
               <div
                 key={personality.id}
-                className={`p-4 border rounded-xl cursor-pointer transition-colors ${
+                className={`p-4 border rounded-lg cursor-pointer transition-colors ${
                   selectedPersonality === personality.id
                     ? 'border-blue-500 bg-blue-50'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
                 onClick={() => setSelectedPersonality(personality.id)}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold">{personality.name}</h3>
-                  <Badge variant="outline" className="text-xs">
-                    {Math.round(personality.trainingMetrics.customerSatisfactionScore * 100)}%
-                  </Badge>
-                </div>
-                <p className="text-sm text-gray-600 mb-3">{personality.description}</p>
-                
-                <div className="space-y-2">
-                  <div className="flex flex-wrap gap-1">
-                    {personality.emotionalRange.slice(0, 3).map((emotion) => (
-                      <Badge key={emotion} variant="outline" className="text-xs">
-                        {emotion}
-                      </Badge>
-                    ))}
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <Languages className="w-3 h-3" />
-                    {personality.languageSupport.join(', ')}
-                  </div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <div className="text-gray-500">Emotion Acc.</div>
-                    <div className="font-semibold">
-                      {Math.round(personality.trainingMetrics.emotionAccuracy * 100)}%
+                <div className="flex justify-between items-start">
+                  <div className="space-y-2">
+                    <h4 className="font-semibold">{personality.name}</h4>
+                    <p className="text-sm text-gray-600">{personality.description}</p>
+                    <div className="flex gap-2">
+                      {personality.languageSupport.map((lang) => (
+                        <Badge key={lang} variant="outline" className="text-xs">
+                          {lang}
+                        </Badge>
+                      ))}
                     </div>
                   </div>
-                  <div>
-                    <div className="text-gray-500">Conversion</div>
-                    <div className="font-semibold">
-                      {Math.round(personality.trainingMetrics.conversionRate * 100)}%
+                  <div className="text-right space-y-1">
+                    <div className="text-sm">
+                      <div className="text-gray-500">Adaptation Acc.</div>
+                      <div className="font-semibold">
+                        {Math.round(personality.trainingMetrics.adaptationAccuracy * 100)}%
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -346,26 +289,25 @@ const VoiceAIManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Testing Interface */}
+      {/* Voice Synthesis Testing */}
       {isModelTrained && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Mic className="w-5 h-5" />
-              Voice AI Testing
+              <Volume2 className="h-5 w-5" />
+              Voice Synthesis Testing
             </CardTitle>
             <CardDescription>
-              Test emotion detection, personality adaptation, and speech synthesis
+              Test voice synthesis with different personalities and languages
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Controls */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Personality</label>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Voice Personality</label>
                 <Select value={selectedPersonality} onValueChange={setSelectedPersonality}>
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select personality" />
                   </SelectTrigger>
                   <SelectContent>
                     {personalities.map((personality) => (
@@ -376,159 +318,87 @@ const VoiceAIManagement: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2">Language</label>
-                <Select value={selectedLanguage} onValueChange={(value) => setSelectedLanguage(value as 'English' | 'Hindi')}>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Language</label>
+                <Select value={selectedLanguage} onValueChange={(value: 'English' | 'Hindi') => setSelectedLanguage(value)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="English">English</SelectItem>
-                    <SelectItem value="Hindi">Hindi</SelectItem>
+                    <SelectItem value="Hindi">हिंदी (Hindi)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            {/* Test Input */}
-            <div>
-              <label className="block text-sm font-medium mb-2">Test Text</label>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Test Text</label>
               <Textarea
+                placeholder="Enter text to synthesize..."
                 value={testText}
                 onChange={(e) => setTestText(e.target.value)}
-                placeholder={selectedLanguage === 'Hindi' 
-                  ? "हिंदी में टेस्ट टेक्स्ट लिखें..." 
-                  : "Enter test text in English..."
-                }
                 rows={3}
               />
             </div>
 
-            {/* Action Buttons */}
             <div className="flex gap-2">
               <Button 
-                onClick={analyzeEmotion}
-                disabled={isAnalyzing || !testText.trim()}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                {isAnalyzing ? <RotateCcw className="w-4 h-4 animate-spin" /> : <Heart className="w-4 h-4" />}
-                Analyze Emotion
-              </Button>
-              
-              <Button 
-                onClick={synthesizeSpeech}
+                onClick={synthesizeVoice} 
                 disabled={isSynthesizing || !testText.trim()}
-                className="flex items-center gap-2"
+                className="flex-1"
               >
-                {isSynthesizing ? <RotateCcw className="w-4 h-4 animate-spin" /> : <Volume2 className="w-4 h-4" />}
-                Synthesize Speech
+                {isSynthesizing ? (
+                  <>
+                    <RotateCcw className="mr-2 h-4 w-4 animate-spin" />
+                    Synthesizing...
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="mr-2 h-4 w-4" />
+                    Synthesize Voice
+                  </>
+                )}
               </Button>
             </div>
 
-            {/* Emotion Analysis Results */}
-            {emotionAnalysis && (
-              <div className="p-4 border rounded-xl bg-gray-50">
-                <h3 className="font-semibold mb-3">Emotion Analysis Results</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge className={getEmotionColor(emotionAnalysis.primary)}>
-                        {emotionAnalysis.primary}
-                      </Badge>
-                      <span className="text-sm text-gray-600">
-                        {Math.round(emotionAnalysis.confidence * 100)}% confidence
-                      </span>
-                    </div>
-                    <div className="text-sm">
-                      <div className="mb-1">
-                        <span className="font-medium">Intensity:</span> {Math.round(emotionAnalysis.intensity * 100)}%
-                      </div>
-                      <div className="mb-1">
-                        <span className="font-medium">Context:</span> {emotionAnalysis.context}
-                      </div>
-                      {emotionAnalysis.culturalContext && (
-                        <div>
-                          <span className="font-medium">Cultural Context:</span> {emotionAnalysis.culturalContext}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h4 className="font-medium mb-2">Adaptation Needed</h4>
-                    <Badge variant={emotionAnalysis.adaptationNeeded ? 'destructive' : 'default'}>
-                      {emotionAnalysis.adaptationNeeded ? 'Yes' : 'No'}
-                    </Badge>
-                    {selectedPersonalityData && (
-                      <div className="mt-3">
-                        <h4 className="font-medium mb-1">Recommended Response Style</h4>
-                        <div className="text-sm text-gray-600">
-                          {selectedPersonalityData.description}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Audio Player */}
             {audioUrl && (
-              <div className="p-4 border rounded-xl bg-blue-50">
-                <h3 className="font-semibold mb-3">Generated Speech</h3>
-                <audio controls className="w-full" src={audioUrl}>
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <label className="text-sm font-medium block mb-2">Generated Audio</label>
+                <audio controls className="w-full">
+                  <source src={audioUrl} type="audio/mpeg" />
                   Your browser does not support the audio element.
                 </audio>
-                <div className="mt-2 text-sm text-gray-600">
-                  Personality: {selectedPersonalityData?.name} | Language: {selectedLanguage}
+              </div>
+            )}
+
+            {selectedPersonalityData && (
+              <div className="p-4 bg-blue-50 rounded-lg">
+                <h4 className="font-medium mb-2">Selected Personality: {selectedPersonalityData.name}</h4>
+                <p className="text-sm text-gray-600 mb-2">{selectedPersonalityData.description}</p>
+                <div className="flex gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-500">Adaptation:</span>
+                    <span className="ml-1 font-medium">
+                      {Math.round(selectedPersonalityData.trainingMetrics.adaptationAccuracy * 100)}%
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Satisfaction:</span>
+                    <span className="ml-1 font-medium">
+                      {Math.round(selectedPersonalityData.trainingMetrics.customerSatisfactionScore * 100)}%
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Conversion:</span>
+                    <span className="ml-1 font-medium">
+                      {Math.round(selectedPersonalityData.trainingMetrics.conversionRate * 100)}%
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Performance Metrics */}
-      {isModelTrained && selectedPersonalityData && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5" />
-              Performance Metrics
-            </CardTitle>
-            <CardDescription>
-              Real-time performance metrics for {selectedPersonalityData.name} personality
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 border rounded-xl">
-                <div className="text-2xl font-bold text-blue-600">
-                  {Math.round(selectedPersonalityData.trainingMetrics.emotionAccuracy * 100)}%
-                </div>
-                <div className="text-sm text-gray-600">Emotion Detection</div>
-              </div>
-              <div className="text-center p-4 border rounded-xl">
-                <div className="text-2xl font-bold text-green-600">
-                  {Math.round(selectedPersonalityData.trainingMetrics.adaptationAccuracy * 100)}%
-                </div>
-                <div className="text-sm text-gray-600">Adaptation Success</div>
-              </div>
-              <div className="text-center p-4 border rounded-xl">
-                <div className="text-2xl font-bold text-purple-600">
-                  {Math.round(selectedPersonalityData.trainingMetrics.customerSatisfactionScore * 100)}%
-                </div>
-                <div className="text-sm text-gray-600">Customer Satisfaction</div>
-              </div>
-              <div className="text-center p-4 border rounded-xl">
-                <div className="text-2xl font-bold text-orange-600">
-                  {Math.round(selectedPersonalityData.trainingMetrics.conversionRate * 100)}%
-                </div>
-                <div className="text-sm text-gray-600">Conversion Rate</div>
-              </div>
-            </div>
           </CardContent>
         </Card>
       )}

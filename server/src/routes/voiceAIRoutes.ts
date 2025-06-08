@@ -1,12 +1,10 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth';
 import {
-  analyzeEmotion,
   getVoicePersonalities,
   synthesizeVoice,
   adaptConversation,
   trainVoicePersonality,
-  getEmotionMetrics,
   testVoiceAI,
   startConversationalAI,
   interruptConversationalAI
@@ -16,10 +14,6 @@ const router = express.Router();
 
 // All routes are protected
 router.use(authenticate);
-
-// Emotion Analysis
-router.post('/analyze-emotion', analyzeEmotion);
-router.get('/metrics', getEmotionMetrics);
 
 // Voice Personalities
 router.get('/personalities', getVoicePersonalities);

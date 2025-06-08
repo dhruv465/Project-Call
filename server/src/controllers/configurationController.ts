@@ -85,17 +85,6 @@ const updateServicesWithNewConfig = async (configuration: any): Promise<void> =>
       logger.info('Campaign service updated with new API keys');
     }
     
-    // Update the emotion service with new configuration
-    try {
-      const { default: resilientEmotionService } = require('../services/resilientEmotionService');
-      if (resilientEmotionService && typeof resilientEmotionService.updateConfig === 'function') {
-        await resilientEmotionService.updateConfig();
-        logger.info('Emotion service updated with new configuration from database');
-      }
-    } catch (error) {
-      logger.warn(`Could not update emotion service: ${getErrorMessage(error)}`);
-    }
-    
     logger.info('All services updated with new configuration');
   } catch (error) {
     logger.error(`Error updating services with new config: ${getErrorMessage(error)}`);
@@ -161,11 +150,6 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
         },
         voiceAIConfig: {
           personalities: [],
-          emotionDetection: {
-            enabled: true,
-            sensitivity: 0.7,
-            adaptiveResponseThreshold: 0.6
-          },
           bilingualSupport: {
             enabled: false,
             primaryLanguage: 'English',
@@ -175,7 +159,6 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
           conversationFlow: {
             personalityAdaptation: true,
             contextAwareness: true,
-            emotionBasedResponses: true,
             naturalPauses: true
           },
           conversationalAI: {
@@ -234,8 +217,6 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
         defaultTimeZone: configToSend.generalSettings.defaultTimeZone,
       },
       voiceAIConfig: {
-        emotionDetectionEnabled: configToSend.voiceAIConfig?.emotionDetection?.enabled ?? false,
-        emotionSensitivity: configToSend.voiceAIConfig?.emotionDetection?.sensitivity ?? 0.7,
         bilingualSupportEnabled: configToSend.voiceAIConfig?.bilingualSupport?.enabled ?? false,
         conversationalAIEnabled: configToSend.voiceAIConfig?.conversationalAI?.enabled ?? true
       },
@@ -730,11 +711,6 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
       if (!config.voiceAIConfig) {
         config.voiceAIConfig = {
           personalities: [],
-          emotionDetection: {
-            enabled: true,
-            sensitivity: 0.7,
-            adaptiveResponseThreshold: 0.6
-          },
           bilingualSupport: {
             enabled: false,
             primaryLanguage: 'English',
@@ -744,7 +720,6 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
           conversationFlow: {
             personalityAdaptation: true,
             contextAwareness: true,
-            emotionBasedResponses: true,
             naturalPauses: true
           },
           conversationalAI: {
@@ -761,25 +736,6 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
             defaultVoiceId: '',
             defaultModelId: 'eleven_multilingual_v2'
           }
-        };
-      }
-      
-      // Update emotion detection settings
-      if (updatedConfig.voiceAIConfig.emotionDetection) {
-        config.voiceAIConfig.emotionDetection = {
-          ...existingConfig.voiceAIConfig?.emotionDetection,
-          enabled: handleFieldUpdate(
-            updatedConfig.voiceAIConfig.emotionDetection.enabled, 
-            existingConfig.voiceAIConfig?.emotionDetection?.enabled ?? true
-          ),
-          sensitivity: handleFieldUpdate(
-            updatedConfig.voiceAIConfig.emotionDetection.sensitivity,
-            existingConfig.voiceAIConfig?.emotionDetection?.sensitivity ?? 0.7
-          ),
-          adaptiveResponseThreshold: handleFieldUpdate(
-            updatedConfig.voiceAIConfig.emotionDetection.adaptiveResponseThreshold,
-            existingConfig.voiceAIConfig?.emotionDetection?.adaptiveResponseThreshold ?? 0.6
-          )
         };
       }
       
@@ -809,8 +765,6 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
       config.markModified('voiceAIConfig');
       
       logger.info('Voice AI configuration updated:', {
-        emotionDetectionEnabled: config.voiceAIConfig.emotionDetection?.enabled,
-        emotionSensitivity: config.voiceAIConfig.emotionDetection?.sensitivity,
         bilingualSupport: config.voiceAIConfig.bilingualSupport?.enabled,
         conversationalAI: config.voiceAIConfig.conversationalAI?.enabled
       });

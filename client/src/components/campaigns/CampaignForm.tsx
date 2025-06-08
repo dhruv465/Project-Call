@@ -101,7 +101,7 @@ const initialFormState: CampaignFormData = {
   },
   voiceConfiguration: {
     provider: "elevenlabs",
-    voiceId: "default-voice-id", // Will be overridden with system configuration
+    voiceId: "", // Will be set from system configuration during form load
     speed: 1.0,
     pitch: 1.0,
   },
@@ -264,15 +264,20 @@ const CampaignForm = ({
       // Only update form data if not editing an existing campaign
       if (!campaignId) {
         // Determine the most reliable voice ID from configuration
-        let bestVoiceId = 'default-voice-id';
+        let bestVoiceId = '';
         
-        // Priority 1: voice config default ID
+        // Priority 1: voice config default ID  
         if (config.voiceConfig?.defaultVoiceId) {
           bestVoiceId = config.voiceConfig.defaultVoiceId;
         } 
         // Priority 2: ElevenLabs first voice
         else if (config.elevenLabsConfig?.availableVoices?.length > 0) {
           bestVoiceId = config.elevenLabsConfig.availableVoices[0].voiceId;
+        }
+        // Priority 3: Ensure we have a voice ID
+        else {
+          console.error("No voices available in system configuration");
+          showToast("Warning", "No voices configured in system. Please configure ElevenLabs voices.", "destructive");
         }
         
         // Determine best system prompt
@@ -328,6 +333,11 @@ const CampaignForm = ({
       
       // Set fallback values for required fields even if config loading fails
       if (!campaignId) {
+        showToast(
+          "Error",
+          "Failed to load system configuration. Please check your system settings.",
+          "destructive"
+        );
         setFormData(prev => ({
           ...prev,
           startDate: new Date(),
@@ -337,7 +347,7 @@ const CampaignForm = ({
           },
           voiceConfiguration: {
             ...prev.voiceConfiguration,
-            voiceId: 'default-voice-id',
+            voiceId: '', // Don't use default-voice-id fallback
           }
         }));
       }
@@ -586,9 +596,9 @@ const CampaignForm = ({
         },
         voiceConfiguration: {
           provider: formData.voiceConfiguration.provider || "elevenlabs",
-          // Ensure voiceId is always provided as a non-empty string
+          // Ensure voiceId is always provided as a non-empty string from available voices
           voiceId: formData.voiceConfiguration.voiceId || 
-            (systemConfig?.elevenLabsConfig?.availableVoices?.[0]?.voiceId || "default-voice-id"),
+            (systemConfig?.elevenLabsConfig?.availableVoices?.[0]?.voiceId || ""),
           speed: Number(formData.voiceConfiguration.speed) || 1.0,
           pitch: Number(formData.voiceConfiguration.pitch) || 1.0,
         },
@@ -634,10 +644,16 @@ const CampaignForm = ({
           "You are an AI assistant making a call on behalf of a company. Be professional, friendly, and helpful.";
       }
       
-      // 3. Ensure voiceId is a non-empty string
-      if (!submissionData.voiceConfiguration.voiceId) {
-        submissionData.voiceConfiguration.voiceId = 
-          systemConfig?.elevenLabsConfig?.availableVoices?.[0]?.voiceId || "default-voice-id";
+      // 3. Ensure voiceId is a non-empty string and is valid
+      if (!submissionData.voiceConfiguration.voiceId || submissionData.voiceConfiguration.voiceId === "default-voice-id") {
+        const availableVoices = systemConfig?.elevenLabsConfig?.availableVoices || [];
+        if (availableVoices.length > 0) {
+          submissionData.voiceConfiguration.voiceId = availableVoices[0].voiceId;
+          console.log(`Using first available voice: ${availableVoices[0].name} (${availableVoices[0].voiceId})`);
+        } else {
+          console.error("No voices available in system configuration");
+          throw new Error("No voices configured in the system. Please configure ElevenLabs voices in system settings.");
+        }
       }
       
       // Double-check that the required fields are present and log them

@@ -5,7 +5,7 @@
 import mongoose from 'mongoose';
 import { logger, getErrorMessage } from '../index';
 import leadService from './leadService';
-import { ConversationEngineService } from './conversationEngineService';
+import ConversationEngineService from './conversationEngineService';
 import { EnhancedVoiceAIService } from './enhancedVoiceAIService';
 import Configuration from '../models/Configuration';
 import { v4 as uuidv4 } from 'uuid';
@@ -374,12 +374,11 @@ export class CampaignService {
           const personalities = await EnhancedVoiceAIService.getEnhancedVoicePersonalities();
           const personalityObj = personalities.find(p => p.id === variant.personality) || personalities[0];
           
-          await this.conversationEngine.initializeConversation(
-            sessionId,
+          await this.conversationEngine.createSession(
             lead.id,
             campaign.id,
-            personalityObj,
-            variant.language
+            variant.language,
+            personalityObj?.id
           );
           
           // Generate opening message

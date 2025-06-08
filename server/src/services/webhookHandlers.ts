@@ -108,16 +108,27 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
             openAIProvider.apiKey
           );
           
-          const voiceId = await EnhancedVoiceAIService.getValidVoiceId(
-            campaign.voiceConfiguration?.voiceId || 'default'
-          );
+          // Debug campaign voice configuration for initial greeting
+          logger.info(`🔍 Initial Greeting Voice Config Debug for call ${callId}:`, {
+            campaignId: call.campaignId,
+            campaignFound: !!campaign,
+            voiceConfig: campaign.voiceConfiguration,
+            requestedVoiceId: campaign.voiceConfiguration?.voiceId,
+            voiceProvider: campaign.voiceConfiguration?.provider,
+            primaryLanguage: campaign.primaryLanguage
+          });
+          
+          const requestedVoiceId = campaign.voiceConfiguration?.voiceId || 'default';
+          logger.info(`🎤 Resolving initial greeting voice ID for call ${callId}: "${requestedVoiceId}"`);
+          
+          const voiceId = await EnhancedVoiceAIService.getValidVoiceId(requestedVoiceId);
+          
+          logger.info(`🎯 Final greeting voice ID selected for call ${callId}: "${voiceId}"`);
           
           const speechResponse = await voiceAI.synthesizeAdaptiveVoice({
             text: initialPrompt,
             personalityId: voiceId,
-            language: campaign.primaryLanguage === 'hi' ? 'hi' : 'en',
-            adaptToEmotion: true,
-            emotion: { primary: 'professional', confidence: 1.0 }
+            language: campaign.primaryLanguage === 'hi' ? 'hi' : 'en'
           });
           
           // Check if we got audio content back
@@ -322,19 +333,28 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
                 openAIProvider.apiKey
               );
               
-              // Get voice configuration
+              // Get voice configuration with detailed debugging
               const campaign = await Campaign.findById(call.campaignId);
-              const voiceId = await EnhancedVoiceAIService.getValidVoiceId(
-                campaign?.voiceConfiguration?.voiceId || 'default'
-              );
+              logger.info(`🔍 Campaign Voice Config Debug for call ${callId}:`, {
+                campaignId: call.campaignId,
+                campaignFound: !!campaign,
+                voiceConfig: campaign?.voiceConfiguration,
+                requestedVoiceId: campaign?.voiceConfiguration?.voiceId,
+                voiceProvider: campaign?.voiceConfiguration?.provider
+              });
+              
+              const requestedVoiceId = campaign?.voiceConfiguration?.voiceId || 'default';
+              logger.info(`🎤 Resolving voice ID for call ${callId}: "${requestedVoiceId}"`);
+              
+              const voiceId = await EnhancedVoiceAIService.getValidVoiceId(requestedVoiceId);
+              
+              logger.info(`🎯 Final voice ID selected for call ${callId}: "${voiceId}"`);
               
               // Synthesize speech using ElevenLabs
               const speechResponse = await voiceAI.synthesizeAdaptiveVoice({
                 text: aiResponse.text,
                 personalityId: voiceId,
-                language: campaign?.primaryLanguage === 'hi' ? 'hi' : 'en',
-                adaptToEmotion: true,
-                emotion: { primary: aiResponse.emotion || 'professional', confidence: 1.0 }
+                language: campaign?.primaryLanguage === 'hi' ? 'hi' : 'en'
               });
               
               // Use ElevenLabs synthesized audio in the response
@@ -563,7 +583,6 @@ async function generateCallMetrics(callId: string): Promise<void> {
       outcome: outcome as 'connected' | 'no-answer' | 'busy' | 'failed' | 'voicemail',
       conversationMetrics: {
         customerEngagement: calculateEngagementScore(conversationLog),
-        emotionalTone: detectEmotionalTones(conversationLog),
         objectionCount: countObjections(conversationLog),
         interruptionCount: countInterruptions(conversationLog),
         conversionIndicators: identifyConversionIndicators(conversationLog)
@@ -601,38 +620,6 @@ function calculateEngagementScore(conversationLog: Array<{role: string, content:
   const lengthScore = Math.min(avgUserLength / 100, 1); // Max at 100 chars average
   
   return (interactionScore * 0.6 + lengthScore * 0.4);
-}
-
-function detectEmotionalTones(conversationLog: Array<{role: string, content: string, emotion?: string}>): string[] {
-  // Extract and return emotions detected in the conversation
-  const emotions = new Set<string>();
-  
-  // Add detected emotions
-  conversationLog.forEach(entry => {
-    if (entry.emotion) emotions.add(entry.emotion);
-  });
-  
-  // Simple keyword-based emotion detection as fallback
-  const emotionKeywords = {
-    'positive': ['happy', 'great', 'excellent', 'wonderful', 'love'],
-    'negative': ['angry', 'frustrated', 'upset', 'disappointed', 'hate'],
-    'neutral': ['okay', 'fine', 'sure', 'alright'],
-    'interested': ['tell me more', 'interesting', 'curious', 'what else'],
-    'confused': ['don\'t understand', 'confused', 'what do you mean', 'unclear']
-  };
-  
-  conversationLog.forEach(entry => {
-    if (entry.role === 'user') {
-      const lowerContent = entry.content.toLowerCase();
-      Object.entries(emotionKeywords).forEach(([emotion, keywords]) => {
-        if (keywords.some(keyword => lowerContent.includes(keyword))) {
-          emotions.add(emotion);
-        }
-      });
-    }
-  });
-  
-  return Array.from(emotions);
 }
 
 function countObjections(conversationLog: Array<{role: string, content: string, intent?: string}>): number {

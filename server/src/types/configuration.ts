@@ -113,12 +113,6 @@ export interface VoiceAIPersonality {
   };
 }
 
-export interface EmotionDetectionConfig {
-  enabled: boolean;
-  sensitivity: number;
-  adaptiveResponseThreshold: number;
-}
-
 export interface BilingualSupportConfig {
   enabled: boolean;
   primaryLanguage: string;
@@ -129,7 +123,6 @@ export interface BilingualSupportConfig {
 export interface ConversationFlowConfig {
   personalityAdaptation: boolean;
   contextAwareness: boolean;
-  emotionBasedResponses: boolean;
   naturalPauses: boolean;
 }
 
@@ -150,7 +143,6 @@ export interface ConversationalAIConfig {
 
 export interface VoiceAIConfig {
   personalities: VoiceAIPersonality[];
-  emotionDetection: EmotionDetectionConfig;
   bilingualSupport: BilingualSupportConfig;
   conversationFlow: ConversationFlowConfig;
   conversationalAI: ConversationalAIConfig;

@@ -1,7 +1,7 @@
 // Export all services from a central file for easier imports
-import { ConversationEngineService } from './conversationEngineService';
-import EnhancedVoiceAIService from './enhancedVoiceAIService';
-import LLMService from './llmService';
+import ConversationEngineService from './conversationEngineService';
+import { EnhancedVoiceAIService } from './enhancedVoiceAIService';
+import { LLMService } from './llm/service';
 import SpeechAnalysisService from './speechAnalysisService';
 import VoiceAIService from './voiceAIService';
 import { AdvancedTelephonyService } from './advancedTelephonyService';
@@ -65,7 +65,11 @@ export const conversationEngine = new ConversationEngineService('', '', '', '');
 
 // Create service instances for controllers
 export const voiceAIService = new EnhancedVoiceAIService('', '');
-export const llmService = new LLMService('', '');
+export const llmService = new LLMService({
+  providers: [],
+  fallbackProviders: [],
+  timeoutMs: 30000
+});
 
 // Create advanced service instances
 export const advancedConversationEngine = new AdvancedConversationEngine(llmService, voiceAIService);
@@ -88,42 +92,6 @@ export * as webhookHandlers from './webhookHandlers';
 // Export analytics services
 export { callAnalyticsService } from './callAnalyticsService';
 export { callMonitoring } from '../monitoring/callMonitoring';
-
-export const emotionDetectionService = {
-  analyzeAudioEmotion: async (audioData: any) => {
-    // For audio emotion detection, we would need audio processing
-    // For now, we'll use text-based emotion detection as a fallback
-    const textApproximation = 'Audio speech analysis';
-    return await voiceAIService.detectEmotionWithCulturalContext(textApproximation);
-  },
-  analyzeTextEmotion: async (text: string, language: string = 'en') => {
-    const lang = language === 'hi' ? 'Hindi' : 'English';
-    return await voiceAIService.detectEmotionWithCulturalContext(text, lang as 'English' | 'Hindi');
-  },
-  getMetrics: async (params: { timeRange: string; personalityId: string }) => {
-    // Mock metrics for demonstration
-    return {
-      emotionAccuracy: 0.92,
-      detectionCount: 1247,
-      averageConfidence: 0.85,
-      emotionDistribution: {
-        interested: 35,
-        neutral: 28,
-        frustrated: 15,
-        excited: 12,
-        confused: 10
-      },
-      culturalAdaptations: 156,
-      timeRange: params.timeRange,
-      personalityId: params.personalityId,
-      trends: {
-        accuracyTrend: '+2.3%',
-        volumeTrend: '+15.7%',
-        confidenceTrend: '+1.8%'
-      }
-    };
-  }
-};
 
 // Export individual services
 export {

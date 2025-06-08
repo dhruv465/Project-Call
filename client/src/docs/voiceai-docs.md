@@ -32,10 +32,10 @@ The Voice AI system provides advanced conversational AI capabilities with emotio
 
 ## Integration Examples
 
-### Basic Emotion Analysis
+### Basic Voice Synthesis
 ```typescript
-const analyzeEmotion = async (text: string, language: 'English' | 'Hindi') => {
-  const response = await fetch('/api/lumina-outreach/analyze-emotion', {
+const synthesizeSpeech = async (text: string, language: 'English' | 'Hindi') => {
+  const response = await fetch('/api/lumina-outreach/synthesize-speech', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -127,11 +127,12 @@ const handleConversation = async (
 
 ## Voice AI Personality Types
 
-1. **Professional**: Formal, concise, and business-focused
-2. **Empathetic**: Warm, understanding, and supportive
-3. **Persuasive**: Confident, compelling, and solution-oriented
-4. **Informative**: Clear, detailed, and educational
-5. **Friendly**: Casual, approachable, and conversational
+Voice personalities are configured through the ElevenLabs API integration. Available personalities depend on the voices configured in your system. Each voice automatically adapts to provide appropriate responses based on context and detected emotions.
+
+To configure voice personalities:
+1. Set up your ElevenLabs API key in system settings
+2. Available voices will be automatically imported from your ElevenLabs account
+3. Each voice will be available as a personality option
 
 ## Best Practices
 

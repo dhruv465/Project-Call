@@ -26,10 +26,9 @@ import streamRoutes from './routes/streamRoutes';
 
 // Services initialization
 import { initializeSpeechService } from './services/realSpeechService';
-import { ConversationEngineService } from './services/conversationEngineService';
+import ConversationEngineService from './services/conversationEngineService';
 import CampaignService from './services/campaignService';
 import leadService from './services/leadService';
-import { ModelRegistry } from './ml/pipeline/model_registry';
 
 // Load environment variables
 dotenv.config();
@@ -211,9 +210,6 @@ const initializeServices = async () => {
       path.join(__dirname, '../uploads/audio')
     );
 
-    // Model registry
-    const modelRegistry = new ModelRegistry();
-
     // Conversation engine
     const conversationEngine = new ConversationEngineService(
       elevenLabsApiKey,
@@ -232,13 +228,11 @@ const initializeServices = async () => {
     
     // Export services
     global.speechService = speechService;
-    global.modelRegistry = modelRegistry;
     global.conversationEngine = conversationEngine;
     global.campaignService = campaignService;
     
     return {
       speechService,
-      modelRegistry,
       conversationEngine,
       campaignService
     };

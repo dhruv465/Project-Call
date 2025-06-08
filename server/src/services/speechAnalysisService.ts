@@ -5,12 +5,6 @@ export interface SpeechAnalysis {
   transcript: string;
   confidence: number;
   language: 'English' | 'Hindi';
-  emotions: {
-    primary: string;
-    secondary?: string;
-    confidence: number;
-    intensity: number;
-  };
   intent: {
     category: string;
     confidence: number;
@@ -126,12 +120,6 @@ export class SpeechAnalysisService {
         "transcript": "${audioText}",
         "confidence": 0.9,
         "language": "English or Hindi",
-        "emotions": {
-          "primary": "main emotion",
-          "secondary": "secondary emotion if any",
-          "confidence": 0.8,
-          "intensity": 0.7
-        },
         "intent": {
           "category": "question, objection, interest, concern, request, complaint, compliment",
           "confidence": 0.8,
@@ -154,7 +142,7 @@ export class SpeechAnalysisService {
           messages: [
             {
               role: 'system',
-              content: 'You are an expert speech analysis AI. Analyze customer speech for emotions, intent, sentiment, and communication patterns. Always return valid JSON.'
+              content: 'You are an expert speech analysis AI. Analyze customer speech for intent, sentiment, and communication patterns. Always return valid JSON.'
             },
             {
               role: 'user',
@@ -311,7 +299,7 @@ export class SpeechAnalysisService {
         currentTurn: context.currentTurn + 1,
         customerProfile: {
           ...context.customerProfile,
-          mood: newAnalysis.emotions.primary,
+          mood: newAnalysis.sentiment,
           engagement_level: Math.min(context.customerProfile.engagement_level + 0.1, 1.0)
         }
       };
@@ -339,11 +327,6 @@ export class SpeechAnalysisService {
       transcript: audioText,
       confidence: 0.5,
       language: this.detectLanguage(audioText),
-      emotions: {
-        primary: 'neutral',
-        confidence: 0.5,
-        intensity: 0.5
-      },
       intent: {
         category: 'information_request',
         confidence: 0.5,
@@ -358,109 +341,49 @@ export class SpeechAnalysisService {
     };
   }
 
-  // Real-time Emotion Tracking
-  async trackEmotionChanges(
-    emotionHistory: Array<{ emotion: string; timestamp: Date; intensity: number }>,
-    currentEmotion: string,
-    intensity: number
+  // Conversation Quality Tracking
+  async trackConversationQuality(
+    conversationHistory: Array<{ role: string; content: string; timestamp: Date }>,
+    currentResponse: string
   ): Promise<{
-    emotionTrend: 'improving' | 'declining' | 'stable';
+    qualityTrend: 'improving' | 'declining' | 'stable';
     recommendations: string[];
     alertLevel: 'low' | 'medium' | 'high';
   }> {
     try {
-      // Calculate emotion trend
-      const recentEmotions = emotionHistory.slice(-5);
-      const emotionTrend = this.calculateEmotionTrend(recentEmotions, currentEmotion, intensity);
+      // Simple quality assessment based on conversation length and engagement
+      const customerResponses = conversationHistory.filter(entry => entry.role === 'user');
+      const avgResponseLength = customerResponses.reduce((sum, resp) => sum + resp.content.length, 0) / customerResponses.length || 0;
       
-      // Generate recommendations based on trend
-      const recommendations = await this.generateEmotionBasedRecommendations(
-        emotionTrend,
-        currentEmotion,
-        intensity
-      );
+      let qualityTrend: 'improving' | 'declining' | 'stable' = 'stable';
+      let alertLevel: 'low' | 'medium' | 'high' = 'low';
       
-      // Determine alert level
-      const alertLevel = this.determineAlertLevel(currentEmotion, intensity, emotionTrend);
+      if (avgResponseLength > 50) {
+        qualityTrend = 'improving';
+      } else if (avgResponseLength < 20) {
+        qualityTrend = 'declining';
+        alertLevel = 'medium';
+      }
+      
+      const recommendations = [
+        'Continue with current approach',
+        'Monitor customer engagement',
+        'Adjust conversation pace as needed'
+      ];
       
       return {
-        emotionTrend,
+        qualityTrend,
         recommendations,
         alertLevel
       };
     } catch (error) {
-      logger.error('Error tracking emotion changes:', error);
+      logger.error('Error tracking conversation quality:', error);
       return {
-        emotionTrend: 'stable',
+        qualityTrend: 'stable',
         recommendations: ['Continue with current approach'],
         alertLevel: 'low'
       };
     }
-  }
-
-  private calculateEmotionTrend(
-    history: Array<{ emotion: string; timestamp: Date; intensity: number }>,
-    current: string,
-    currentIntensity: number
-  ): 'improving' | 'declining' | 'stable' {
-    if (history.length < 2) return 'stable';
-    
-    const emotionScores = {
-      'angry': -2, 'frustrated': -1.5, 'sad': -1, 'worried': -0.5,
-      'neutral': 0, 'confused': -0.3,
-      'interested': 0.5, 'happy': 1, 'excited': 1.5, 'satisfied': 2
-    };
-    
-    const currentScore = (emotionScores[current] || 0) * currentIntensity;
-    const previousScore = (emotionScores[history[history.length - 1].emotion] || 0) * history[history.length - 1].intensity;
-    
-    const difference = currentScore - previousScore;
-    
-    if (difference > 0.3) return 'improving';
-    if (difference < -0.3) return 'declining';
-    return 'stable';
-  }
-
-  private async generateEmotionBasedRecommendations(
-    trend: string,
-    emotion: string,
-    intensity: number
-  ): Promise<string[]> {
-    const recommendations = [];
-    
-    if (trend === 'declining' && intensity > 0.7) {
-      recommendations.push('Consider switching to empathetic personality');
-      recommendations.push('Slow down speech pace');
-      recommendations.push('Acknowledge customer concerns directly');
-    } else if (trend === 'improving' && emotion === 'interested') {
-      recommendations.push('Share more detailed information');
-      recommendations.push('Increase enthusiasm in voice');
-      recommendations.push('Move towards closing techniques');
-    } else if (emotion === 'confused') {
-      recommendations.push('Simplify explanations');
-      recommendations.push('Use clearer language');
-      recommendations.push('Repeat key points');
-    }
-    
-    return recommendations.length > 0 ? recommendations : ['Continue with current approach'];
-  }
-
-  private determineAlertLevel(
-    emotion: string,
-    intensity: number,
-    trend: string
-  ): 'low' | 'medium' | 'high' {
-    const negativeEmotions = ['angry', 'frustrated', 'sad'];
-    
-    if (negativeEmotions.includes(emotion) && intensity > 0.8) {
-      return 'high';
-    } else if (negativeEmotions.includes(emotion) && intensity > 0.5) {
-      return 'medium';
-    } else if (trend === 'declining') {
-      return 'medium';
-    }
-    
-    return 'low';
   }
 }
 

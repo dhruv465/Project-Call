@@ -102,9 +102,7 @@ export const handleVoiceStream = async (ws: WebSocket, req: Request): Promise<vo
           const speechResponse = await voiceAI.synthesizeAdaptiveVoice({
             text: openingMessage,
             personalityId: personalityId,
-            language: session.language || 'English',
-            adaptToEmotion: true,
-            emotion: { primary: 'professional', confidence: 1.0 }
+            language: session.language || 'English'
           });
           
           // Send synthesized audio through WebSocket
@@ -188,9 +186,7 @@ export const handleVoiceStream = async (ws: WebSocket, req: Request): Promise<vo
               const speechResponse = await voiceAI.synthesizeAdaptiveVoice({
                 text: aiResponse.text,
                 personalityId: personalityId,
-                language: session.language || 'English',
-                adaptToEmotion: true,
-                emotion: { primary: aiResponse.emotion || 'neutral', confidence: 0.9 }
+                language: session.language || 'English'
               });
               
               // Send synthesized audio back through WebSocket
@@ -324,7 +320,19 @@ export const handleConversationalAIStream = async (ws: WebSocket, req: Request):
         // Handle interruption request
         if (data.type === 'interrupt') {
           if (voiceAI) {
-            const interrupted = voiceAI.interruptConversation(conversationId);
+            // Use the underlying service to interrupt the stream
+            let interrupted = false;
+            try {
+              // Try to interrupt using the conversational service
+              if (voiceAI['conversationalService']) {
+                interrupted = voiceAI['conversationalService'].interruptStream(conversationId);
+              } else if (voiceAI['sdkService']) {
+                interrupted = voiceAI['sdkService'].interruptStream(conversationId);
+              }
+            } catch (error) {
+              logger.warn(`Failed to interrupt conversation ${conversationId}:`, error);
+            }
+            
             ws.send(JSON.stringify({
               type: 'interrupted',
               success: interrupted,
@@ -366,9 +374,7 @@ export const handleConversationalAIStream = async (ws: WebSocket, req: Request):
             {
               conversationId,
               language: language,
-              emotionDetection: conversationalSettings.adaptiveTone,
               interruptible: conversationalSettings.interruptible,
-              adaptiveTone: conversationalSettings.adaptiveTone,
               contextAwareness: true,
               modelId: conversationalSettings.defaultModelId || 'eleven_multilingual_v2',
               onAudioChunk: (chunk: Buffer) => {
@@ -416,7 +422,16 @@ export const handleConversationalAIStream = async (ws: WebSocket, req: Request):
       logger.info(`Conversational AI stream closed: ${conversationId}`);
       // Clean up resources if needed
       if (voiceAI) {
-        voiceAI.interruptConversation(conversationId);
+        try {
+          // Try to interrupt using the underlying service
+          if (voiceAI['conversationalService']) {
+            voiceAI['conversationalService'].closeConversation(conversationId);
+          } else if (voiceAI['sdkService']) {
+            voiceAI['sdkService'].closeConversation(conversationId);
+          }
+        } catch (error) {
+          logger.warn(`Failed to close conversation ${conversationId}:`, error);
+        }
       }
     });
     

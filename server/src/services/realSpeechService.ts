@@ -112,24 +112,7 @@ export class RealSpeechService implements SpeechServiceInterface {
       return labels.gender.toLowerCase();
     }
     
-    // Simple heuristic based on voice name
-    const maleNames = ['adam', 'arnold', 'bill', 'brian', 'charlie', 'chris', 'daniel', 'dave', 'david', 'george', 'harry', 'james', 'john', 'joseph', 'matthew', 'michael', 'mike', 'paul', 'peter', 'robert', 'sam', 'thomas', 'william'];
-    const femaleNames = ['alice', 'amy', 'anna', 'ashley', 'bella', 'charlotte', 'elizabeth', 'emily', 'emma', 'hannah', 'jennifer', 'jessica', 'joanna', 'julia', 'kate', 'katherine', 'lisa', 'mary', 'melissa', 'nicole', 'olivia', 'rachel', 'sarah', 'sophia'];
-    
-    const lowerName = name.toLowerCase();
-    
-    for (const maleName of maleNames) {
-      if (lowerName.includes(maleName)) {
-        return 'male';
-      }
-    }
-    
-    for (const femaleName of femaleNames) {
-      if (lowerName.includes(femaleName)) {
-        return 'female';
-      }
-    }
-    
+    // No hardcoded name lists - use ElevenLabs API labels only
     return 'unknown';
   }
   

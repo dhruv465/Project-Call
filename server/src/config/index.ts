@@ -1,18 +1,48 @@
 // Server configuration
 import dotenv from 'dotenv';
-import { EmotionServiceConfig } from '../types/emotion';
 
 // Load environment variables
 dotenv.config();
 
-// Emotion Service Configuration
-// Note: This is kept for backward compatibility with older code
-// The resilientEmotionService now uses database configuration instead of environment variables
-export const EMOTION_SERVICE_CONFIG: EmotionServiceConfig = {
-  baseUrl: process.env.EMOTION_SERVICE_URL || 'http://localhost:5001',
-  apiKey: process.env.EMOTION_SERVICE_API_KEY || 'development-key',
-  modelVersion: process.env.EMOTION_MODEL_VERSION || 'v1',
-  timeout: parseInt(process.env.EMOTION_SERVICE_TIMEOUT || '5000')
+// Database configuration
+export const DB_CONFIG = {
+  uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/projectcall',
+  options: {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  }
 };
 
-// Export other configurations as needed...
+// Server configuration
+export const SERVER_CONFIG = {
+  port: parseInt(process.env.PORT || '3001'),
+  cors: {
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    credentials: true
+  }
+};
+
+// API Keys configuration
+export const API_KEYS = {
+  elevenLabs: process.env.ELEVENLABS_API_KEY || '',
+  openAI: process.env.OPENAI_API_KEY || '',
+  anthropic: process.env.ANTHROPIC_API_KEY || '',
+  twilio: {
+    accountSid: process.env.TWILIO_ACCOUNT_SID || '',
+    authToken: process.env.TWILIO_AUTH_TOKEN || '',
+    phoneNumber: process.env.TWILIO_PHONE_NUMBER || ''
+  }
+};
+
+// JWT configuration
+export const JWT_CONFIG = {
+  secret: process.env.JWT_SECRET || 'your-secret-key',
+  expiresIn: process.env.JWT_EXPIRES_IN || '24h'
+};
+
+export default {
+  DB_CONFIG,
+  SERVER_CONFIG,
+  API_KEYS,
+  JWT_CONFIG
+};

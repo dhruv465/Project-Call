@@ -1,2 +1,2 @@
 // Export all types
-export * from './emotion';
+// Note: Emotion types have been removed as part of system simplification

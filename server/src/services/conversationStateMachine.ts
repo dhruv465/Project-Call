@@ -1,6 +1,8 @@
 import logger from '../utils/logger';
 import { voiceAIService } from './index';
 import Call, { ICall } from '../models/Call';
+import Campaign from '../models/Campaign';
+import Configuration from '../models/Configuration';
 
 /**
  * Conversation state types
@@ -30,13 +32,11 @@ export interface ConversationContext {
   userAttention: 'high' | 'medium' | 'low';
   currentTopic?: string;
   detectedIntent?: string;
-  detectedEmotion?: string;
   objections: string[];
   conversationLog: Array<{
     role: string;
     content: string;
     timestamp: Date;
-    emotion?: string;
     intent?: string;
   }>;
   leadInfo?: Record<string, any>;
@@ -181,7 +181,7 @@ export class ConversationStateMachine {
   async processUserInput(
     conversationId: string, 
     userInput: string
-  ): Promise<{ text: string, emotion?: string, intent?: string }> {
+  ): Promise<{ text: string, intent?: string }> {
     try {
       const conversation = this.conversations.get(conversationId);
       if (!conversation) {
@@ -191,16 +191,12 @@ export class ConversationStateMachine {
       // Update conversation context
       conversation.lastUserInteraction = new Date();
       
-      // Detect user emotion from speech
-      const detectedEmotion = await this.detectEmotion(userInput);
-      conversation.detectedEmotion = detectedEmotion;
-      
       // Detect user intent from speech
       const detectedIntent = await this.detectIntent(userInput, conversation);
       conversation.detectedIntent = detectedIntent;
       
       // Check for objections
-      if (this.isObjection(userInput, detectedIntent)) {
+      if (await this.isObjection(userInput, detectedIntent)) {
         conversation.objections.push(userInput);
       }
       
@@ -209,7 +205,6 @@ export class ConversationStateMachine {
         role: 'user',
         content: userInput,
         timestamp: new Date(),
-        emotion: detectedEmotion,
         intent: detectedIntent
       });
       
@@ -246,9 +241,10 @@ export class ConversationStateMachine {
       // Transition to error state
       await this.transitionState(conversationId, 'error', { error });
       
-      // Return a generic response
+      // Fetch error response from configuration
+      const config = await Configuration.findOne();
       return {
-        text: "I'm sorry, I'm having trouble understanding. Could you please repeat that?"
+        text: config?.errorMessages?.generalError || "Error processing request"
       };
     }
   }
@@ -261,9 +257,28 @@ export class ConversationStateMachine {
     if (!conversation) return;
     
     try {
-      // Here we would fetch the compliance script and generate the proper text
-      // For now we'll use a placeholder
-      const complianceText = "Hello, this is an automated call from Lumina Outreach. This call may be recorded for quality assurance.";
+      // Fetch the compliance script from database
+      const call = await Call.findById(conversation.callId);
+      const config = await Configuration.findOne();
+      
+      if (!call) {
+        throw new Error(`Call not found: ${conversation.callId}`);
+      }
+      
+      // Get compliance text from configuration or load specific script if a script ID is provided
+      let complianceText = '';
+      
+      if (call.complianceScriptId) {
+        // Here you would fetch the specific compliance script by ID
+        // For now, we'll fall back to the default from configuration
+        complianceText = config?.complianceSettings?.callIntroduction || '';
+      } else {
+        // Use default compliance text from configuration
+        complianceText = config?.complianceSettings?.callIntroduction || '';
+      }
+      
+      // Replace any placeholders in the compliance text
+      complianceText = complianceText.replace('[Company Name]', call.companyName || 'our company');
       
       // Add to conversation log
       conversation.conversationLog.push({
@@ -295,9 +310,23 @@ export class ConversationStateMachine {
     if (!conversation) return;
     
     try {
-      // Here we would generate a context-aware greeting
-      // We could also pull information about the lead to personalize
-      const greetingText = "I'm calling to discuss how our services could benefit you. Do you have a few minutes to talk?";
+      // Fetch call, campaign, and lead details
+      const call = await Call.findById(conversation.callId);
+      const campaign = await Campaign.findById(conversation.campaignId);
+      
+      if (!call || !campaign) {
+        throw new Error(`Call or campaign not found for conversation ${conversationId}`);
+      }
+      
+      // Get active script from the campaign
+      const activeScript = campaign.script?.versions?.find(v => v.isActive);
+      
+      if (!activeScript || !activeScript.content) {
+        throw new Error(`No active script found for campaign ${conversation.campaignId}`);
+      }
+      
+      // Use the campaign script as greeting
+      const greetingText = activeScript.content;
       
       // Add to conversation log
       conversation.conversationLog.push({
@@ -305,6 +334,18 @@ export class ConversationStateMachine {
         content: greetingText,
         timestamp: new Date()
       });
+      
+      // Store campaign info in conversation context for future reference
+      conversation.campaignInfo = {
+        name: campaign.name,
+        goal: campaign.goal,
+        targetAudience: campaign.targetAudience,
+        primaryLanguage: campaign.primaryLanguage,
+        llmConfig: campaign.llmConfiguration
+      };
+      
+      // Store script template for future use
+      conversation.scriptTemplate = activeScript.content;
       
       // Move to listening state after greeting
       setTimeout(() => {
@@ -326,8 +367,31 @@ export class ConversationStateMachine {
     if (!conversation) return;
     
     try {
-      // Generate appropriate closing based on conversation context
-      const closingText = "Thank you for your time today. If you have any further questions, please don't hesitate to reach out. Have a great day!";
+      // Fetch campaign to get appropriate closing message
+      const campaign = await Campaign.findById(conversation.campaignId);
+      const call = await Call.findById(conversation.callId);
+      
+      if (!campaign || !call) {
+        throw new Error(`Campaign or call not found for conversation ${conversationId}`);
+      }
+      
+      // Generate closing based on conversation context and campaign settings
+      let closingText = "";
+      
+      // Get closing script from campaign settings
+      if (campaign.scriptClosing) {
+        closingText = campaign.scriptClosing;
+      } else {
+        // Fallback to configuration
+        const config = await Configuration.findOne();
+        if (conversation.consentReceived) {
+          closingText = config?.closingScripts?.consentReceived || "";
+        } else if (conversation.objections.length > 0) {
+          closingText = config?.closingScripts?.withObjections || "";
+        } else {
+          closingText = config?.closingScripts?.default || "";
+        }
+      }
       
       // Add to conversation log
       conversation.conversationLog.push({
@@ -379,7 +443,7 @@ export class ConversationStateMachine {
   private async generateAIResponse(
     conversationId: string,
     userInput: string
-  ): Promise<{ text: string, emotion?: string, intent?: string }> {
+  ): Promise<{ text: string, intent?: string }> {
     const conversation = this.conversations.get(conversationId);
     if (!conversation) {
       throw new Error(`Conversation not found: ${conversationId}`);
@@ -393,62 +457,25 @@ export class ConversationStateMachine {
         conversationLog: conversation.conversationLog,
         leadId: conversation.leadId,
         campaignId: conversation.campaignId,
-        detectedEmotion: conversation.detectedEmotion,
-        detectedIntent: conversation.detectedIntent,
-        objections: conversation.objections,
         callContext: {
           complianceComplete: conversation.complianceComplete || false,
           disclosureComplete: conversation.disclosureComplete || false,
           currentPhase: conversation.currentTopic || 'introduction',
-          language: 'en-US'
+          language: 'en-US',
+          objections: conversation.objections,
+          detectedIntent: conversation.detectedIntent
         }
       });
       
       return response;
     } catch (error) {
       logger.error(`Error generating AI response for ${conversationId}:`, error);
+      
+      // Get error response from configuration
+      const config = await Configuration.findOne();
       return {
-        text: "I'm sorry, I'm having difficulty with my response. Could we continue in a moment?"
+        text: config?.errorMessages?.aiResponseError || "Error generating response"
       };
-    }
-  }
-  
-  /**
-   * Detect emotion from user input
-   */
-  private async detectEmotion(userInput: string): Promise<string> {
-    try {
-      // This would call the emotion detection service
-      // For this implementation, we'll use a simple keyword-based approach
-      const emotionKeywords = {
-        happy: ['great', 'awesome', 'excellent', 'happy', 'glad', 'pleased'],
-        angry: ['angry', 'frustrated', 'annoyed', 'upset', 'mad'],
-        confused: ['confused', 'unclear', 'don\'t understand', 'what do you mean'],
-        interested: ['tell me more', 'interested', 'curious', 'go on'],
-        skeptical: ['doubt', 'not sure', 'skeptical', 'really', 'proof'],
-        neutral: []
-      };
-      
-      // Default to neutral
-      let detectedEmotion = 'neutral';
-      let highestMatchCount = 0;
-      
-      // Check for each emotion
-      for (const [emotion, keywords] of Object.entries(emotionKeywords)) {
-        const matchCount = keywords.filter(keyword => 
-          userInput.toLowerCase().includes(keyword.toLowerCase())
-        ).length;
-        
-        if (matchCount > highestMatchCount) {
-          highestMatchCount = matchCount;
-          detectedEmotion = emotion;
-        }
-      }
-      
-      return detectedEmotion;
-    } catch (error) {
-      logger.error('Error detecting emotion:', error);
-      return 'neutral';
     }
   }
   
@@ -460,45 +487,41 @@ export class ConversationStateMachine {
     conversation: ConversationContext
   ): Promise<string> {
     try {
-      // This would call the intent detection service
-      // For this implementation, we'll use a simple keyword-based approach
-      const intents = {
-        inquiry: ['what is', 'how does', 'tell me about', 'explain'],
-        interest: ['interested', 'sounds good', 'tell me more', 'like to'],
-        objection: ['too expensive', 'not interested', 'don\'t need', 'already have'],
-        affirmation: ['yes', 'sure', 'okay', 'alright', 'go ahead'],
-        negation: ['no', 'nope', 'not now', 'don\'t', 'can\'t'],
-        gratitude: ['thank you', 'thanks', 'appreciate', 'grateful'],
-        confusion: ['confused', 'don\'t understand', 'what do you mean', 'unclear'],
-        closing: ['goodbye', 'bye', 'end call', 'hang up', 'that\'s all']
-      };
+      // Fetch campaign to access LLM configuration
+      const campaign = await Campaign.findById(conversation.campaignId);
       
-      // Default to general conversation
-      let detectedIntent = 'general';
-      let highestMatchCount = 0;
-      
-      // Check for each intent
-      for (const [intent, keywords] of Object.entries(intents)) {
-        const matchCount = keywords.filter(keyword => 
-          userInput.toLowerCase().includes(keyword.toLowerCase())
-        ).length;
-        
-        if (matchCount > highestMatchCount) {
-          highestMatchCount = matchCount;
-          detectedIntent = intent;
-        }
+      if (!campaign) {
+        logger.warn(`Campaign not found for intent detection: ${conversation.campaignId}`);
+        return 'general';
       }
       
-      // If the intent is closing, schedule conversation to end
-      if (detectedIntent === 'closing' && conversation.state !== 'closing') {
+      // In a real implementation, this would use an LLM to detect intent
+      // For now, let's use a placeholder that recognizes if this is
+      // a potential closing response
+      
+      // Fetch configuration to get closing phrases
+      const config = await Configuration.findOne();
+      
+      // Check for closing intent based on configured phrases
+      const closingPhrases = config?.intentDetection?.closingPhrases || [];
+      const isClosing = closingPhrases.length > 0 && 
+        closingPhrases.some(phrase => 
+          userInput.toLowerCase().includes(phrase.toLowerCase())
+        );
+      
+      if (isClosing && conversation.state !== 'closing') {
         setTimeout(() => {
           this.transitionState(conversation.callId, 'closing').catch(err => {
             logger.error('Error transitioning to closing state:', err);
           });
         }, 1000);
+        return 'closing';
       }
       
-      return detectedIntent;
+      // For other intents, we would use the LLM service
+      // This would be integrated with the primary conversation LLM
+      
+      return 'general';
     } catch (error) {
       logger.error('Error detecting intent:', error);
       return 'general';
@@ -508,28 +531,30 @@ export class ConversationStateMachine {
   /**
    * Check if user input contains an objection
    */
-  private isObjection(userInput: string, intent?: string): boolean {
-    // Check if intent is objection
+  private async isObjection(userInput: string, intent?: string): Promise<boolean> {
+    // If intent detection already identified this as an objection
     if (intent === 'objection') return true;
     
-    // Check for objection phrases
-    const objectionPhrases = [
-      'too expensive',
-      'not interested',
-      'don\'t need',
-      'already have',
-      'can\'t afford',
-      'not now',
-      'maybe later',
-      'have to think about it',
-      'need to consult',
-      'don\'t have time',
-      'not a good fit'
-    ];
-    
-    return objectionPhrases.some(phrase => 
-      userInput.toLowerCase().includes(phrase.toLowerCase())
-    );
+    try {
+      // In a production system, this would use an LLM to detect objections
+      // based on the campaign context and conversation history
+      
+      // For now, let's use the LLM service to detect objections
+      // This is a placeholder for the actual implementation
+      const llmResponse = await voiceAIService.detectObjection(userInput);
+      return llmResponse.isObjection || false;
+    } catch (error) {
+      logger.error('Error detecting objection:', error);
+      
+      // Fallback to configuration-based detection in case of error
+      const config = await Configuration.findOne();
+      const objectionPhrases = config?.intentDetection?.objectionPhrases || [];
+      
+      return objectionPhrases.length > 0 && 
+        objectionPhrases.some(phrase => 
+          userInput.toLowerCase().includes(phrase.toLowerCase())
+        );
+    }
   }
   
   /**

@@ -1,5 +1,6 @@
 import { logger } from '../index';
-import { LLMService } from './llmService';
+import { LLMService } from './llm/service';
+import { LLMMessage } from './llm/types';
 import { EnhancedVoiceAIService } from './enhancedVoiceAIService';
 import Campaign from '../models/Campaign';
 import Lead from '../models/Lead';
@@ -7,7 +8,6 @@ import Lead from '../models/Lead';
 export interface ConversationState {
   phase: 'opening' | 'discovery' | 'presentation' | 'objection-handling' | 'closing' | 'follow-up';
   customerProfile: {
-    emotionalState: string;
     engagementLevel: number;
     decisionMakingStyle: string;
     painPoints: string[];
@@ -119,7 +119,6 @@ export class AdvancedConversationEngine {
     callId: string;
     conversationState: string;
     customerInput?: string;
-    customerEmotion?: any;
     campaignId: string;
     personalityId?: string;
     abTestVariantId?: string;
@@ -135,14 +134,13 @@ export class AdvancedConversationEngine {
       let intentAnalysis: IntentAnalysis | null = null;
       if (params.customerInput) {
         intentAnalysis = await this.analyzeIntent(params.customerInput);
-        await this.updateCustomerProfile(conversation, intentAnalysis, params.customerEmotion);
+        await this.updateCustomerProfile(conversation, intentAnalysis);
       }
 
       // Determine next response based on conversation phase and analysis
       const response = await this.determineResponse(
         conversation,
         intentAnalysis,
-        params.customerEmotion,
         params.personalityId
       );
 
@@ -165,7 +163,6 @@ export class AdvancedConversationEngine {
       return {
         phase: 'opening',
         customerProfile: {
-          emotionalState: 'neutral',
           engagementLevel: 0.5,
           decisionMakingStyle: 'unknown',
           painPoints: [],
@@ -252,10 +249,21 @@ export class AdvancedConversationEngine {
     `;
 
     try {
-      const llmResponse = await this.llmService.generateResponse([
+      const messages: LLMMessage[] = [
         { role: 'user', content: prompt }
-      ], 'auto', { temperature: 0.3, maxTokens: 150 });
-      const parsed = JSON.parse(llmResponse.text);
+      ];
+      
+      const llmResponse = await this.llmService.chat({
+        provider: 'openai',
+        model: 'gpt-4',
+        messages: messages,
+        options: { 
+          temperature: 0.3, 
+          maxTokens: 150 
+        }
+      });
+      
+      const parsed = JSON.parse(llmResponse.content);
       return {
         intent: parsed.intent || 'unknown',
         confidence: parsed.confidence || 0.5
@@ -410,7 +418,6 @@ export class AdvancedConversationEngine {
   private async determineResponse(
     conversation: ConversationState,
     intentAnalysis: IntentAnalysis | null,
-    customerEmotion: any,
     personalityId?: string
   ): Promise<any> {
     try {
@@ -561,14 +568,8 @@ export class AdvancedConversationEngine {
   // Conversation State Management
   private async updateCustomerProfile(
     conversation: ConversationState,
-    intent: IntentAnalysis,
-    emotion: any
+    intent: IntentAnalysis
   ): Promise<void> {
-    // Update emotional state
-    if (emotion) {
-      conversation.customerProfile.emotionalState = emotion.primary || 'neutral';
-    }
-
     // Update engagement level based on responses
     if (intent.primary === 'interest') {
       conversation.customerProfile.engagementLevel = Math.min(1, conversation.customerProfile.engagementLevel + 0.2);
@@ -621,7 +622,6 @@ export class AdvancedConversationEngine {
   // Conversation Flow Adaptation
   async adaptConversationFlow(params: {
     conversationId: string;
-    customerEmotion: any;
     conversationHistory: any[];
     currentScript: string;
     language: string;
@@ -635,10 +635,9 @@ export class AdvancedConversationEngine {
       // Analyze conversation effectiveness
       const effectiveness = this.analyzeConversationEffectiveness(params.conversationHistory);
       
-      // Adapt based on customer emotion and effectiveness
+      // Adapt based on conversation effectiveness
       const adaptation = await this.generateAdaptation(
         conversation,
-        params.customerEmotion,
         effectiveness,
         params.language
       );
@@ -667,7 +666,6 @@ export class AdvancedConversationEngine {
 
   private async generateAdaptation(
     conversation: ConversationState,
-    emotion: any,
     effectiveness: number,
     language: string
   ): Promise<any> {
@@ -680,32 +678,23 @@ export class AdvancedConversationEngine {
 
     // Adapt script based on effectiveness
     if (effectiveness < 0.3) {
-      adaptations.script = await this.generateRecoveryScript(conversation, emotion);
+      adaptations.script = await this.generateRecoveryScript(conversation);
       adaptations.recommendations.push('Switch to recovery mode');
     } else if (effectiveness > 0.7) {
       adaptations.script = await this.generateAcceleratedScript(conversation);
       adaptations.recommendations.push('Accelerate to closing');
     }
 
-    // Adjust voice based on emotion
-    if (emotion?.primary === 'frustrated') {
-      adaptations.voiceAdjustments = {
-        speed: 0.9,
-        tone: 'empathetic',
-        energy: 'calm'
-      };
-    } else if (emotion?.primary === 'excited') {
-      adaptations.voiceAdjustments = {
-        speed: 1.1,
-        tone: 'enthusiastic',
-        energy: 'high'
-      };
-    }
+    // Standard voice adjustments based on conversation stage
+    adaptations.voiceAdjustments = {
+      speed: 1.0,
+      tone: 'professional',
+      energy: 'balanced'
+    };
 
     return adaptations;
   }
-
-  private async generateRecoveryScript(conversation: ConversationState, emotion: any): Promise<string> {
+  private async generateRecoveryScript(conversation: ConversationState): Promise<string> {
     return "I can sense this might not be resonating with you. Let me take a step back - what would be most valuable for you to hear about right now?";
   }
 

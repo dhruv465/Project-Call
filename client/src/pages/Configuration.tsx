@@ -33,7 +33,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/useToast";
 import api from "@/services/api";
@@ -84,9 +83,6 @@ interface Configuration {
   retryAttempts: number;
   retryDelay: number;
   timeZone: string;
-
-  // Voice AI Settings
-  emotionDetectionEnabled: boolean;
 
   // Webhook Settings
   webhookSecret: string;
@@ -151,9 +147,6 @@ Keep the conversation natural and engaging. If they're not interested, politely 
     retryAttempts: 3,
     retryDelay: 60, // 1 minute
     timeZone: "America/New_York",
-
-    // Voice AI Settings
-    emotionDetectionEnabled: true,
 
     // Webhook Settings
     webhookSecret: "",
@@ -448,9 +441,6 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             data.generalSettings?.workingHours?.timeZone ||
             "America/New_York",
 
-          // Voice AI Settings
-          emotionDetectionEnabled: data.voiceAIConfig?.emotionDetection?.enabled ?? true,
-
           webhookSecret: data.webhookConfig?.secret || "",
           webhookStatus: data.webhookConfig?.status || "unverified",
         });
@@ -494,7 +484,6 @@ Keep the conversation natural and engaging. If they're not interested, politely 
         temperature: config.temperature,
         maxTokens: config.maxTokens,
         llmApiKey: config.llmApiKey ? "SET" : "NOT SET",
-        emotionDetectionEnabled: config.emotionDetectionEnabled,
       });
 
       // Transform the flat config object into the structured API format
@@ -572,11 +561,6 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           defaultTimeZone: config.timeZone,
           defaultSystemPrompt: config.systemPrompt,
         },
-        voiceAIConfig: {
-          emotionDetection: {
-            enabled: config.emotionDetectionEnabled,
-          },
-        },
         webhookConfig: {
           secret: config.webhookSecret,
           status: config.webhookStatus,
@@ -609,11 +593,6 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           defaultProvider: apiConfig.llmConfig.defaultProvider,
           temperature: apiConfig.llmConfig.temperature,
           maxTokens: apiConfig.llmConfig.maxTokens,
-        },
-        voiceAIConfig: {
-          emotionDetection: {
-            enabled: apiConfig.voiceAIConfig.emotionDetection.enabled,
-          },
         },
       });
 
@@ -735,11 +714,6 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             updatedConfigData.webhookConfig?.secret || prevConfig.webhookSecret,
           webhookStatus:
             updatedConfigData.webhookConfig?.status || prevConfig.webhookStatus,
-
-          // Voice AI config (emotion detection)
-          emotionDetectionEnabled:
-            updatedConfigData.voiceAIConfig?.emotionDetection?.enabled ?? 
-            prevConfig.emotionDetectionEnabled,
         };
       });
 
@@ -1295,7 +1269,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                     <p className="text-sm text-muted-foreground">
                       The AI voice synthesis service used to generate
                       natural-sounding speech for phone calls. ElevenLabs
-                      provides high-quality voice synthesis with emotional
+                      provides high-quality voice synthesis with advanced
                       expression capabilities.
                     </p>
                   </div>
@@ -1592,25 +1566,6 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                 className="py-4"
               />
             </div>
-          </div>
-          
-          {/* Emotion Detection Toggle */}
-          <div className="flex items-center justify-between space-y-2 p-4 border rounded-xl bg-slate-50/50">
-            <div className="space-y-1">
-              <Label htmlFor="emotionDetection" className="text-sm font-medium">
-                Emotion Detection
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Enable AI emotion detection to adapt voice tone and responses based on customer emotions
-              </p>
-            </div>
-            <Switch
-              id="emotionDetection"
-              checked={config.emotionDetectionEnabled}
-              onCheckedChange={(checked) => 
-                updateConfig("emotionDetectionEnabled", checked)
-              }
-            />
           </div>
           
           <Button

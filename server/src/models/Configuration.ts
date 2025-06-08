@@ -31,7 +31,6 @@ export interface IConfiguration extends mongoose.Document {
       voiceId: string;
       personality: string;
       style: string;
-      emotionalRange: string[];
       languageSupport: string[];
       settings: {
         stability: number;
@@ -40,11 +39,6 @@ export interface IConfiguration extends mongoose.Document {
         useSpeakerBoost: boolean;
       };
     }[];
-    emotionDetection: {
-      enabled: boolean;
-      sensitivity: number;
-      adaptiveResponseThreshold: number;
-    };
     bilingualSupport: {
       enabled: boolean;
       primaryLanguage: string;
@@ -54,7 +48,6 @@ export interface IConfiguration extends mongoose.Document {
     conversationFlow: {
       personalityAdaptation: boolean;
       contextAwareness: boolean;
-      emotionBasedResponses: boolean;
       naturalPauses: boolean;
     };
     conversationalAI: {
@@ -238,10 +231,6 @@ const ConfigurationSchema = new mongoose.Schema(
           type: String,
           default: 'Conversational'
         },
-        emotionalRange: {
-          type: [String],
-          default: ['neutral', 'happy', 'concerned']
-        },
         languageSupport: {
           type: [String],
           default: ['English']
@@ -271,24 +260,6 @@ const ConfigurationSchema = new mongoose.Schema(
           }
         }
       }],
-      emotionDetection: {
-        enabled: {
-          type: Boolean,
-          default: true
-        },
-        sensitivity: {
-          type: Number,
-          default: 0.7,
-          min: 0.1,
-          max: 1.0
-        },
-        adaptiveResponseThreshold: {
-          type: Number,
-          default: 0.6,
-          min: 0.1,
-          max: 1.0
-        }
-      },
       bilingualSupport: {
         enabled: {
           type: Boolean,
@@ -313,10 +284,6 @@ const ConfigurationSchema = new mongoose.Schema(
           default: true
         },
         contextAwareness: {
-          type: Boolean,
-          default: true
-        },
-        emotionBasedResponses: {
           type: Boolean,
           default: true
         },

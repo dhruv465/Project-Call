@@ -11,7 +11,7 @@ import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import logger from '../utils/logger';
 import { getErrorMessage } from '../utils/logger';
-import { EmotionAnalysis, VoicePersonality } from './voiceAIService';
+import { VoicePersonality } from './voiceAIService';
 // Import the official ElevenLabs SDK
 import ElevenLabs from 'elevenlabs-node';
 
@@ -42,7 +42,6 @@ export interface ConversationMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  emotion?: string;
   interrupted?: boolean;
 }
 
@@ -126,14 +125,12 @@ export class ElevenLabsConversationalService extends EventEmitter {
    * @param conversationId Conversation ID
    * @param role Role of the message sender
    * @param content Message content
-   * @param emotion Optional emotion for the message
    * @returns The message that was added
    */
   public addMessage(
     conversationId: string, 
     role: 'system' | 'user' | 'assistant', 
-    content: string,
-    emotion?: string
+    content: string
   ): ConversationMessage | null {
     const conversation = this.conversations.get(conversationId);
     if (!conversation) {
@@ -145,8 +142,7 @@ export class ElevenLabsConversationalService extends EventEmitter {
       id: uuidv4(),
       role,
       content,
-      timestamp: new Date(),
-      emotion
+      timestamp: new Date()
     };
 
     conversation.messages.push(message);
@@ -375,30 +371,25 @@ export class ElevenLabsConversationalService extends EventEmitter {
   }
 
   /**
-   * Synthesize adaptive voice with emotion and personality adaptation
+   * Synthesize adaptive voice with personality adaptation
    * @param params Parameters for adaptive voice synthesis
    * @returns Audio content and metadata
    */
   public async synthesizeAdaptiveVoice(params: {
     text: string;
     personalityId: string;
-    emotion?: any;
     language?: string;
-    adaptToEmotion?: boolean;
   }): Promise<any> {
     try {
-      const { text, personalityId, emotion, language = 'en', adaptToEmotion = true } = params;
+      const { text, personalityId, language = 'en' } = params;
       
-      // Determine voice settings based on emotion
-      let adaptiveSettings = undefined;
-      if (adaptToEmotion && emotion) {
-        adaptiveSettings = {
-          stability: emotion.primary === 'frustrated' ? 0.9 : 0.8,
-          similarityBoost: 0.75,
-          style: emotion.primary === 'excited' ? 0.6 : 0.3,
-          speakerBoost: true
-        };
-      }
+      // Use standard voice settings
+      const standardSettings = {
+        stability: 0.8,
+        similarityBoost: 0.75,
+        style: 0.3,
+        speakerBoost: true
+      };
 
       // Choose appropriate model based on language
       const modelId = language === 'hi' ? 'eleven_multilingual_v2' : 'eleven_monolingual_v1';
@@ -408,9 +399,9 @@ export class ElevenLabsConversationalService extends EventEmitter {
         text,
         personalityId,
         {
-          stability: adaptiveSettings?.stability,
-          similarityBoost: adaptiveSettings?.similarityBoost,
-          style: adaptiveSettings?.style,
+          stability: standardSettings.stability,
+          similarityBoost: standardSettings.similarityBoost,
+          style: standardSettings.style,
           modelId
         }
       );
@@ -421,14 +412,10 @@ export class ElevenLabsConversationalService extends EventEmitter {
         metadata: {
           voiceId: personalityId,
           language,
-          emotion: emotion?.primary || 'neutral',
           duration: Math.ceil(text.length / 15), // Rough estimate
-          adapted: adaptToEmotion && !!emotion
+          adapted: false
         },
-        adaptations: adaptiveSettings ? {
-          voiceSettings: adaptiveSettings,
-          reason: `Adapted for ${emotion?.primary} emotion`
-        } : null
+        adaptations: null
       };
     } catch (error) {
       logger.error(`Error synthesizing adaptive voice: ${getErrorMessage(error)}`);
@@ -506,7 +493,7 @@ let conversationalService: ElevenLabsConversationalService | null = null;
 /**
  * Initialize the ElevenLabs Conversational AI Service
  * @param apiKey ElevenLabs API key
- * @param openAIApiKey OpenAI API key for emotion detection
+ * @param openAIApiKey OpenAI API key for conversation enhancement
  * @returns Service instance
  */
 export function initializeConversationalService(
