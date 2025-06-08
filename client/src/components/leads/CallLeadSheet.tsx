@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Phone } from 'lucide-react';
 import { 
   Sheet, 
@@ -486,12 +486,10 @@ const CallLeadSheet = ({
                 <div className="space-y-3 text-center">
                   <Button 
                     onClick={handleInitiateCall} 
-                    className="bg-black hover:bg-gray-800 text-white"
-                    size="sm"
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90 rounded-full shadow-md transition-all duration-300 transform hover:scale-105 h-12 w-12 p-0"
                     disabled={!configStatus?.telephonyConfigured || !selectedCampaign || isLoadingCampaigns}
                   >
-                    <Phone className="h-4 w-4 mr-2" />
-                    Start Call
+                    <Phone className="h-5 w-5" />
                   </Button>
                   {configStatus && !configStatus.telephonyConfigured && (
                     <p className="text-sm text-muted-foreground">
@@ -512,18 +510,19 @@ const CallLeadSheet = ({
                   <p>Connecting call...</p>
                 </div>
               ) : configStatus?.telephonyConfigured && callStatus === 'connected' ? (
-                <div className="space-y-2 text-center">
-                  <div className="flex items-center justify-center h-12 w-12 rounded-full bg-green-100 text-green-800 mx-auto">
-                    <Phone className="h-6 w-6" />
-                  </div>
+                <div className="space-y-3 text-center">
                   <p>Call in progress</p>
-                  <Button 
-                    onClick={handleEndCall} 
-                    variant="destructive"
-                    size="sm"
-                  >
-                    End Call
-                  </Button>
+                  <div className="flex items-center justify-center gap-4">
+                    <div className="flex items-center justify-center h-12 w-12 rounded-full bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                      <Phone className="h-6 w-6" />
+                    </div>
+                    <Button 
+                      onClick={handleEndCall} 
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-full shadow-md transition-all duration-300 transform hover:scale-105 h-12 w-12 p-0"
+                    >
+                      <Phone className="h-5 w-5 rotate-[135deg]" />
+                    </Button>
+                  </div>
                 </div>
               ) : configStatus?.telephonyConfigured && callStatus === 'completed' ? (
                 <div className="text-center space-y-2">
@@ -540,22 +539,19 @@ const CallLeadSheet = ({
                   <p>Call failed</p>
                   <Button 
                     onClick={handleInitiateCall} 
-                    variant="outline"
-                    size="sm"
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90 rounded-full shadow-md transition-all duration-300 transform hover:scale-105 h-12 w-12 p-0"
                   >
-                    Retry Call
+                    <Phone className="h-5 w-5" />
                   </Button>
                 </div>
               ) : (
                 <div className="text-center space-y-3">
                   <Button 
                     onClick={handleInitiateCall} 
-                    className="bg-black hover:bg-gray-800 text-white"
-                    size="sm"
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90 rounded-full shadow-md transition-all duration-300 transform hover:scale-105 h-12 w-12 p-0"
                     disabled={!configStatus?.telephonyConfigured || !selectedCampaign || isLoadingCampaigns}
                   >
-                    <Phone className="h-4 w-4 mr-2" />
-                    Start Call
+                    <Phone className="h-5 w-5" />
                   </Button>
                   {configStatus && !configStatus.telephonyConfigured && (
                     <p className="text-sm text-muted-foreground">
