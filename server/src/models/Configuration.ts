@@ -57,6 +57,20 @@ export interface IConfiguration extends mongoose.Document {
       emotionBasedResponses: boolean;
       naturalPauses: boolean;
     };
+    conversationalAI: {
+      enabled: boolean;
+      useSDK: boolean;
+      interruptible: boolean;
+      adaptiveTone: boolean;
+      naturalConversationPacing: boolean;
+      voiceSettings: {
+        speed: number;
+        stability: number;
+        style: number;
+      };
+      defaultVoiceId: string;
+      defaultModelId: string;
+    };
   };
   llmConfig: {
     providers: {
@@ -98,7 +112,6 @@ export interface IConfiguration extends mongoose.Document {
     };
   };
   webhookConfig: {
-    url: string;
     secret: string;
     lastVerified?: Date | null;
     status?: 'unverified' | 'verified' | 'failed';
@@ -198,6 +211,170 @@ const ConfigurationSchema = new mongoose.Schema(
         enum: ['unverified', 'verified', 'failed'],
         default: 'unverified',
       },
+    },
+    voiceAIConfig: {
+      personalities: [{
+        id: {
+          type: String,
+          required: true
+        },
+        name: {
+          type: String,
+          required: true
+        },
+        description: {
+          type: String,
+          default: ''
+        },
+        voiceId: {
+          type: String,
+          required: true
+        },
+        personality: {
+          type: String,
+          default: 'Professional'
+        },
+        style: {
+          type: String,
+          default: 'Conversational'
+        },
+        emotionalRange: {
+          type: [String],
+          default: ['neutral', 'happy', 'concerned']
+        },
+        languageSupport: {
+          type: [String],
+          default: ['English']
+        },
+        settings: {
+          stability: {
+            type: Number,
+            default: 0.8,
+            min: 0.0,
+            max: 1.0
+          },
+          similarityBoost: {
+            type: Number,
+            default: 0.75,
+            min: 0.0,
+            max: 1.0
+          },
+          style: {
+            type: Number,
+            default: 0.3,
+            min: 0.0,
+            max: 1.0
+          },
+          useSpeakerBoost: {
+            type: Boolean,
+            default: true
+          }
+        }
+      }],
+      emotionDetection: {
+        enabled: {
+          type: Boolean,
+          default: true
+        },
+        sensitivity: {
+          type: Number,
+          default: 0.7,
+          min: 0.1,
+          max: 1.0
+        },
+        adaptiveResponseThreshold: {
+          type: Number,
+          default: 0.6,
+          min: 0.1,
+          max: 1.0
+        }
+      },
+      bilingualSupport: {
+        enabled: {
+          type: Boolean,
+          default: false
+        },
+        primaryLanguage: {
+          type: String,
+          default: 'English'
+        },
+        secondaryLanguage: {
+          type: String,
+          default: 'Hindi'
+        },
+        autoLanguageDetection: {
+          type: Boolean,
+          default: true
+        }
+      },
+      conversationFlow: {
+        personalityAdaptation: {
+          type: Boolean,
+          default: true
+        },
+        contextAwareness: {
+          type: Boolean,
+          default: true
+        },
+        emotionBasedResponses: {
+          type: Boolean,
+          default: true
+        },
+        naturalPauses: {
+          type: Boolean,
+          default: true
+        }
+      },
+      conversationalAI: {
+        enabled: {
+          type: Boolean,
+          default: true
+        },
+        useSDK: {
+          type: Boolean,
+          default: true
+        },
+        interruptible: {
+          type: Boolean,
+          default: true
+        },
+        adaptiveTone: {
+          type: Boolean,
+          default: true
+        },
+        naturalConversationPacing: {
+          type: Boolean,
+          default: true
+        },
+        voiceSettings: {
+          speed: {
+            type: Number,
+            default: 1.0,
+            min: 0.5,
+            max: 2.0
+          },
+          stability: {
+            type: Number,
+            default: 0.75,
+            min: 0.0,
+            max: 1.0
+          },
+          style: {
+            type: Number,
+            default: 0.3,
+            min: 0.0,
+            max: 1.0
+          }
+        },
+        defaultVoiceId: {
+          type: String,
+          default: ''
+        },
+        defaultModelId: {
+          type: String,
+          default: 'eleven_multilingual_v2'
+        }
+      }
     },
     llmConfig: {
       providers: [
@@ -339,10 +516,6 @@ const ConfigurationSchema = new mongoose.Schema(
       },
     },
     webhookConfig: {
-      url: {
-        type: String,
-        default: '',
-      },
       secret: {
         type: String,
         default: '',

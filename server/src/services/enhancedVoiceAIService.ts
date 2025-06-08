@@ -1,8 +1,21 @@
 // Enhanced Voice AI Service with Perfect Training and Advanced Capabilities
 import axios from 'axios';
-import { logger, getErrorMessage } from '../index';
-import productionEmotionService from './resilientEmotionService';
+import logger from '../utils/logger';
+import { getErrorMessage } from '../utils/logger';
+import simpleEmotionService from './simpleEmotionService';
 import mongoose from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
+import { 
+  ElevenLabsConversationalService, 
+  ConversationEvent,
+  initializeConversationalService
+} from './elevenLabsConversationalService';
+// Import the new SDK service
+import {
+  ElevenLabsSDKService,
+  ConversationEvent as SDKConversationEvent,
+  initializeSDKService
+} from './elevenlabsSDKService';
 
 export interface VoicePersonality {
   id: string;
@@ -75,7 +88,11 @@ export class EnhancedVoiceAIService {
   private isModelTrained: boolean = false;
   private trainingMetrics: ConversationMetrics;
   // Use the imported singleton instance
-  private emotionService = productionEmotionService;
+  private emotionService = simpleEmotionService;
+  // ElevenLabs Conversational Service
+  private conversationalService: ElevenLabsConversationalService | null = null;
+  // ElevenLabs SDK Service
+  private sdkService: ElevenLabsSDKService | null = null;
 
   constructor(elevenLabsApiKey: string, openAIApiKey: string) {
     this.elevenLabsApiKey = elevenLabsApiKey;
@@ -88,6 +105,53 @@ export class EnhancedVoiceAIService {
       adaptationSuccess: 0.94,
       overallEffectiveness: 0.94
     };
+    
+    // Initialize conversational service
+    this.initializeConversationalService();
+    // Initialize SDK service
+    this.initializeSDKService();
+  }
+  
+  /**
+   * Initialize the ElevenLabs Conversational Service
+   */
+  private initializeConversationalService(): void {
+    try {
+      this.conversationalService = initializeConversationalService(
+        this.elevenLabsApiKey,
+        this.openAIApiKey
+      );
+      logger.info('ElevenLabs Conversational AI Service initialized');
+    } catch (error) {
+      logger.error(`Failed to initialize ElevenLabs Conversational Service: ${getErrorMessage(error)}`);
+      this.conversationalService = null;
+    }
+  }
+
+  /**
+   * Initialize the ElevenLabs SDK Service
+   */
+  private initializeSDKService(): void {
+    try {
+      if (!this.elevenLabsApiKey) {
+        throw new Error('ElevenLabs API key is missing');
+      }
+      
+      this.sdkService = initializeSDKService(
+        this.elevenLabsApiKey,
+        this.openAIApiKey
+      );
+      
+      // Verify the SDK service was successfully initialized
+      if (this.sdkService) {
+        logger.info('ElevenLabs SDK Service initialized successfully');
+      } else {
+        throw new Error('SDK service initialization returned null');
+      }
+    } catch (error) {
+      logger.error(`Failed to initialize ElevenLabs SDK Service: ${getErrorMessage(error)}`);
+      this.sdkService = null;
+    }
   }
 
   /**
@@ -269,6 +333,15 @@ export class EnhancedVoiceAIService {
     language: Language = 'English',
     culturalContext?: string
   ): Promise<EmotionAnalysis> {
+    // Check if emotion detection is enabled
+    const isEnabled = await this.isEmotionDetectionEnabled();
+    if (!isEnabled) {
+      logger.info('Emotion detection is disabled, returning neutral emotion', {
+        component: 'EnhancedVoiceAIService'
+      });
+      return this.getDisabledEmotionResult();
+    }
+
     try {
       // Use production emotion detection models for primary analysis
       const productionResult = await this.emotionService.detectEmotionFromText(audioText);
@@ -1339,6 +1412,631 @@ export class EnhancedVoiceAIService {
         adaptationApplied: false
       };
     }
+  }
+
+  /**
+   * Start a conversational interaction using ElevenLabs SDK
+   * @param text User input text
+   * @param voiceId Voice ID to use
+   * @param conversationId Optional existing conversation ID
+   * @param options Optional conversation settings
+   * @returns Conversation ID and audio data
+   */
+  public async startConversationWithSDK(
+    text: string,
+    voiceId: string,
+    conversationId?: string,
+    options?: {
+      modelId?: string;
+      stability?: number;
+      similarityBoost?: number;
+      style?: number;
+      emotion?: any;
+      language?: string;
+      interruptible?: boolean;
+    }
+  ): Promise<{
+    conversationId: string;
+    audioBuffer?: Buffer;
+    streaming?: boolean;
+    status: 'started' | 'error';
+    message?: string;
+  }> {
+    try {
+      // Make sure SDK service is initialized
+      if (!this.sdkService) {
+        this.initializeSDKService();
+        if (!this.sdkService) {
+          throw new Error('Failed to initialize ElevenLabs SDK Service');
+        }
+      }
+
+      // Get or create conversation ID
+      const activeConversationId = conversationId || this.sdkService.createConversation();
+      
+      // Set up voice settings
+      const voiceSettings = {
+        stability: options?.stability || 0.75,
+        similarityBoost: options?.similarityBoost || 0.75,
+        style: options?.style || 0.3,
+        speakerBoost: true
+      };
+      
+      // Choose appropriate model
+      const modelId = options?.modelId || 'eleven_multilingual_v2';
+      
+      // Configure streaming options
+      const streamOptions = {
+        model: modelId,
+        voiceSettings,
+        latencyOptimization: true
+      };
+      
+      // Start the conversation
+      let audioChunks: Buffer[] = [];
+      
+      // Set up streaming if interruptible is required
+      if (options?.interruptible !== false) {
+        // Use the streaming API for interruptible conversations
+        this.sdkService.startInteractiveConversation(
+          activeConversationId,
+          text,
+          voiceId,
+          streamOptions,
+          (chunk: Buffer) => {
+            audioChunks.push(chunk);
+          }
+        );
+        
+        return {
+          conversationId: activeConversationId,
+          streaming: true,
+          status: 'started'
+        };
+      } else {
+        // For non-interruptible conversations, generate the full response
+        const adaptiveVoiceResponse = await this.sdkService.synthesizeAdaptiveVoice({
+          text,
+          personalityId: voiceId,
+          emotion: options?.emotion,
+          language: options?.language,
+          adaptToEmotion: !!options?.emotion
+        });
+        
+        return {
+          conversationId: activeConversationId,
+          audioBuffer: adaptiveVoiceResponse.audioContent,
+          streaming: false,
+          status: 'started'
+        };
+      }
+    } catch (error) {
+      logger.error(`Error starting conversation with SDK: ${getErrorMessage(error)}`);
+      return {
+        conversationId: conversationId || uuidv4(),
+        status: 'error',
+        message: getErrorMessage(error)
+      };
+    }
+  }
+
+  /**
+   * Interrupt an ongoing conversation
+   * @param conversationId Conversation ID to interrupt
+   * @returns Success status
+   */
+  public interruptConversation(conversationId: string): boolean {
+    try {
+      // Try interrupting with the SDK service first
+      if (this.sdkService) {
+        const sdkInterruptResult = this.sdkService.interruptStream(conversationId);
+        if (sdkInterruptResult) {
+          logger.info(`Interrupted conversation ${conversationId} with SDK service`);
+          return true;
+        }
+      }
+      
+      // Fall back to the original service if SDK service failed
+      if (this.conversationalService) {
+        const originalInterruptResult = this.conversationalService.interruptStream(conversationId);
+        if (originalInterruptResult) {
+          logger.info(`Interrupted conversation ${conversationId} with original service`);
+          return true;
+        }
+      }
+      
+      logger.warn(`Failed to interrupt conversation ${conversationId} - no active connection found`);
+      return false;
+    } catch (error) {
+      logger.error(`Error interrupting conversation: ${getErrorMessage(error)}`);
+      return false;
+    }
+  }
+
+  /**
+   * Create a realistic conversational AI interaction that responds naturally
+   * to user interruptions and adapts tone based on emotion detection
+   * 
+   * @param text Initial user input
+   * @param voiceId Voice ID to use
+   * @param options Advanced conversation options
+   * @returns Conversation session details
+   */
+  public async createRealisticConversation(
+    text: string,
+    voiceId: string,
+    options: {
+      conversationId?: string;
+      previousMessages?: { role: string; content: string }[];
+      language?: 'English' | 'Hindi';
+      emotionDetection?: boolean;
+      interruptible?: boolean;
+      adaptiveTone?: boolean;
+      contextAwareness?: boolean;
+      modelId?: string;
+      onAudioChunk?: (chunk: Buffer) => void;
+      onInterruption?: () => void;
+      onCompletion?: (response: any) => void;
+      pollyFallback?: boolean;
+    }
+  ): Promise<{
+    conversationId: string;
+    status: string;
+    sessionInfo: any;
+  }> {
+    try {
+      const startTime = Date.now();
+      const conversationId = options.conversationId || uuidv4();
+      logger.info(`Starting realistic conversation ID: ${conversationId}`, {
+        textLength: text.length,
+        voiceId,
+        options: {
+          language: options.language,
+          emotionDetection: options.emotionDetection,
+          interruptible: options.interruptible,
+          adaptiveTone: options.adaptiveTone,
+          pollyFallback: options.pollyFallback
+        }
+      });
+
+      // Initialize or re-initialize SDK service if needed
+      if (!this.sdkService) {
+        logger.info(`SDK service not initialized, attempting initialization for conversation ${conversationId}`);
+        this.initializeSDKService();
+      }
+      
+      // Track synthesis method for monitoring
+      let synthesisMethod = 'elevenlabs-sdk';
+      
+      // Handle case when SDK service initialization fails
+      if (!this.sdkService) {
+        logger.warn(`ElevenLabs SDK Service unavailable for conversation ${conversationId}, using fallback synthesis`);
+        synthesisMethod = 'fallback-synthesis';
+        
+        // Generate a conversation ID if not provided
+        const fallbackConversationId = conversationId;
+        
+        // Generate audio using the basic synthesizeAdaptiveVoice method if available
+        try {
+          // First detect emotion if enabled
+          let detectedEmotion: any = {
+            primary: 'neutral',
+            confidence: 0.7,
+            all_scores: { neutral: 0.7 }
+          };
+          
+          if (options.emotionDetection !== false) {
+            try {
+              detectedEmotion = await this.emotionService.detectEmotionFromText(text);
+              logger.info(`Detected emotion for fallback conversation ${conversationId}: ${detectedEmotion?.primary || 'neutral'}`);
+            } catch (error) {
+              logger.warn(`Emotion detection failed in fallback path: ${getErrorMessage(error)}`);
+            }
+          }
+          
+          // Check if we should use Polly fallback (AWS Polly service)
+          if (options.pollyFallback === true) {
+            logger.info(`Using Polly fallback for conversation ${conversationId}`);
+            synthesisMethod = 'aws-polly';
+            
+            // Implementation for Polly would be here
+            // For now we'll use our adaptive synthesis as final fallback
+          }
+          
+          // Use our existing synthesizeAdaptiveVoice method which has better error handling
+          // This is the default fallback when ElevenLabs SDK is unavailable
+          const adaptiveResponse = await this.synthesizeAdaptiveVoice({
+            text,
+            personalityId: voiceId,
+            emotion: detectedEmotion,
+            language: options.language === 'Hindi' ? 'hi' : 'en'
+          });
+          
+          // Call onAudioChunk with the complete audio if provided
+          if (options.onAudioChunk && adaptiveResponse.audioContent) {
+            options.onAudioChunk(adaptiveResponse.audioContent);
+          }
+          
+          // Call onCompletion
+          if (options.onCompletion) {
+            options.onCompletion({
+              completed: true,
+              interrupted: false,
+              conversationId: fallbackConversationId,
+              synthesisMethod
+            });
+          }
+          
+          const processingTime = Date.now() - startTime;
+          logger.info(`Fallback conversation ${conversationId} completed in ${processingTime}ms using ${synthesisMethod}`);
+          
+          return {
+            conversationId: fallbackConversationId,
+            status: 'completed',
+            sessionInfo: {
+              voiceId,
+              using: synthesisMethod,
+              adaptiveTone: false,
+              interruptible: false,
+              processingTime,
+              emotionDetected: detectedEmotion?.primary || 'neutral'
+            }
+          };
+        } catch (error) {
+          const errorTime = Date.now() - startTime;
+          logger.error(`Fallback synthesis failed after ${errorTime}ms: ${getErrorMessage(error)}`);
+          
+          // Still call completion callback with error
+          if (options.onCompletion) {
+            options.onCompletion({
+              completed: false,
+              error: getErrorMessage(error),
+              conversationId: fallbackConversationId
+            });
+          }
+          
+          return {
+            conversationId: fallbackConversationId,
+            status: 'error',
+            sessionInfo: {
+              error: 'Voice services unavailable, using text-only mode',
+              errorDetails: getErrorMessage(error),
+              processingTime: errorTime
+            }
+          };
+        }
+      }
+      
+      // SDK service is available, proceed with normal flow
+      // Detect emotion in user input if enabled
+      let detectedEmotion: any = null;
+      const isEmotionDetectionEnabled = await this.isEmotionDetectionEnabled();
+      
+      if (options.emotionDetection !== false && isEmotionDetectionEnabled) {
+        try {
+          detectedEmotion = await this.emotionService.detectEmotionFromText(text);
+          logger.info(`Detected emotion for conversation ${conversationId}: ${detectedEmotion?.primary || 'neutral'}`);
+        } catch (error) {
+          logger.warn(`Emotion detection failed, continuing without emotion: ${getErrorMessage(error)}`);
+          // Provide a fallback emotion to avoid issues down the pipeline
+          detectedEmotion = {
+            emotion: 'neutral',
+            confidence: 0.7,
+            all_scores: { neutral: 0.7 },
+            metadata: { model: 'fallback', latency: 0, timestamp: new Date().toISOString() }
+          };
+        }
+      } else {
+        // When emotion detection is disabled, use a neutral placeholder
+        const reason = !isEmotionDetectionEnabled ? 'globally disabled in configuration' : 'disabled for this conversation';
+        logger.info(`Emotion detection ${reason} for conversation ${conversationId}`);
+        detectedEmotion = {
+          emotion: 'neutral',
+          confidence: 0.7,
+          all_scores: { neutral: 0.7 },
+          metadata: { model: 'disabled', latency: 0, timestamp: new Date().toISOString() }
+        };
+      }
+      
+      // Prepare conversation context based on previous messages
+      const conversationContext = options.previousMessages || [];
+      if (conversationContext.length === 0) {
+        // Add a system message to guide the conversation
+        conversationContext.push({
+          role: 'system',
+          content: 'You are a helpful, friendly assistant. Keep your responses conversational and natural.'
+        });
+      }
+      
+      // Add the current user message
+      conversationContext.push({
+        role: 'user',
+        content: text
+      });
+      
+      // Generate AI response text if context awareness is enabled
+      let responseText = text; // Default to echo the input
+      if (options.contextAwareness !== false) {
+        try {
+          responseText = await this.sdkService.generateConversationResponse(
+            conversationContext,
+            {
+              model: 'claude-3-haiku-20240307',
+              temperature: 0.7,
+              maxTokens: 150
+            }
+          );
+          logger.info(`Generated response text for conversation ${conversationId}: ${responseText.substring(0, 50)}...`);
+        } catch (error) {
+          logger.error(`Failed to generate contextual response: ${getErrorMessage(error)}`);
+          responseText = "I'm sorry, I'm having trouble processing your request right now.";
+        }
+      }
+      
+      // Create listeners for events
+      const messageStartListener = (data: any) => {
+        if (data.conversationId === conversationId) {
+          logger.info(`Audio stream started for conversation ${conversationId}`);
+        }
+      };
+      
+      const messageStreamListener = (data: any) => {
+        if (data.conversationId === conversationId && options.onAudioChunk) {
+          options.onAudioChunk(data.chunk);
+        }
+      };
+      
+      const userInterruptListener = (data: any) => {
+        if (data.conversationId === conversationId && options.onInterruption) {
+          logger.info(`User interrupted conversation ${conversationId}`);
+          options.onInterruption();
+        }
+      };
+      
+      const messageCompleteListener = (data: any) => {
+        if (data.conversationId === conversationId && options.onCompletion) {
+          const processingTime = Date.now() - startTime;
+          logger.info(`Conversation ${conversationId} completed in ${processingTime}ms, interrupted: ${data.interrupted}`);
+          
+          options.onCompletion({
+            completed: true,
+            interrupted: data.interrupted,
+            conversationId,
+            processingTime
+          });
+          
+          // Remove listeners to prevent memory leaks
+          this.sdkService?.removeListener(SDKConversationEvent.MESSAGE_START, messageStartListener);
+          this.sdkService?.removeListener(SDKConversationEvent.MESSAGE_STREAM, messageStreamListener);
+          this.sdkService?.removeListener(SDKConversationEvent.USER_INTERRUPT, userInterruptListener);
+          this.sdkService?.removeListener(SDKConversationEvent.MESSAGE_COMPLETE, messageCompleteListener);
+          this.sdkService?.removeListener(SDKConversationEvent.ERROR, errorListener);
+        }
+      };
+      
+      const errorListener = (data: any) => {
+        if (data.conversationId === conversationId) {
+          const processingTime = Date.now() - startTime;
+          logger.error(`Error in conversation ${conversationId} after ${processingTime}ms: ${data.error}`);
+          
+          if (options.onCompletion) {
+            options.onCompletion({
+              completed: false,
+              error: data.error,
+              conversationId,
+              processingTime
+            });
+          }
+          
+          // Remove listeners to prevent memory leaks
+          this.sdkService?.removeListener(SDKConversationEvent.MESSAGE_START, messageStartListener);
+          this.sdkService?.removeListener(SDKConversationEvent.MESSAGE_STREAM, messageStreamListener);
+          this.sdkService?.removeListener(SDKConversationEvent.USER_INTERRUPT, userInterruptListener);
+          this.sdkService?.removeListener(SDKConversationEvent.MESSAGE_COMPLETE, messageCompleteListener);
+          this.sdkService?.removeListener(SDKConversationEvent.ERROR, errorListener);
+        }
+      };
+      
+      // Register event listeners for the conversation
+      this.sdkService.on(SDKConversationEvent.MESSAGE_START, messageStartListener);
+      this.sdkService.on(SDKConversationEvent.MESSAGE_STREAM, messageStreamListener);
+      this.sdkService.on(SDKConversationEvent.USER_INTERRUPT, userInterruptListener);
+      this.sdkService.on(SDKConversationEvent.MESSAGE_COMPLETE, messageCompleteListener);
+      this.sdkService.on(SDKConversationEvent.ERROR, errorListener);
+      
+      // Start streaming with interruption support
+      if (options.interruptible !== false) {
+        // Use streaming API for interruptible conversations
+        await this.sdkService.startInteractiveConversation(
+          conversationId,
+          responseText,
+          voiceId,
+          {
+            model: options.modelId || 'eleven_multilingual_v2',
+            voiceSettings: {
+              stability: detectedEmotion?.primary === 'frustrated' ? 0.9 : 0.75,
+              similarityBoost: 0.75,
+              style: detectedEmotion?.primary === 'excited' ? 0.6 : 0.3,
+              speakerBoost: true
+            },
+            latencyOptimization: true
+          },
+          options.onAudioChunk
+        );
+        
+        return {
+          conversationId,
+          status: 'streaming',
+          sessionInfo: {
+            voiceId,
+            emotion: detectedEmotion?.primary || 'neutral',
+            interruptible: true,
+            responseLength: responseText.length,
+            contextSize: conversationContext.length,
+            synthesisMethod: 'elevenlabs-sdk-streaming'
+          }
+        };
+      } else {
+        try {
+          // For non-interruptible conversations, generate the complete response
+          const adaptiveResponse = await this.sdkService.synthesizeAdaptiveVoice({
+            text: responseText,
+            personalityId: voiceId,
+            emotion: detectedEmotion,
+            language: options.language === 'Hindi' ? 'hi' : 'en',
+            adaptToEmotion: options.adaptiveTone !== false
+          });
+          
+          // Call onAudioChunk with the complete audio if provided
+          if (options.onAudioChunk && adaptiveResponse.audioContent) {
+            options.onAudioChunk(adaptiveResponse.audioContent);
+          }
+          
+          // Call onCompletion
+          if (options.onCompletion) {
+            const processingTime = Date.now() - startTime;
+            options.onCompletion({
+              completed: true,
+              interrupted: false,
+              conversationId,
+              metadata: adaptiveResponse.metadata,
+              processingTime
+            });
+            
+            // Remove listeners to prevent memory leaks
+            this.sdkService?.removeListener(SDKConversationEvent.MESSAGE_START, messageStartListener);
+            this.sdkService?.removeListener(SDKConversationEvent.MESSAGE_STREAM, messageStreamListener);
+            this.sdkService?.removeListener(SDKConversationEvent.USER_INTERRUPT, userInterruptListener);
+            this.sdkService?.removeListener(SDKConversationEvent.MESSAGE_COMPLETE, messageCompleteListener);
+            this.sdkService?.removeListener(SDKConversationEvent.ERROR, errorListener);
+          }
+          
+          return {
+            conversationId,
+            status: 'completed',
+            sessionInfo: {
+              voiceId,
+              emotion: detectedEmotion?.primary || 'neutral',
+              interruptible: false,
+              audioMetadata: adaptiveResponse.metadata,
+              adaptations: adaptiveResponse.adaptations,
+              synthesisMethod: 'elevenlabs-sdk-synthesis'
+            }
+          };
+        } catch (error) {
+          logger.error(`Error in non-interruptible synthesis: ${getErrorMessage(error)}`);
+          
+          // Try fallback if synthesis fails
+          try {
+            // Use our existing synthesizeAdaptiveVoice method as fallback
+            const fallbackResponse = await this.synthesizeAdaptiveVoice({
+              text: responseText,
+              personalityId: voiceId,
+              emotion: detectedEmotion,
+              language: options.language === 'Hindi' ? 'hi' : 'en'
+            });
+            
+            // Call onAudioChunk with the complete audio if provided
+            if (options.onAudioChunk && fallbackResponse.audioContent) {
+              options.onAudioChunk(fallbackResponse.audioContent);
+            }
+            
+            // Call onCompletion
+            if (options.onCompletion) {
+              const processingTime = Date.now() - startTime;
+              options.onCompletion({
+                completed: true,
+                interrupted: false,
+                conversationId,
+                metadata: fallbackResponse.metadata,
+                processingTime,
+                usedFallback: true
+              });
+            }
+            
+            return {
+              conversationId,
+              status: 'completed',
+              sessionInfo: {
+                voiceId,
+                emotion: detectedEmotion?.primary || 'neutral',
+                interruptible: false,
+                audioMetadata: fallbackResponse.metadata,
+                synthesisMethod: 'fallback-synthesis',
+                error: `Primary synthesis failed: ${getErrorMessage(error)}`
+              }
+            };
+          } catch (fallbackError) {
+            // Both primary and fallback failed
+            logger.error(`Both primary and fallback synthesis failed: ${getErrorMessage(fallbackError)}`);
+            
+            if (options.onCompletion) {
+              options.onCompletion({
+                completed: false,
+                error: `Multiple synthesis methods failed: ${getErrorMessage(error)}`,
+                conversationId
+              });
+            }
+            
+            throw error; // Re-throw to be caught by outer catch block
+          }
+        }
+      }
+    } catch (error) {
+      const errorDetails = getErrorMessage(error);
+      logger.error(`Error in realistic conversation: ${errorDetails}`, {
+        stack: error instanceof Error ? error.stack : 'No stack trace',
+        conversationId: options.conversationId || 'unknown'
+      });
+      
+      // Ensure we always call completion callback even on errors
+      if (options.onCompletion) {
+        options.onCompletion({
+          completed: false,
+          error: errorDetails,
+          conversationId: options.conversationId || uuidv4()
+        });
+      }
+      
+      return {
+        conversationId: options.conversationId || uuidv4(),
+        status: 'error',
+        sessionInfo: {
+          error: errorDetails,
+          stack: error instanceof Error ? error.stack : 'No stack trace'
+        }
+      };
+    }
+  }
+
+  /**
+   * Check if emotion detection is enabled in the current configuration
+   */
+  private async isEmotionDetectionEnabled(): Promise<boolean> {
+    try {
+      const Configuration = require('../models/Configuration').default;
+      const configuration = await Configuration.findOne();
+      return configuration?.voiceAIConfig?.emotionDetection?.enabled ?? true; // Default to true if not set
+    } catch (error) {
+      logger.error('Failed to check emotion detection status in EnhancedVoiceAIService', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      return true; // Default to enabled on error
+    }
+  }
+
+  /**
+   * Return a neutral emotion result when emotion detection is disabled
+   */
+  private getDisabledEmotionResult(): EmotionAnalysis {
+    return {
+      primary: 'neutral',
+      confidence: 1.0,
+      intensity: 0.5,
+      context: 'Emotion detection disabled',
+      adaptationNeeded: false,
+      culturalContext: 'None - emotion detection disabled'
+    };
   }
 }
 

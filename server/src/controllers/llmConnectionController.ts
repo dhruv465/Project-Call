@@ -52,8 +52,9 @@ export const testLLMConnection = async (req: Request, res: Response) => {
     let response: any = null;
     
     try {
-      // Get the provider client
-      await llmService.testProvider(providerName);
+      // Get the provider client and test connection
+      const provider = llmService.getProvider(configProviderName as LLMProvider);
+      await provider.testConnection();
       
       // Send a simple test message
       const testMessages: LLMMessage[] = [

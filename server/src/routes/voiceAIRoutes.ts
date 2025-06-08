@@ -7,7 +7,9 @@ import {
   adaptConversation,
   trainVoicePersonality,
   getEmotionMetrics,
-  testVoiceAI
+  testVoiceAI,
+  startConversationalAI,
+  interruptConversationalAI
 } from '../controllers/voiceAIController';
 
 const router = express.Router();
@@ -28,6 +30,10 @@ router.post('/synthesize', synthesizeVoice);
 
 // Conversation Adaptation
 router.post('/adapt-conversation', adaptConversation);
+
+// ElevenLabs Conversational AI
+router.post('/conversational-ai/start', startConversationalAI);
+router.post('/conversational-ai/interrupt', interruptConversationalAI);
 
 // Testing and Development
 router.post('/test', testVoiceAI);

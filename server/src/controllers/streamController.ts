@@ -247,3 +247,185 @@ export const handleVoiceStream = async (ws: WebSocket, req: Request): Promise<vo
     ws.close(1011, 'Internal server error');
   }
 };
+
+/**
+ * WebSocket handler for ElevenLabs Conversational AI
+ * Provides real-time streaming with interruption support
+ */
+export const handleConversationalAIStream = async (ws: WebSocket, req: Request): Promise<void> => {
+  // Extract query parameters
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const conversationId = url.searchParams.get('conversationId') || uuidv4();
+  const voiceId = url.searchParams.get('voiceId');
+  
+  if (!voiceId) {
+    logger.error('Missing voiceId in conversational AI stream');
+    ws.close(1008, 'Missing required parameters');
+    return;
+  }
+  
+  let voiceAI: EnhancedVoiceAIService | null = null;
+  let config;
+  let isProcessing = false;
+  
+  try {
+    logger.info(`Conversational AI stream started: ${conversationId}`);
+    
+    // Get system configuration
+    config = await Configuration.findOne();
+    if (!config || !config.elevenLabsConfig.isEnabled) {
+      logger.error('ElevenLabs not configured for conversational AI');
+      ws.close(1008, 'Voice synthesis not configured');
+      return;
+    }
+    
+    // Initialize voice synthesis service
+    const openAIProvider = config.llmConfig.providers.find(p => p.name === 'openai');
+    if (!config.elevenLabsConfig.apiKey || !openAIProvider?.apiKey) {
+      logger.error('Missing API keys for conversational AI');
+      ws.close(1008, 'Service not configured properly');
+      return;
+    }
+    
+    // Create voice AI service instance
+    voiceAI = new EnhancedVoiceAIService(
+      config.elevenLabsConfig.apiKey,
+      openAIProvider.apiKey
+    );
+    
+    // Initialize conversational settings from configuration
+    const conversationalSettings = config.voiceAIConfig?.conversationalAI || {
+      enabled: true,
+      useSDK: true,
+      interruptible: true,
+      adaptiveTone: true,
+      naturalConversationPacing: true
+    };
+    
+    // Send ready message
+    ws.send(JSON.stringify({
+      type: 'ready',
+      conversationId,
+      settings: conversationalSettings
+    }));
+    
+    // Handle messages from client
+    ws.on('message', async (message: WebSocket.Data) => {
+      try {
+        // Skip if already processing a message
+        if (isProcessing) {
+          logger.info(`Skipping message, already processing: ${conversationId}`);
+          return;
+        }
+        
+        isProcessing = true;
+        const data = JSON.parse(message.toString());
+        
+        // Handle interruption request
+        if (data.type === 'interrupt') {
+          if (voiceAI) {
+            const interrupted = voiceAI.interruptConversation(conversationId);
+            ws.send(JSON.stringify({
+              type: 'interrupted',
+              success: interrupted,
+              conversationId
+            }));
+          }
+          isProcessing = false;
+          return;
+        }
+        
+        // Handle text input
+        if (data.type === 'text') {
+          const text = data.text;
+          if (!text) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: 'No text provided'
+            }));
+            isProcessing = false;
+            return;
+          }
+          
+          // Detect language
+          const language = data.language || 'English';
+          
+          // Start streaming response
+          ws.send(JSON.stringify({
+            type: 'processing',
+            conversationId
+          }));
+          
+          // Collect audio chunks
+          const audioChunks: Buffer[] = [];
+          
+          // Start conversation with streaming
+          voiceAI.createRealisticConversation(
+            text,
+            voiceId,
+            {
+              conversationId,
+              language: language,
+              emotionDetection: conversationalSettings.adaptiveTone,
+              interruptible: conversationalSettings.interruptible,
+              adaptiveTone: conversationalSettings.adaptiveTone,
+              contextAwareness: true,
+              modelId: conversationalSettings.defaultModelId || 'eleven_multilingual_v2',
+              onAudioChunk: (chunk: Buffer) => {
+                // Send audio chunk to client
+                ws.send(chunk);
+                audioChunks.push(chunk);
+              },
+              onInterruption: () => {
+                ws.send(JSON.stringify({
+                  type: 'interrupted',
+                  conversationId
+                }));
+              },
+              onCompletion: (response) => {
+                ws.send(JSON.stringify({
+                  type: 'completed',
+                  conversationId,
+                  interrupted: response.interrupted || false,
+                  metadata: response.metadata || {}
+                }));
+                isProcessing = false;
+              }
+            }
+          ).catch((error) => {
+            logger.error(`Error in conversational AI: ${error.message}`);
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: error.message
+            }));
+            isProcessing = false;
+          });
+        }
+      } catch (error: any) {
+        logger.error(`Error processing message: ${error.message}`);
+        ws.send(JSON.stringify({
+          type: 'error',
+          message: 'Failed to process message'
+        }));
+        isProcessing = false;
+      }
+    });
+    
+    // Handle connection close
+    ws.on('close', () => {
+      logger.info(`Conversational AI stream closed: ${conversationId}`);
+      // Clean up resources if needed
+      if (voiceAI) {
+        voiceAI.interruptConversation(conversationId);
+      }
+    });
+    
+  } catch (error: any) {
+    logger.error(`Conversational AI stream error: ${error.message}`);
+    ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Internal server error'
+    }));
+    ws.close(1011, 'Internal server error');
+  }
+};

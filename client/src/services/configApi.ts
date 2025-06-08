@@ -78,7 +78,7 @@ export const configApi = {
         })),
       },
       webhookConfig: {
-        url: configToSend.webhookConfig?.url ? configToSend.webhookConfig.url.substring(0, 15) + '...' : 'NOT SET',
+        // URL is now environment-only, not sent from frontend
         secret: configToSend.webhookConfig?.secret ? '[MASKED]' : 'NOT SET',
       }
     });

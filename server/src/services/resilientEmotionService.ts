@@ -129,6 +129,15 @@ class ResilientEmotionService {
     // Ensure service is initialized with latest configuration
     await this.ensureInitialized();
     
+    // Check if emotion detection is enabled
+    const isEnabled = await this.isEmotionDetectionEnabled();
+    if (!isEnabled) {
+      logger.info('Emotion detection is disabled, returning neutral emotion', {
+        component: 'ResilientEmotionService'
+      });
+      return this.getDisabledFallbackResult();
+    }
+    
     try {
       for (let attempt = 1; attempt <= this.retryCount; attempt++) {
         try {
@@ -184,6 +193,23 @@ class ResilientEmotionService {
   async detectEmotionFromText(text: string): Promise<EmotionResult> {
     // Ensure service is initialized with latest configuration
     await this.ensureInitialized();
+    
+    // Check if emotion detection is enabled
+    const isEnabled = await this.isEmotionDetectionEnabled();
+    if (!isEnabled) {
+      logger.info('Emotion detection is disabled, returning neutral emotion', {
+        component: 'ResilientEmotionService'
+      });
+      return this.getDisabledFallbackResult();
+    }
+    
+    // If emotion detection is disabled in configuration, use fallback immediately
+    if (this.serviceConfig.modelVersion === 'basic' || !this.serviceConfig.apiKey) {
+      logger.info('Emotion detection is disabled or no API key available, using fallback', {
+        component: 'ResilientEmotionService'
+      });
+      return this.fallbackEmotionDetection();
+    }
     
     try {
       for (let attempt = 1; attempt <= this.retryCount; attempt++) {
@@ -289,6 +315,38 @@ class ResilientEmotionService {
         tenantId
       });
     }
+  }
+
+  /**
+   * Check if emotion detection is enabled in the current configuration
+   */
+  private async isEmotionDetectionEnabled(): Promise<boolean> {
+    try {
+      const configuration = await Configuration.findOne();
+      return configuration?.voiceAIConfig?.emotionDetection?.enabled ?? true; // Default to true if not set
+    } catch (error) {
+      logger.error('Failed to check emotion detection status', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        component: 'ResilientEmotionService'
+      });
+      return true; // Default to enabled on error
+    }
+  }
+
+  /**
+   * Return a neutral emotion result when emotion detection is disabled
+   */
+  private getDisabledFallbackResult(): EmotionResult {
+    return {
+      emotion: 'neutral',
+      confidence: 1.0,
+      metadata: {
+        model: 'disabled-fallback',
+        latency: 0,
+        timestamp: new Date().toISOString(),
+        note: 'emotion_detection_disabled'
+      }
+    };
   }
 }
 

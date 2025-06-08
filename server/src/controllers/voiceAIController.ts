@@ -218,3 +218,87 @@ export const testVoiceAI = async (req: Request, res: Response) => {
     });
   }
 };
+
+// @desc    Start ElevenLabs Conversational AI interaction
+// @route   POST /api/lumina-outreach/conversational-ai/start
+// @access  Private
+export const startConversationalAI = async (req: Request, res: Response) => {
+  try {
+    const {
+      text,
+      voiceId,
+      conversationId,
+      language = 'English',
+      emotionDetection = true,
+      interruptible = true,
+      adaptiveTone = true,
+      contextAwareness = true,
+      previousMessages = []
+    } = req.body;
+
+    if (!text) {
+      return res.status(400).json({ message: 'Text input is required' });
+    }
+    
+    if (!voiceId) {
+      return res.status(400).json({ message: 'Voice ID is required' });
+    }
+
+    // Start the conversation using the enhanced SDK implementation
+    const conversationResult = await voiceAIService.createRealisticConversation(
+      text,
+      voiceId,
+      {
+        conversationId,
+        previousMessages,
+        language,
+        emotionDetection,
+        interruptible,
+        adaptiveTone,
+        contextAwareness,
+        // Don't include callbacks in the REST API response
+      }
+    );
+
+    // Return the conversation result
+    res.json({
+      success: true,
+      conversation: conversationResult
+    });
+  } catch (error) {
+    logger.error('Error in startConversationalAI:', error);
+    res.status(500).json({
+      message: 'Failed to start conversational AI',
+      error: handleError(error)
+    });
+  }
+};
+
+// @desc    Interrupt an ongoing ElevenLabs Conversational AI interaction
+// @route   POST /api/lumina-outreach/conversational-ai/interrupt
+// @access  Private
+export const interruptConversationalAI = async (req: Request, res: Response) => {
+  try {
+    const { conversationId } = req.body;
+
+    if (!conversationId) {
+      return res.status(400).json({ message: 'Conversation ID is required' });
+    }
+
+    // Interrupt the conversation
+    const success = voiceAIService.interruptConversation(conversationId);
+
+    res.json({
+      success,
+      message: success 
+        ? 'Conversation interrupted successfully' 
+        : 'Failed to interrupt conversation - it may have already completed'
+    });
+  } catch (error) {
+    logger.error('Error in interruptConversationalAI:', error);
+    res.status(500).json({
+      message: 'Failed to interrupt conversational AI',
+      error: handleError(error)
+    });
+  }
+};

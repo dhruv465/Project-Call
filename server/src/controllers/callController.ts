@@ -91,8 +91,16 @@ export const initiateCall = async (req: Request & { user?: any }, res: Response)
         configuration.twilioConfig.authToken
       );
 
-      // Use ngrok URL in development, otherwise use the host header
-      const baseUrl = process.env.WEBHOOK_BASE_URL || 'https://e56c-103-147-161-85.ngrok-free.app';
+      // Get webhook base URL from environment variable only
+      const baseUrl = process.env.WEBHOOK_BASE_URL;
+      
+      if (!baseUrl) {
+        logger.error('WEBHOOK_BASE_URL environment variable is not set');
+        return res.status(500).json({
+          success: false,
+          message: 'Server configuration error: webhook base URL not configured'
+        });
+      }
       
       // Create the Twilio call with webhook URL
       // The webhook will handle voice synthesis to avoid API key issues here

@@ -159,6 +159,40 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
             daysOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
           }
         },
+        voiceAIConfig: {
+          personalities: [],
+          emotionDetection: {
+            enabled: true,
+            sensitivity: 0.7,
+            adaptiveResponseThreshold: 0.6
+          },
+          bilingualSupport: {
+            enabled: false,
+            primaryLanguage: 'English',
+            secondaryLanguage: 'Hindi',
+            autoLanguageDetection: true
+          },
+          conversationFlow: {
+            personalityAdaptation: true,
+            contextAwareness: true,
+            emotionBasedResponses: true,
+            naturalPauses: true
+          },
+          conversationalAI: {
+            enabled: true,
+            useSDK: true,
+            interruptible: true,
+            adaptiveTone: true,
+            naturalConversationPacing: true,
+            voiceSettings: {
+              speed: 1.0,
+              stability: 0.8,
+              style: 0.3
+            },
+            defaultVoiceId: '',
+            defaultModelId: 'eleven_multilingual_v2'
+          }
+        },
         complianceSettings: {
           recordCalls: true,
           callIntroduction: 'Hello, this is an automated call from [Company Name]. This call may be recorded for quality and training purposes.',
@@ -169,7 +203,6 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
           }
         },
         webhookConfig: {
-          url: '',
           secret: ''
         }
       });
@@ -200,8 +233,16 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
         defaultSystemPrompt: configToSend.generalSettings.defaultSystemPrompt ? 'SET' : 'NOT SET',
         defaultTimeZone: configToSend.generalSettings.defaultTimeZone,
       },
+      voiceAIConfig: {
+        emotionDetectionEnabled: configToSend.voiceAIConfig?.emotionDetection?.enabled ?? false,
+        emotionSensitivity: configToSend.voiceAIConfig?.emotionDetection?.sensitivity ?? 0.7,
+        bilingualSupportEnabled: configToSend.voiceAIConfig?.bilingualSupport?.enabled ?? false,
+        conversationalAIEnabled: configToSend.voiceAIConfig?.conversationalAI?.enabled ?? true
+      },
       webhookConfig: {
-        url: configToSend.webhookConfig.url ? 'SET' : 'NOT SET',
+        // Do not send URL to frontend - it's managed via environment variable
+        secret: configToSend.webhookConfig.secret ? 'SET' : 'NOT SET',
+        status: configToSend.webhookConfig.status || 'unverified'
       }
     });
 
@@ -671,15 +712,111 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
       };
     }
     
-    // Update webhook config if provided
+    // Update webhook config if provided (only secret, URL is environment-only)
     if (updatedConfig.webhookConfig) {
       logger.info('Updating webhook configuration...');
       config.webhookConfig = {
         ...existingConfig.webhookConfig,
-        url: handleFieldUpdate(updatedConfig.webhookConfig.url, existingConfig.webhookConfig.url),
+        // Only secret is managed via database, URL is environment variable only
         secret: updateApiKeyIfChanged(updatedConfig.webhookConfig.secret, existingConfig.webhookConfig.secret)
       };
-    }      // Save configuration changes
+    }
+
+    // Update voiceAI config if provided
+    if (updatedConfig.voiceAIConfig) {
+      logger.info('Updating Voice AI configuration...');
+      
+      // Ensure voiceAIConfig exists in the config
+      if (!config.voiceAIConfig) {
+        config.voiceAIConfig = {
+          personalities: [],
+          emotionDetection: {
+            enabled: true,
+            sensitivity: 0.7,
+            adaptiveResponseThreshold: 0.6
+          },
+          bilingualSupport: {
+            enabled: false,
+            primaryLanguage: 'English',
+            secondaryLanguage: 'Hindi',
+            autoLanguageDetection: true
+          },
+          conversationFlow: {
+            personalityAdaptation: true,
+            contextAwareness: true,
+            emotionBasedResponses: true,
+            naturalPauses: true
+          },
+          conversationalAI: {
+            enabled: true,
+            useSDK: true,
+            interruptible: true,
+            adaptiveTone: true,
+            naturalConversationPacing: true,
+            voiceSettings: {
+              speed: 1.0,
+              stability: 0.8,
+              style: 0.3
+            },
+            defaultVoiceId: '',
+            defaultModelId: 'eleven_multilingual_v2'
+          }
+        };
+      }
+      
+      // Update emotion detection settings
+      if (updatedConfig.voiceAIConfig.emotionDetection) {
+        config.voiceAIConfig.emotionDetection = {
+          ...existingConfig.voiceAIConfig?.emotionDetection,
+          enabled: handleFieldUpdate(
+            updatedConfig.voiceAIConfig.emotionDetection.enabled, 
+            existingConfig.voiceAIConfig?.emotionDetection?.enabled ?? true
+          ),
+          sensitivity: handleFieldUpdate(
+            updatedConfig.voiceAIConfig.emotionDetection.sensitivity,
+            existingConfig.voiceAIConfig?.emotionDetection?.sensitivity ?? 0.7
+          ),
+          adaptiveResponseThreshold: handleFieldUpdate(
+            updatedConfig.voiceAIConfig.emotionDetection.adaptiveResponseThreshold,
+            existingConfig.voiceAIConfig?.emotionDetection?.adaptiveResponseThreshold ?? 0.6
+          )
+        };
+      }
+      
+      // Update other voiceAI configuration sections if provided
+      if (updatedConfig.voiceAIConfig.bilingualSupport) {
+        config.voiceAIConfig.bilingualSupport = {
+          ...existingConfig.voiceAIConfig?.bilingualSupport,
+          ...updatedConfig.voiceAIConfig.bilingualSupport
+        };
+      }
+      
+      if (updatedConfig.voiceAIConfig.conversationFlow) {
+        config.voiceAIConfig.conversationFlow = {
+          ...existingConfig.voiceAIConfig?.conversationFlow,
+          ...updatedConfig.voiceAIConfig.conversationFlow
+        };
+      }
+      
+      if (updatedConfig.voiceAIConfig.conversationalAI) {
+        config.voiceAIConfig.conversationalAI = {
+          ...existingConfig.voiceAIConfig?.conversationalAI,
+          ...updatedConfig.voiceAIConfig.conversationalAI
+        };
+      }
+      
+      // Mark voiceAIConfig as modified
+      config.markModified('voiceAIConfig');
+      
+      logger.info('Voice AI configuration updated:', {
+        emotionDetectionEnabled: config.voiceAIConfig.emotionDetection?.enabled,
+        emotionSensitivity: config.voiceAIConfig.emotionDetection?.sensitivity,
+        bilingualSupport: config.voiceAIConfig.bilingualSupport?.enabled,
+        conversationalAI: config.voiceAIConfig.conversationalAI?.enabled
+      });
+    }
+
+    // Save configuration changes
     try {
       // Process API keys - log what will be saved to the database
       let emptyKeyProviders = [];
@@ -719,6 +856,7 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
       config.markModified('llmConfig.providers');
       config.markModified('elevenLabsConfig');
       config.markModified('twilioConfig');
+      config.markModified('voiceAIConfig');
       
       // Also mark each provider individually to ensure status changes are detected
       if (config.llmConfig && config.llmConfig.providers) {
@@ -829,7 +967,6 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
           callRetryAttempts: response.generalSettings.callRetryAttempts
         },
         webhookConfig: {
-          hasUrl: !!response.webhookConfig.url,
           hasSecret: !!response.webhookConfig.secret
         }
       });

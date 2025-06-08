@@ -83,8 +83,19 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
     const initialPrompt = activeScript?.content || 
                          "Hello, this is an automated call from Lumina Outreach. How are you doing today?";
     
-    // Use your ngrok base URL
-    const baseUrl = process.env.WEBHOOK_BASE_URL || 'https://e56c-103-147-161-85.ngrok-free.app';
+    // Get webhook base URL from environment variable only
+    const baseUrl = process.env.WEBHOOK_BASE_URL;
+    
+    // Ensure webhook base URL is set
+    if (!baseUrl) {
+      logger.error('WEBHOOK_BASE_URL environment variable is not set');
+      const twiml = new twilio.twiml.VoiceResponse();
+      twiml.say({ voice: 'Polly.Matthew' }, 'We apologize, but there was a server configuration error.');
+      twiml.hangup();
+      res.type('text/xml');
+      res.send(twiml.toString());
+      return;
+    }
     
     // Try to use ElevenLabs for initial greeting if available
     let useElevenLabs = false;
@@ -259,7 +270,19 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
   const callId = req.query.callId as string;
   const conversationId = req.query.conversationId as string;
   const speechResult = req.body.SpeechResult;
-  const baseUrl = process.env.WEBHOOK_BASE_URL || 'https://e56c-103-147-161-85.ngrok-free.app';
+  // Get webhook base URL from environment variable only
+  const baseUrl = process.env.WEBHOOK_BASE_URL;
+  
+  // Ensure webhook base URL is set
+  if (!baseUrl) {
+    logger.error('WEBHOOK_BASE_URL environment variable is not set');
+    const twiml = new twilio.twiml.VoiceResponse();
+    twiml.say({ voice: 'Polly.Matthew' }, 'We apologize, but there was a server configuration error.');
+    twiml.hangup();
+    res.type('text/xml');
+    res.send(twiml.toString());
+    return;
+  }
 
   try {
     logger.info(`Gather webhook called for call ${callId}`, {

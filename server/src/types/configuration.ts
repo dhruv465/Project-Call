@@ -95,6 +95,67 @@ export interface ComplianceSettings {
   };
 }
 
+// Voice AI Configuration Types
+export interface VoiceAIPersonality {
+  id: string;
+  name: string;
+  description: string;
+  voiceId: string;
+  personality: string;
+  style: string;
+  emotionalRange: string[];
+  languageSupport: string[];
+  settings: {
+    stability: number;
+    similarityBoost: number;
+    style: number;
+    useSpeakerBoost: boolean;
+  };
+}
+
+export interface EmotionDetectionConfig {
+  enabled: boolean;
+  sensitivity: number;
+  adaptiveResponseThreshold: number;
+}
+
+export interface BilingualSupportConfig {
+  enabled: boolean;
+  primaryLanguage: string;
+  secondaryLanguage: string;
+  autoLanguageDetection: boolean;
+}
+
+export interface ConversationFlowConfig {
+  personalityAdaptation: boolean;
+  contextAwareness: boolean;
+  emotionBasedResponses: boolean;
+  naturalPauses: boolean;
+}
+
+export interface ConversationalAIConfig {
+  enabled: boolean;
+  useSDK: boolean;
+  interruptible: boolean;
+  adaptiveTone: boolean;
+  naturalConversationPacing: boolean;
+  voiceSettings: {
+    speed: number;
+    stability: number;
+    style: number;
+  };
+  defaultVoiceId: string;
+  defaultModelId: string;
+}
+
+export interface VoiceAIConfig {
+  personalities: VoiceAIPersonality[];
+  emotionDetection: EmotionDetectionConfig;
+  bilingualSupport: BilingualSupportConfig;
+  conversationFlow: ConversationFlowConfig;
+  conversationalAI: ConversationalAIConfig;
+}
+
 // Full Configuration Interface
 export interface IConfiguration {
   twilioConfig: TwilioConfig;
@@ -103,6 +164,7 @@ export interface IConfiguration {
   generalSettings: GeneralSettings;
   complianceSettings: ComplianceSettings;
   webhookConfig: WebhookConfig;
+  voiceAIConfig: VoiceAIConfig;
   toObject(): any;
   save(): Promise<any>;
 }
@@ -121,4 +183,5 @@ export interface UpdatedConfig {
   generalSettings?: Partial<GeneralSettings>;
   complianceSettings?: Partial<ComplianceSettings>;
   webhookConfig?: Partial<WebhookConfig>;
+  voiceAIConfig?: Partial<VoiceAIConfig>;
 }
