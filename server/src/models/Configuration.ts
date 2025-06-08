@@ -119,6 +119,33 @@ export interface IConfiguration extends mongoose.Document {
   getMaskedConfig?: () => any;
   deleteApiKey?: (provider: string, name?: string | null) => boolean;
   updateApiKeyStatus?: (provider: string, name: string | null, status: 'unverified' | 'verified' | 'failed', details?: any) => boolean;
+
+  // New fields for error messages, closing scripts, and intent detection
+  errorMessages?: {
+    generalError?: string;
+    aiResponseError?: string;
+    speechRecognitionError?: string;
+    noCallFound?: string;
+    configurationError?: string;
+    serverError?: string;
+    technicalIssue?: string;
+    noSpeechDetected?: string;
+    callDisconnected?: string;
+  };
+  closingScripts?: {
+    default?: string;
+    consentReceived?: string;
+    withObjections?: string;
+  };
+  intentDetection?: {
+    closingPhrases?: string[];
+    objectionPhrases?: string[];
+  };
+  callResponses?: {
+    goodbye?: string;
+    thankYou?: string;
+    speechPrompt?: string;
+  };
 }
 
 const ConfigurationSchema = new mongoose.Schema(
@@ -486,6 +513,68 @@ const ConfigurationSchema = new mongoose.Schema(
       secret: {
         type: String,
         default: '',
+      },
+    },
+    errorMessages: {
+      generalError: {
+        type: String,
+        default: "I'm sorry, I'm having trouble understanding. Could you please repeat that?",
+      },
+      aiResponseError: {
+        type: String,
+        default: "I'm sorry, I'm having difficulty with my response. Could we continue in a moment?",
+      },
+      speechRecognitionError: {
+        type: String,
+        default: "I didn't catch that. Could you please speak more clearly?",
+      },
+      noCallFound: {
+        type: String,
+        default: "I'm sorry, but I couldn't find any call associated with this request.",
+      },
+      configurationError: {
+        type: String,
+        default: "There seems to be an issue with the configuration. Please contact support.",
+      },
+      serverError: {
+        type: String,
+        default: "I'm sorry, but we're experiencing technical difficulties. Please try again later.",
+      },
+      technicalIssue: {
+        type: String,
+        default: "There was a technical issue processing your request. Please try again.",
+      },
+      noSpeechDetected: {
+        type: String,
+        default: "No speech was detected. Please make sure your microphone is working and try again.",
+      },
+      callDisconnected: {
+        type: String,
+        default: "The call has been disconnected. Please check your connection and try again.",
+      },
+    },
+    closingScripts: {
+      default: {
+        type: String,
+        default: "Thank you for your time. If you have any questions, please feel free to reach out.",
+      },
+      consentReceived: {
+        type: String,
+        default: "Thank you for your interest! We'll follow up as discussed. Have a great day!",
+      },
+      withObjections: {
+        type: String,
+        default: "I understand your concerns. Thank you for sharing your thoughts. Have a nice day!",
+      },
+    },
+    intentDetection: {
+      closingPhrases: {
+        type: [String],
+        default: ['goodbye', 'bye', 'end call', 'hang up', 'that\'s all'],
+      },
+      objectionPhrases: {
+        type: [String],
+        default: ['not interested', 'don\'t call', 'too expensive', 'can\'t afford'],
       },
     },
     updatedBy: {

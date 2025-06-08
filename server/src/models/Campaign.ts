@@ -17,6 +17,7 @@ export interface ICampaign extends mongoose.Document {
       };
     }[];
   };
+  scriptClosing?: string;
   leadSources: string[];
   status: string;
   startDate: Date;
@@ -95,6 +96,11 @@ const CampaignSchema = new mongoose.Schema(
           },
         },
       ],
+    },
+    scriptClosing: {
+      type: String,
+      required: false,
+      default: '',
     },
     leadSources: {
       type: [String],
@@ -219,8 +225,8 @@ const CampaignSchema = new mongoose.Schema(
 CampaignSchema.pre('save', async function(next) {
   try {
     if (this.isModified('voiceConfiguration.voiceId')) {
-      // Import dynamically to avoid circular dependencies
-      const { default: EnhancedVoiceAIService } = await import('../services/enhancedVoiceAIService');
+      // Import directly to avoid circular dependencies
+      const { EnhancedVoiceAIService } = await import('../services/enhancedVoiceAIService');
       // Get valid voice ID (will fallback to default if the voice ID is invalid)
       this.voiceConfiguration.voiceId = await EnhancedVoiceAIService.getValidVoiceId(this.voiceConfiguration.voiceId);
     }

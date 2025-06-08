@@ -3,6 +3,7 @@ import { voiceAIService } from './index';
 import Call, { ICall } from '../models/Call';
 import Campaign from '../models/Campaign';
 import Configuration from '../models/Configuration';
+import { objectDetectionService } from './objectDetectionService';
 
 /**
  * Conversation state types
@@ -278,7 +279,7 @@ export class ConversationStateMachine {
       }
       
       // Replace any placeholders in the compliance text
-      complianceText = complianceText.replace('[Company Name]', call.companyName || 'our company');
+      complianceText = complianceText.replace('[Company Name]', 'our company');
       
       // Add to conversation log
       conversation.conversationLog.push({
@@ -450,8 +451,10 @@ export class ConversationStateMachine {
     }
     
     try {
+      // Fetch campaign to get language settings
+      const campaign = await Campaign.findById(conversation.campaignId);
+      
       // Use the voiceAI service to generate response
-      // This is a simplified example - in production, this would be more sophisticated
       const response = await voiceAIService.generateResponse({
         userInput,
         conversationLog: conversation.conversationLog,
@@ -461,9 +464,8 @@ export class ConversationStateMachine {
           complianceComplete: conversation.complianceComplete || false,
           disclosureComplete: conversation.disclosureComplete || false,
           currentPhase: conversation.currentTopic || 'introduction',
-          language: 'en-US',
-          objections: conversation.objections,
-          detectedIntent: conversation.detectedIntent
+          language: campaign?.primaryLanguage ? 
+            (campaign.primaryLanguage === 'hi' ? 'hi-IN' : 'en-US') : 'en-US'
         }
       });
       
@@ -474,7 +476,7 @@ export class ConversationStateMachine {
       // Get error response from configuration
       const config = await Configuration.findOne();
       return {
-        text: config?.errorMessages?.aiResponseError || "Error generating response"
+        text: config?.errorMessages?.aiResponseError || ""
       };
     }
   }
@@ -495,10 +497,6 @@ export class ConversationStateMachine {
         return 'general';
       }
       
-      // In a real implementation, this would use an LLM to detect intent
-      // For now, let's use a placeholder that recognizes if this is
-      // a potential closing response
-      
       // Fetch configuration to get closing phrases
       const config = await Configuration.findOne();
       
@@ -518,10 +516,14 @@ export class ConversationStateMachine {
         return 'closing';
       }
       
-      // For other intents, we would use the LLM service
-      // This would be integrated with the primary conversation LLM
-      
-      return 'general';
+      // For other intents, use the object detection service
+      try {
+        const intentDetection = await objectDetectionService.detectIntent(userInput);
+        return intentDetection.intent || 'general';
+      } catch (intentError) {
+        logger.error('Error in intent detection via service:', intentError);
+        return 'general';
+      }
     } catch (error) {
       logger.error('Error detecting intent:', error);
       return 'general';
@@ -536,12 +538,8 @@ export class ConversationStateMachine {
     if (intent === 'objection') return true;
     
     try {
-      // In a production system, this would use an LLM to detect objections
-      // based on the campaign context and conversation history
-      
-      // For now, let's use the LLM service to detect objections
-      // This is a placeholder for the actual implementation
-      const llmResponse = await voiceAIService.detectObjection(userInput);
+      // Use the object detection service to detect objections
+      const llmResponse = await objectDetectionService.detectObjection(userInput);
       return llmResponse.isObjection || false;
     } catch (error) {
       logger.error('Error detecting objection:', error);

@@ -1,3 +1,132 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Production builds
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
+.env.test
+
+# Logs
+logs/
+*.log
+combined.log
+error.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+.nyc_output/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary folders
+tmp/
+temp/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache
+.cache
+.parcel-cache
+
+# Uploads and user data
+uploads/
+audio/
+recordings/
+
+# SSL certificates (keep structure, ignore actual certs)
+certificates/*.pem
+certificates/*.key
+certificates/*.crt
+
+# Docker volumes
+data/
+
+# Backup files
+backups/
+
+# Monitoring data
+prometheus_data/
+grafana_data/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Configuration files with secrets
+config/production.json
+config/secrets.json
+
+# Testing
+.jest/
+test-results/
+coverage/
+
+# Linting
+.eslintcache
+
+# TypeScript
+*.tsbuildinfo
+
+# Optional REPL history
+.node_repl_history
+
+# Lock files (keep only one type)
+yarn.lock
+
+# Keep empty directories
+!.gitkeep
+
+# Local development overrides
+docker-compose.override.yml
+
 # ===================================
 # Lumina Outreach .gitignore
 # ===================================

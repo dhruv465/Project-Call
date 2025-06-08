@@ -6,6 +6,7 @@ import Configuration from '../models/Configuration';
 import { conversationEngine } from './index';
 import { AdvancedTelephonyService } from './advancedTelephonyService';
 import { EnhancedVoiceAIService } from './enhancedVoiceAIService';
+import { synthesizeVoiceResponse } from '../utils/voiceSynthesis';
 
 // Import Twilio
 const twilio = require('twilio');
@@ -32,8 +33,53 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
     const call = await Call.findById(callId);
     if (!call) {
       logger.error(`No call found with ID ${callId}`);
+      
+      // Get configuration for ElevenLabs
+      const config = await Configuration.findOne();
+      const errorMessage = config?.errorMessages?.noCallFound || 'We apologize, but we cannot find your call record.';
+      
+      // Generate error response with ElevenLabs if available
       const twiml = new twilio.twiml.VoiceResponse();
-      twiml.say({ voice: 'Polly.Matthew' }, 'We apologize, but we cannot find your call record.');
+      
+      if (config?.elevenLabsConfig?.isEnabled && config?.elevenLabsConfig?.apiKey) {
+        try {
+          const openAIProvider = config.llmConfig.providers.find(p => p.name === 'openai');
+          if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
+            const voiceAI = new EnhancedVoiceAIService(
+              config.elevenLabsConfig.apiKey,
+              openAIProvider.apiKey
+            );
+            
+            const defaultVoiceId = config.voiceAIConfig?.conversationalAI?.defaultVoiceId || 
+                                 'XvRdSQXvmv5jHPGBw0XU'; // Default voice ID
+            
+            const speechResponse = await voiceAI.synthesizeAdaptiveVoice({
+              text: errorMessage,
+              personalityId: defaultVoiceId,
+              language: 'en'
+            });
+            
+            if (speechResponse.audioContent) {
+              const audioBase64 = speechResponse.audioContent.toString('base64');
+              const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
+              twiml.play(audioDataUrl);
+            } else {
+              // Fallback to empty audio to avoid Polly
+              twiml.play('');
+            }
+          } else {
+            // Fallback to empty audio to avoid Polly
+            twiml.play('');
+          }
+        } catch (error) {
+          // Fallback to empty audio to avoid Polly
+          twiml.play('');
+        }
+      } else {
+        // Fallback to empty audio to avoid Polly
+        twiml.play('');
+      }
+      
       twiml.hangup();
       res.type('text/xml');
       res.send(twiml.toString());
@@ -67,8 +113,53 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
     
     if (!campaign || !configuration) {
       logger.error('Campaign or configuration not found');
+      
+      // Get error message
+      const errorMessage = 'We apologize, but there was a configuration error.';
+      
+      // Generate error response with TwiML
       const twiml = new twilio.twiml.VoiceResponse();
-      twiml.say({ voice: 'Polly.Matthew' }, 'We apologize, but there was a configuration error.');
+      
+      // Try to use ElevenLabs if possible
+      if (configuration?.elevenLabsConfig?.isEnabled && configuration?.elevenLabsConfig?.apiKey) {
+        try {
+          const openAIProvider = configuration.llmConfig.providers.find(p => p.name === 'openai');
+          if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
+            const voiceAI = new EnhancedVoiceAIService(
+              configuration.elevenLabsConfig.apiKey,
+              openAIProvider.apiKey
+            );
+            
+            const defaultVoiceId = configuration.voiceAIConfig?.conversationalAI?.defaultVoiceId || 
+                                  'XvRdSQXvmv5jHPGBw0XU'; // Default voice ID
+            
+            const speechResponse = await voiceAI.synthesizeAdaptiveVoice({
+              text: errorMessage,
+              personalityId: defaultVoiceId,
+              language: 'en'
+            });
+            
+            if (speechResponse.audioContent) {
+              const audioBase64 = speechResponse.audioContent.toString('base64');
+              const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
+              twiml.play(audioDataUrl);
+            } else {
+              // Fallback to empty audio
+              twiml.play('');
+            }
+          } else {
+            // Fallback to empty audio
+            twiml.play('');
+          }
+        } catch (error) {
+          // Fallback to empty audio
+          twiml.play('');
+        }
+      } else {
+        // Fallback to empty audio
+        twiml.play('');
+      }
+      
       twiml.hangup();
       res.type('text/xml');
       res.send(twiml.toString());
@@ -90,7 +181,50 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
     if (!baseUrl) {
       logger.error('WEBHOOK_BASE_URL environment variable is not set');
       const twiml = new twilio.twiml.VoiceResponse();
-      twiml.say({ voice: 'Polly.Matthew' }, 'We apologize, but there was a server configuration error.');
+      
+      // Get message from configuration
+      const config = await Configuration.findOne();
+      const errorMessage = config?.errorMessages?.serverError || 'We apologize, but there was a server configuration error.';
+      
+      // Try to use ElevenLabs if possible
+      if (config?.elevenLabsConfig?.isEnabled && config?.elevenLabsConfig?.apiKey) {
+        try {
+          const openAIProvider = config.llmConfig.providers.find(p => p.name === 'openai');
+          if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
+            const voiceAI = new EnhancedVoiceAIService(
+              config.elevenLabsConfig.apiKey,
+              openAIProvider.apiKey
+            );
+            
+            const defaultVoiceId = config.voiceAIConfig?.conversationalAI?.defaultVoiceId || 
+                                 'XvRdSQXvmv5jHPGBw0XU'; // Default voice ID
+            
+            const speechResponse = await voiceAI.synthesizeAdaptiveVoice({
+              text: errorMessage,
+              personalityId: defaultVoiceId,
+              language: 'en'
+            });
+            
+            if (speechResponse.audioContent) {
+              const audioBase64 = speechResponse.audioContent.toString('base64');
+              const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
+              twiml.play(audioDataUrl);
+            } else {
+              // Fallback to empty audio
+              twiml.play('');
+            }
+          } else {
+            // Fallback to empty audio
+            twiml.play('');
+          }
+        } catch (error) {
+          // Fallback to empty audio
+          twiml.play('');
+        }
+      } else {
+        // Fallback to empty audio
+        twiml.play('');
+      }
       twiml.hangup();
       res.type('text/xml');
       res.send(twiml.toString());
@@ -147,13 +281,11 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
       }
     }
     
-    // Fallback to Polly if ElevenLabs failed
+    // Fallback if ElevenLabs failed
     if (!useElevenLabs) {
-      logger.info(`Using Polly fallback greeting for call ${callId}`);
-      twiml.say({ 
-        voice: 'Polly.Matthew',
-        language: campaign.primaryLanguage === 'hi' ? 'hi-IN' : 'en-US'
-      }, initialPrompt);
+      logger.info(`Using empty audio fallback greeting for call ${callId}`);
+      // Send empty audio instead of Polly voice
+      twiml.play('');
     }
     
     // Set up gather for speech input
@@ -167,7 +299,51 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
     });
     
     // Fallback if no speech detected
-    twiml.say({ voice: 'Polly.Matthew' }, "I'm sorry, I didn't catch that. Please speak after the tone.");
+    // Get message from configuration
+    const config = await Configuration.findOne();
+    const speechPrompt = config?.callResponses?.speechPrompt || "I'm sorry, I didn't catch that. Please speak after the tone.";
+    
+    // Try to use ElevenLabs for the speech prompt
+    if (configuration.elevenLabsConfig?.isEnabled && configuration.elevenLabsConfig?.apiKey) {
+      try {
+        const openAIProvider = configuration.llmConfig.providers.find(p => p.name === 'openai');
+        if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
+          const voiceAI = new EnhancedVoiceAIService(
+            configuration.elevenLabsConfig.apiKey,
+            openAIProvider.apiKey
+          );
+          
+          const requestedVoiceId = campaign.voiceConfiguration?.voiceId || 'default';
+          const voiceId = await EnhancedVoiceAIService.getValidVoiceId(requestedVoiceId);
+          
+          const speechResponse = await voiceAI.synthesizeAdaptiveVoice({
+            text: speechPrompt,
+            personalityId: voiceId,
+            language: campaign.primaryLanguage === 'hi' ? 'hi' : 'en'
+          });
+          
+          // Use ElevenLabs speech
+          if (speechResponse.audioContent) {
+            const audioBase64 = speechResponse.audioContent.toString('base64');
+            const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
+            twiml.play(audioDataUrl);
+          } else {
+            // Fallback to empty audio
+            twiml.play('');
+          }
+        } else {
+          // Fallback to empty audio
+          twiml.play('');
+        }
+      } catch (error) {
+        // Fallback to empty audio
+        twiml.play('');
+        logger.error(`Error synthesizing speech prompt with ElevenLabs: ${error}`);
+      }
+    } else {
+      // Fallback to empty audio
+      twiml.play('');
+    }
     twiml.gather({
       input: 'speech',
       action: `${baseUrl}/api/calls/gather?callId=${callId}&conversationId=${conversationId}`,
@@ -178,7 +354,19 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
     });
     
     // Final fallback - hang up if still no response
-    twiml.say({ voice: 'Polly.Matthew' }, "Thank you for your time. Goodbye.");
+    // Get message from configuration
+    const configForGoodbye = await Configuration.findOne();
+    const goodbyeMessage = configForGoodbye?.callResponses?.goodbye || "Thank you for your time. Goodbye.";
+    
+    // Use ElevenLabs for goodbye message
+    await synthesizeVoiceResponse(
+      twiml, 
+      goodbyeMessage, 
+      {
+        voiceId: campaign?.voiceConfiguration?.voiceId,
+        language: campaign.primaryLanguage === 'hi' ? 'hi' : 'en'
+      }
+    );
     twiml.hangup();
     
     // Log TwiML for debugging
@@ -201,7 +389,13 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
     
     // Send fallback TwiML
     const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say({ voice: 'Polly.Matthew' }, 'We apologize, but there was a technical issue. Please try again later.');
+    
+    // Get message from configuration
+    const config = await Configuration.findOne();
+    const errorMessage = config?.errorMessages?.technicalIssue || 'We apologize, but there was a technical issue. Please try again later.';
+    
+    // Use ElevenLabs for error message
+    await synthesizeVoiceResponse(twiml, errorMessage, {});
     twiml.hangup();
     
     res.type('text/xml');
@@ -288,7 +482,13 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
   if (!baseUrl) {
     logger.error('WEBHOOK_BASE_URL environment variable is not set');
     const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say({ voice: 'Polly.Matthew' }, 'We apologize, but there was a server configuration error.');
+    
+    // Get message from configuration
+    const config = await Configuration.findOne();
+    const errorMessage = config?.errorMessages?.serverError || 'We apologize, but there was a server configuration error.';
+    
+    // Use ElevenLabs for error message
+    await synthesizeVoiceResponse(twiml, errorMessage, {});
     twiml.hangup();
     res.type('text/xml');
     res.send(twiml.toString());
@@ -373,10 +573,11 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
         }
       }
       
-      // Fallback to Polly voice if ElevenLabs is not available or fails
+      // Fallback if ElevenLabs is not available or fails
       if (!useElevenLabs) {
-        logger.info(`Using Polly fallback for call ${callId} response`);
-        twiml.say({ voice: 'Polly.Matthew' }, aiResponse.text);
+        logger.info(`Using empty audio fallback for call ${callId} response`);
+        // Send empty audio instead of Polly voice
+        twiml.play('');
       }
       
       // Check if conversation should continue based on intent
@@ -396,7 +597,22 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
         });
         
         // Fallback if no response
-        twiml.say({ voice: 'Polly.Matthew' }, "I'm sorry, I didn't catch that. Could you please repeat?");
+        const speechError = config?.errorMessages?.speechRecognitionError || "I'm sorry, I didn't catch that. Could you please repeat?";
+        
+        // Get call and campaign information
+        const currentCall = await Call.findById(callId);
+        const currentCampaign = currentCall ? await Campaign.findById(currentCall.campaignId) : null;
+        
+        // Use ElevenLabs for speech error message
+        await synthesizeVoiceResponse(
+          twiml, 
+          speechError, 
+          {
+            campaignId: currentCall?.campaignId?.toString(),
+            language: currentCampaign?.primaryLanguage === 'hi' ? 'hi' : 'en'
+          }
+        );
+        
         twiml.gather({
           input: 'speech',
           action: `${baseUrl}/api/calls/gather?callId=${callId}&conversationId=${conversationId}`,
@@ -407,7 +623,22 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
         });
       } else {
         // End the call gracefully
-        twiml.say({ voice: 'Polly.Matthew' }, "Thank you for your time. Have a great day!");
+        const thankYouMessage = config?.callResponses?.thankYou || "Thank you for your time. Have a great day!";
+        
+        // Get call and campaign information
+        const currentCall = await Call.findById(callId);
+        const currentCampaign = currentCall ? await Campaign.findById(currentCall.campaignId) : null;
+        
+        // Use ElevenLabs for thank you message
+        await synthesizeVoiceResponse(
+          twiml, 
+          thankYouMessage, 
+          {
+            campaignId: currentCall?.campaignId?.toString(),
+            language: currentCampaign?.primaryLanguage === 'hi' ? 'hi' : 'en'
+          }
+        );
+        
         twiml.hangup();
       }
       
@@ -427,7 +658,22 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
       // No speech detected, try again with more patience
       logger.info(`No speech detected for call ${callId}, prompting again`);
       
-      twiml.say({ voice: 'Polly.Matthew' }, "I'm sorry, I didn't hear anything. Could you please speak?");
+      // Get message from configuration
+      const config = await Configuration.findOne();
+      const noSpeechMessage = config?.errorMessages?.noSpeechDetected || "I'm sorry, we didn't hear anything. Could you please speak?";
+      
+      // Use ElevenLabs for no speech message
+      const call = await Call.findById(callId);
+      const campaign = call ? await Campaign.findById(call.campaignId) : null;
+      
+      await synthesizeVoiceResponse(
+        twiml, 
+        noSpeechMessage, 
+        {
+          campaignId: call?.campaignId?.toString(),
+          language: campaign?.primaryLanguage === 'hi' ? 'hi' : 'en'
+        }
+      );
       
       twiml.gather({
         input: 'speech',
@@ -439,18 +685,32 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
       });
       
       // Final fallback - end call if still no response
-      twiml.say({ voice: 'Polly.Matthew' }, "I'm sorry, we seem to be having difficulty. Thank you for your time. Goodbye.");
-      twiml.hangup();
+      const disconnectMessage = config?.errorMessages?.callDisconnected || "I'm sorry, we seem to be having difficulty. Thank you for your time. Goodbye.";
       
-      res.type('text/xml');
-      res.send(twiml.toString());
+      // Use ElevenLabs for disconnect message
+      await synthesizeVoiceResponse(
+        twiml, 
+        disconnectMessage, 
+        {
+          campaignId: call?.campaignId?.toString(),
+          language: campaign?.primaryLanguage === 'hi' ? 'hi' : 'en'
+        }
+      );
+      
+      twiml.hangup();
     }
   } catch (error) {
     logger.error(`Error in gather webhook for call ${callId}:`, error);
     
     // Send error fallback TwiML
     const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say({ voice: 'Polly.Matthew' }, 'We apologize, but there was a technical issue. Please try again later.');
+    
+    // Get message from configuration
+    const config = await Configuration.findOne();
+    const errorMessage = config?.errorMessages?.technicalIssue || 'We apologize, but there was a technical issue. Please try again later.';
+    
+    // Use ElevenLabs for error message
+    await synthesizeVoiceResponse(twiml, errorMessage, {});
     twiml.hangup();
     
     res.type('text/xml');
@@ -504,12 +764,13 @@ export async function handleTwilioStreamWebhook(req: Request, res: Response): Pr
     
     // Process the conversation through the conversation engine
     // This triggers real-time processing of speech and generates responses
-    await conversationEngine.processStreamInput(
+    await conversationEngine.processUserInput(
       conversationId, 
-      callId,
-      req,
-      res
+      "Real-time stream processing initiated" // Placeholder text
     );
+    
+    // Just return success as we're handling the response elsewhere
+    res.status(200).send('Stream processing initiated');
     
   } catch (error) {
     logger.error(`Error in stream webhook for call ${callId}:`, error);
@@ -623,18 +884,95 @@ function calculateEngagementScore(conversationLog: Array<{role: string, content:
 }
 
 function countObjections(conversationLog: Array<{role: string, content: string, intent?: string}>): number {
-  // Count objections raised by the customer
-  return conversationLog.filter(entry => 
-    entry.role === 'user' && 
-    (entry.intent === 'objection' || 
-     /no|not interested|don't want|too expensive|don't need|already have/i.test(entry.content))
+  // Use LLM-detected intents when available
+  const explicitObjections = conversationLog.filter(entry => 
+    entry.role === 'user' && entry.intent === 'objection'
   ).length;
+  
+  // If no explicit objections are tagged, analyze content
+  if (explicitObjections === 0) {
+    // Get configuration for dynamic objection phrases
+    try {
+      const config = require('../models/Configuration').default;
+      return config.findOne().then(config => {
+        const objectionPhrases = config?.intentDetection?.objectionPhrases || [];
+        
+        // Count objections based on configured phrases
+        return conversationLog.filter(entry => 
+          entry.role === 'user' && 
+          objectionPhrases.some(phrase => 
+            entry.content.toLowerCase().includes(phrase.toLowerCase())
+          )
+        ).length;
+      }).catch(() => 0);
+    } catch (error) {
+      return 0;
+    }
+  }
+  
+  return explicitObjections;
 }
 
-function countInterruptions(conversationLog: Array<{role: string, content: string}>): number {
-  // Detection of interruptions would be implemented based on timestamps
-  // For now, return 0 as placeholder
-  return 0;
+function countInterruptions(conversationLog: Array<{role: string, content: string, timestamp?: Date}>): number {
+  // Count interruptions based on timestamp overlaps and context
+  // An interruption occurs when a user starts speaking before the AI has finished
+  if (conversationLog.length < 3) {
+    return 0; // Not enough entries to detect interruptions
+  }
+  
+  let interruptionCount = 0;
+  const interruptionThresholdMs = 500; // Threshold in milliseconds to consider it an interruption
+  
+  // Start from index 2 to check AI -> User -> AI pattern
+  for (let i = 2; i < conversationLog.length; i += 2) {
+    const previousAI = conversationLog[i-2];
+    const user = conversationLog[i-1];
+    const currentAI = conversationLog[i];
+    
+    // Skip if any of the entries are not the expected roles
+    if (previousAI.role !== 'assistant' || user.role !== 'user' || currentAI.role !== 'assistant') {
+      continue;
+    }
+    
+    // Check for interruption indicators in timestamps if available
+    if (previousAI.timestamp && user.timestamp) {
+      // Calculate expected AI speaking time based on text length (roughly 100ms per character)
+      const expectedSpeakingTimeMs = previousAI.content.length * 100;
+      
+      // If user started speaking too soon after AI started
+      const timeDiffMs = user.timestamp.getTime() - previousAI.timestamp.getTime();
+      if (timeDiffMs < expectedSpeakingTimeMs - interruptionThresholdMs) {
+        interruptionCount++;
+        continue;
+      }
+    }
+    
+    // Check for interruption phrases
+    const interruptionPhrases = [
+      "excuse me", "hold on", "wait", "let me stop you", "can I", 
+      "I need to", "actually", "sorry to interrupt"
+    ];
+    
+    // If user message starts with an interruption phrase
+    const userLower = user.content.toLowerCase().trim();
+    if (interruptionPhrases.some(phrase => userLower.startsWith(phrase))) {
+      interruptionCount++;
+      continue;
+    }
+    
+    // If AI response acknowledges interruption
+    const aiLower = currentAI.content.toLowerCase();
+    if (
+      aiLower.includes("sorry for interrupting") ||
+      aiLower.includes("let me continue") ||
+      aiLower.includes("as I was saying") ||
+      aiLower.includes("to finish my thought")
+    ) {
+      interruptionCount++;
+    }
+  }
+  
+  return interruptionCount;
 }
 
 function identifyConversionIndicators(conversationLog: Array<{role: string, content: string}>): string[] {
@@ -753,52 +1091,34 @@ function detectIntent(conversationLog: Array<{role: string, content: string, int
     };
   }
   
-  // Fallback to keyword-based detection
-  const keywords = {
-    'purchase_intent': ['buy', 'purchase', 'interested', 'get it', 'sign up', 'register'],
-    'information_request': ['tell me', 'how does', 'what is', 'explain', 'more information'],
-    'objection': ['expensive', 'not interested', 'no thanks', 'maybe later', 'don\'t need'],
-    'positive_feedback': ['good', 'great', 'helpful', 'thanks', 'appreciate'],
-    'negative_feedback': ['bad', 'unhelpful', 'waste', 'annoying', 'stop calling']
-  };
-  
-  const scores: Record<string, number> = {};
-  
-  // Count keywords in user messages
-  Object.entries(keywords).forEach(([intent, words]) => {
-    const matchCount = userEntries.reduce((count, entry) => {
-      const matches = words.filter(word => 
-        entry.content.toLowerCase().includes(word.toLowerCase())
-      ).length;
-      return count + matches;
-    }, 0);
+  // No explicit intents available, use voiceAIService for detection
+  try {
+    const { voiceAIService } = require('../services');
+    const userTexts = userEntries.map(entry => entry.content).join(' ');
     
-    scores[intent] = matchCount;
-  });
-  
-  // Find the highest scoring intent
-  const sortedScores = Object.entries(scores)
-    .sort((a, b) => b[1] - a[1])
-    .filter(([_, score]) => score > 0)
-    .map(([intent, score]) => ({
-      intent,
-      confidence: Math.min(score / 5, 1) // Normalize confidence
-    }));
-  
-  if (sortedScores.length > 0) {
+    return voiceAIService.detectIntent(userTexts)
+      .then((result: any) => {
+        return {
+          primaryIntent: result.primaryIntent || 'general_conversation',
+          confidence: result.confidence || 0.5,
+          secondaryIntents: result.secondaryIntents || []
+        };
+      })
+      .catch(() => {
+        return {
+          primaryIntent: 'general_conversation',
+          confidence: 0.5,
+          secondaryIntents: []
+        };
+      });
+  } catch (error) {
+    // If import fails, return default intent
     return {
-      primaryIntent: sortedScores[0].intent,
-      confidence: sortedScores[0].confidence,
-      secondaryIntents: sortedScores.slice(1)
+      primaryIntent: 'general_conversation',
+      confidence: 0.5,
+      secondaryIntents: []
     };
   }
-  
-  // Default intent if nothing detected
-  return {
-    primaryIntent: 'general_conversation',
-    confidence: 0.5,
-    secondaryIntents: []
-  };
 }
 
 function analyzeTranscription(conversationLog: Array<{role: string, content: string}>): {
@@ -819,86 +1139,33 @@ function analyzeTranscription(conversationLog: Array<{role: string, content: str
     };
   }
   
-  // Simple sentiment analysis (would be replaced with more sophisticated NLP)
-  const sentimentBySegment = userMessages.map(message => {
-    // Simple keyword-based sentiment
-    const positiveWords = ['yes', 'good', 'great', 'like', 'interested', 'thanks', 'appreciate', 'love', 'excellent'];
-    const negativeWords = ['no', 'bad', 'don\'t', 'expensive', 'not interested', 'hate', 'terrible', 'awful'];
+  try {
+    // Use LLM service for real sentiment analysis
+    const { llmService } = require('../services');
     
-    const lowerMessage = message.toLowerCase();
-    const positiveCount = positiveWords.filter(word => lowerMessage.includes(word)).length;
-    const negativeCount = negativeWords.filter(word => lowerMessage.includes(word)).length;
-    
-    // Calculate sentiment score (-1 to 1)
-    let sentiment = 0;
-    if (positiveCount + negativeCount > 0) {
-      sentiment = (positiveCount - negativeCount) / (positiveCount + negativeCount);
-    }
-    
+    return llmService.analyzeConversation({
+      messages: userMessages,
+      analyzeFor: ['sentiment', 'keyPhrases', 'followUpRecommendations']
+    }).then((result: any) => {
+      return {
+        keyPhrases: result.keyPhrases || [],
+        sentimentBySegment: result.sentimentBySegment || [],
+        followUpRecommendations: result.followUpRecommendations || []
+      };
+    }).catch(() => {
+      // Fall back to default response if LLM service fails
+      return {
+        keyPhrases: ['Error analyzing conversation'],
+        sentimentBySegment: userMessages.map(msg => ({ segment: msg.substring(0, 50), sentiment: 0 })),
+        followUpRecommendations: ['Follow up with standard process']
+      };
+    });
+  } catch (error) {
+    // Fall back to default response if import fails
     return {
-      segment: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
-      sentiment
+      keyPhrases: ['Error processing conversation'],
+      sentimentBySegment: userMessages.map(msg => ({ segment: msg.substring(0, 50), sentiment: 0 })),
+      followUpRecommendations: ['Follow up with standard process']
     };
-  });
-  
-  // Average sentiment
-  const averageSentiment = sentimentBySegment.reduce(
-    (sum, item) => sum + item.sentiment, 0
-  ) / sentimentBySegment.length;
-  
-  // Generate recommendations based on sentiment and conversation content
-  let followUpRecommendations: string[] = [];
-  
-  if (averageSentiment > 0.3) {
-    followUpRecommendations = [
-      'Follow up with detailed information within 24 hours',
-      'Schedule a demo or consultation call',
-      'Send product/service brochure via email',
-      'Add to high-priority lead list'
-    ];
-  } else if (averageSentiment > -0.3) {
-    followUpRecommendations = [
-      'Follow up with additional value propositions in 3-5 days',
-      'Address potential concerns mentioned in call',
-      'Offer limited-time incentive or discount',
-      'Send case studies or testimonials'
-    ];
-  } else {
-    followUpRecommendations = [
-      'Wait 30+ days before following up',
-      'Consider different product/service offering',
-      'Update lead status to "not interested"',
-      'Remove from active campaign'
-    ];
   }
-  
-  // Extract key phrases (simplified version)
-  const keyPhrases: string[] = [];
-  
-  // Look for questions
-  const questions = userMessages.filter(msg => msg.includes('?') || 
-    /^(what|when|where|why|how|is|are|can|do|does)/i.test(msg));
-  keyPhrases.push(...questions.slice(0, 2));
-  
-  // Look for statements with specific keywords
-  const importantStatements = userMessages.filter(msg => 
-    /need|want|looking for|interested in|problem|issue|concern/i.test(msg));
-  keyPhrases.push(...importantStatements.slice(0, 2));
-  
-  // Extract any mentioned prices, dates, or numbers
-  const numbersAndDates = userMessages.filter(msg => 
-    /\$|\d+|january|february|march|april|may|june|july|august|september|october|november|december/i.test(msg));
-  keyPhrases.push(...numbersAndDates.slice(0, 1));
-  
-  // Limit to 3 key phrases and clean them up
-  const cleanKeyPhrases = keyPhrases
-    .slice(0, 3)
-    .map(phrase => phrase.trim())
-    .filter(phrase => phrase.length > 10 && phrase.length < 100);
-  
-  return {
-    keyPhrases: cleanKeyPhrases.length > 0 ? cleanKeyPhrases : ['No significant phrases detected'],
-    sentimentBySegment,
-    followUpRecommendations
-  };
 }
