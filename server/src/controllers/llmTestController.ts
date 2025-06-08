@@ -233,6 +233,9 @@ export const getAllLLMModels = async (req: Request, res: Response) => {
     // Get all available models from all configured providers
     const allModels = await llmService.getAllAvailableModels();
     
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     return res.status(200).json({
       success: true,
       models: allModels,

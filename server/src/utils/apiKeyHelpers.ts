@@ -1,4 +1,25 @@
-// This file contains temporary fixes for API key handling issues in the application
+// /**
+ * Checks if a value is a masked API key
+ * @param value The string to check
+ * @returns True if the string is a masked API key
+ */
+export const isMaskedApiKey = (value: string): boolean => {
+  if (!value) {
+    // Empty strings are not considered masked keys
+    return false;
+  }
+  
+  const isMasked = value.includes('••••••••');
+  
+  // Add debug logging to help diagnose issues
+  if (value === '') {
+    logger.debug('Empty string passed to isMaskedApiKey - returning false');
+  } else if (isMasked) {
+    logger.debug('Detected masked API key pattern');
+  }
+  
+  return isMasked;
+}; contains temporary fixes for API key handling issues in the application
 // Import this file into the configurationController.ts to apply the fixes
 
 /**

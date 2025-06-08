@@ -107,7 +107,7 @@ const updateServicesWithNewConfig = async (configuration: any): Promise<void> =>
 // @access  Private
 export const getSystemConfiguration = async (_req: Request, res: Response) => {
   try {
-    logger.info('Received request for system configuration');
+    logger.info('Fetching system configuration');
     
     // Get or create configuration
     let configuration = await Configuration.findOne();
@@ -205,6 +205,9 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
       }
     });
 
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.status(200).json(configToSend);
   } catch (error) {
     logger.error('Error in getSystemConfiguration:', error);
@@ -225,21 +228,45 @@ interface LLMProvider {
 }
 
 // Helper functions
+// Enhanced version of isMaskedApiKey with more logging
+const enhancedIsMaskedApiKey = (value: string | undefined): boolean => {
+  if (!value) {
+    logger.debug('Empty or undefined value passed to isMaskedApiKey - returning false');
+    return false;
+  }
+  
+  if (value === '') {
+    logger.debug('Empty string explicitly passed to isMaskedApiKey - returning false');
+    logger.info('Empty API key detected - this will clear the key from database');
+    return false;
+  }
+  
+  const isMasked = value.includes('••••••••');
+  if (isMasked) {
+    logger.debug('Detected masked API key pattern');
+  }
+  
+  return isMasked;
+};
+
+// Update an API key if changed and valid
 const updateApiKeyIfChanged = (newKey: string | undefined, existingKey: string): string => {
   if (typeof newKey === 'undefined') return existingKey;
   
   // If masked (has '••••••••'), keep existing key
-  if (isMaskedApiKey(newKey)) {
+  if (enhancedIsMaskedApiKey(newKey)) {
     logger.debug('Received masked API key, keeping existing value');
     return existingKey;
   }
   
   // If empty string is provided, it's an intentional clear
   if (newKey === '') {
-    logger.info('API key explicitly cleared');
-    return '';
+    logger.info('API key explicitly cleared by user');
+    logger.debug('Empty string detected - API key will be cleared in database');
+    return ''; // Return empty string to clear the key in the database
   }
   
+  logger.info('New API key provided, updating');
   return newKey;
 };
 
@@ -256,33 +283,102 @@ const validateProviderUpdate = (
   updated: UpdateLLMProvider | undefined, 
   existing: BaseLLMProvider
 ): BaseLLMProvider => {
-  if (!updated) return existing;
-  
-  // Check if API key is being updated
-  let status = existing.status;
-  let apiKey = updateApiKeyIfChanged(updated.apiKey, existing.apiKey);
-  
-  // If API key changed, reset status to unverified
-  if (apiKey !== existing.apiKey) {
-    // Only change status if the key is actually being set or cleared
-    // Not if we're just keeping the existing key due to masking
-    if (!isMaskedApiKey(updated.apiKey || '')) {
-      logger.info(`API key for provider ${existing.name} changed, resetting status to unverified`);
-      status = 'unverified';
-    }
-  } else if (updated.status) {
-    // If status is explicitly provided, use it
-    status = updated.status;
+  if (!updated) {
+    return existing;
   }
   
+  const finalApiKey = updateApiKeyIfChanged(updated.apiKey, existing.apiKey);
+  
+  let finalStatus = existing.status;
+  let finalLastVerified = existing.lastVerified;
+
+  const apiKeyEffectivelyChanged = (finalApiKey !== existing.apiKey);
+
+  // Preserve verified status if key hasn't changed
+  if (!apiKeyEffectivelyChanged) {
+    // If the API key hasn't changed and the provider was verified, maintain the verified status
+    if (existing.status === 'verified') {
+      logger.info(`API key for ${existing.name} not changed and provider was verified, preserving verified status`);
+      // Only maintain if the client didn't explicitly change the status
+      if (typeof updated.status === 'undefined') {
+        finalStatus = 'verified';
+        finalLastVerified = existing.lastVerified;
+      }
+    }
+  }
+
+  if (apiKeyEffectivelyChanged) {
+    logger.info(`API key for provider ${existing.name} effectively changed. Resetting status to unverified.`);
+    if (finalApiKey === '') {
+      logger.debug(`API key for provider ${existing.name} was explicitly set to empty string.`);
+    }
+    finalStatus = 'unverified';
+    finalLastVerified = null; 
+  } else {
+    // API key not effectively changed.
+    if (typeof updated.status !== 'undefined') { // Client sent a status
+      if (updated.status !== existing.status) {
+        // Client sent a status, and it's different from the existing one.
+        logger.info(`API key for ${existing.name} not changed, but client sent status "${updated.status}" (DB was "${existing.status}"). Using client's status.`);
+        finalStatus = updated.status;
+
+        if (typeof updated.lastVerified !== 'undefined') {
+          finalLastVerified = updated.lastVerified;
+        } else {
+          // Client changed status but didn't send lastVerified.
+          if (finalStatus === 'verified') {
+            // Client set status to 'verified' without a date. Keep existing date if key unchanged.
+            finalLastVerified = existing.lastVerified; 
+          } else {
+            finalLastVerified = null;
+          }
+        }
+      } else { // updated.status === existing.status
+        // Client sent status, and it's the same as existing.
+        // Respect client's lastVerified if sent, otherwise keep existing.
+        if (typeof updated.lastVerified !== 'undefined') {
+            finalLastVerified = updated.lastVerified;
+        } else {
+            // If client sends same status (e.g. 'verified') but no date, keep existing date.
+            finalLastVerified = existing.lastVerified; 
+        }
+      }
+    } else {
+      // Client did not send 'updated.status' at all.
+      // 'finalStatus' remains 'existing.status' (e.g., "verified")
+      // 'finalLastVerified' remains 'existing.lastVerified' (the date of verification)
+      // This is the crucial path for preserving verification.
+      logger.info(`API key for ${existing.name} not changed, client did not send status. Preserving DB status: "${existing.status}", lastVerified: ${existing.lastVerified}`);
+    }
+  }
+  
+  // Final consistency check for lastVerified based on finalStatus
+  if (finalStatus !== 'verified' && finalStatus !== 'failed') {
+    // If status is not one that implies a verification attempt (verified/failed),
+    // and client didn't explicitly set a lastVerified for this new state,
+    // then lastVerified should be null.
+    // This handles cases where status might become 'unverified', 'pending', etc.
+    if (apiKeyEffectivelyChanged || (typeof updated.status !== 'undefined' && updated.status !== existing.status && typeof updated.lastVerified === 'undefined')) {
+        finalLastVerified = null;
+    }
+  } else if (finalStatus === 'verified' && finalLastVerified === null && !apiKeyEffectivelyChanged) {
+    // If status is 'verified' but somehow lastVerified became null (e.g. client sent 'verified' with no date),
+    // and API key didn't change, restore existing.lastVerified if it was valid.
+    if (existing.status === 'verified' && existing.lastVerified) {
+        finalLastVerified = existing.lastVerified;
+    }
+  }
+
+  
   return {
-    ...existing,
-    apiKey,
+    // Spread existing first to ensure all other properties are carried over by default
+    ...existing, 
+    name: updated.name || existing.name, // Name is usually the identifier, ensure it's consistent
+    apiKey: finalApiKey,
     availableModels: updated.availableModels ?? existing.availableModels,
     isEnabled: updated.isEnabled ?? existing.isEnabled,
-    status,
-    lastVerified: updated.lastVerified ?? existing.lastVerified,
-    name: updated.name || existing.name
+    status: finalStatus,
+    lastVerified: finalLastVerified,
   };
 };
 
@@ -383,10 +479,121 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
       
       // Handle providers
       if (updatedConfig.llmConfig.providers) {
-        config.llmConfig.providers = existingConfig.llmConfig.providers.map(existingProvider => {
-          const updatedProvider = updatedConfig.llmConfig?.providers?.find(p => p.name === existingProvider.name);
-          return validateProviderUpdate(updatedProvider, existingProvider);
-        });
+        logger.info('Updating LLM providers...');
+        
+        // Check for duplicate providers in the incoming update
+        const providerNames = new Set();
+        const uniqueProviders = [];
+        const emptyKeyProviders = [];
+        
+        // Filter out duplicate providers from the update and track empty API keys
+        for (const provider of updatedConfig.llmConfig.providers) {
+          if (!providerNames.has(provider.name)) {
+            providerNames.add(provider.name);
+            uniqueProviders.push(provider);
+            
+            // Track providers with empty API keys
+            if (provider.apiKey === '') {
+              emptyKeyProviders.push(provider.name);
+              logger.info(`Provider ${provider.name} has empty API key in update - will be removed`);
+            }
+          } else {
+            logger.warn(`Duplicate provider ${provider.name} found in update, ignoring duplicates`);
+          }
+        }
+        
+        // Replace updatedConfig.llmConfig.providers with the unique providers
+        updatedConfig.llmConfig.providers = uniqueProviders;
+        
+        // Process each provider and create a new array to assign
+        const updatedProviders = [];
+        
+        // Process each existing provider and update it if there's a matching update
+        for (const existingProvider of existingConfig.llmConfig.providers) {
+          const updatedProvider = updatedConfig.llmConfig.providers.find(p => p.name === existingProvider.name);
+          const processedProvider = validateProviderUpdate(updatedProvider, existingProvider);
+          
+          // Log the provider update, especially for API key changes
+          if (updatedProvider && typeof updatedProvider.apiKey !== 'undefined') {
+            if (updatedProvider.apiKey === '') {
+              logger.info(`Provider ${existingProvider.name}: API key explicitly cleared`);
+              logger.debug(`Provider ${existingProvider.name}: API key value will be set to empty string in database`);
+            } else if (enhancedIsMaskedApiKey(updatedProvider.apiKey)) {
+              logger.info(`Provider ${existingProvider.name}: Received masked API key, keeping existing`);
+              
+              // Important: When using the same masked API key, preserve the verification status
+              if (existingProvider.status === 'verified' && processedProvider.status === 'unverified') {
+                logger.info(`Provider ${existingProvider.name}: Preserving verified status since API key not changed`);
+                processedProvider.status = 'verified';
+                processedProvider.lastVerified = existingProvider.lastVerified;
+              }
+            } else {
+              logger.info(`Provider ${existingProvider.name}: API key updated to new value`);
+            }
+          } else if (!updatedProvider || typeof updatedProvider.status === 'undefined') {
+            // If client didn't send a status, preserve verified status
+            if (existingProvider.status === 'verified' && processedProvider.status === 'unverified') {
+              logger.info(`Provider ${existingProvider.name}: Client didn't send status, preserving verified status`);
+              processedProvider.status = 'verified';
+              processedProvider.lastVerified = existingProvider.lastVerified;
+            }
+          }
+          
+          updatedProviders.push(processedProvider);
+        }          // Check for new providers that don't exist in the current configuration
+        for (const newProvider of updatedConfig.llmConfig.providers) {
+          const exists = existingConfig.llmConfig.providers.some(p => p.name === newProvider.name);
+          
+          if (!exists && newProvider.apiKey && newProvider.apiKey !== '') {
+            logger.info(`Adding new provider: ${newProvider.name}`);
+            
+            // Create a new provider object
+            updatedProviders.push({
+              name: newProvider.name,
+              apiKey: newProvider.apiKey,
+              availableModels: newProvider.availableModels || [],
+              isEnabled: newProvider.isEnabled !== undefined ? newProvider.isEnabled : true,
+              status: 'unverified',
+              lastVerified: null
+            });
+          }
+        }
+        
+        // Clear the existing array and add the updated providers
+        // This ensures Mongoose properly detects the changes
+        config.llmConfig.providers = [];
+        config.markModified('llmConfig.providers');
+        
+        // Now add each provider back one by one
+        // Skip providers with empty API keys to remove them completely
+        for (const provider of updatedProviders) {
+          if (provider.apiKey !== '') {
+            // Important: Add status tracking logs
+            logger.debug(`Adding provider ${provider.name} with API key to configuration (status: ${provider.status})`);
+            
+            // Final verification status check - ensure we're not accidentally resetting a verified provider
+            if (provider.status === 'unverified') {
+              // Check if there was a verified provider with this name in the existing config
+              const existingVerifiedProvider = existingConfig.llmConfig.providers.find(
+                p => p.name === provider.name && p.status === 'verified' && p.apiKey === provider.apiKey
+              );
+              
+              if (existingVerifiedProvider) {
+                // If the API key hasn't changed and it was verified before, maintain the verified status
+                logger.info(`Preserving verified status for ${provider.name} since API key is unchanged from a verified key`);
+                provider.status = 'verified';
+                provider.lastVerified = existingVerifiedProvider.lastVerified;
+              }
+            }
+            
+            // Now add the provider to the configuration
+            config.llmConfig.providers.push(provider);
+          } else {
+            logger.info(`Provider ${provider.name} has empty API key - removing from configuration`);
+          }
+        }
+        
+        logger.info(`Updated to ${config.llmConfig.providers.length} LLM providers after cleanup`);
       }
       
       // Validate and update LLM settings
@@ -404,13 +611,29 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
         }
       }
       
-      config.llmConfig = {
-        ...config.llmConfig,
-        defaultProvider: handleFieldUpdate(updatedConfig.llmConfig.defaultProvider, existingConfig.llmConfig.defaultProvider),
-        defaultModel: handleFieldUpdate(updatedConfig.llmConfig.defaultModel, existingConfig.llmConfig.defaultModel),
-        temperature: handleFieldUpdate(updatedConfig.llmConfig.temperature, existingConfig.llmConfig.temperature),
-        maxTokens: handleFieldUpdate(updatedConfig.llmConfig.maxTokens, existingConfig.llmConfig.maxTokens)
-      };
+      // Update other properties
+      config.llmConfig.defaultProvider = handleFieldUpdate(
+        updatedConfig.llmConfig.defaultProvider, 
+        existingConfig.llmConfig.defaultProvider
+      );
+      
+      config.llmConfig.defaultModel = handleFieldUpdate(
+        updatedConfig.llmConfig.defaultModel, 
+        existingConfig.llmConfig.defaultModel
+      );
+      
+      config.llmConfig.temperature = handleFieldUpdate(
+        updatedConfig.llmConfig.temperature, 
+        existingConfig.llmConfig.temperature
+      );
+      
+      config.llmConfig.maxTokens = handleFieldUpdate(
+        updatedConfig.llmConfig.maxTokens, 
+        existingConfig.llmConfig.maxTokens
+      );
+      
+      // Mark the entire llmConfig as modified to ensure Mongoose saves all changes
+      config.markModified('llmConfig');
     }
     
     // Validate and update general settings
@@ -458,8 +681,116 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
       };
     }      // Save configuration changes
     try {
-      await config.save();
-      logger.info('Configuration saved successfully');
+      // Process API keys - log what will be saved to the database
+      let emptyKeyProviders = [];
+      let providersToRemove = [];
+      
+      if (config.llmConfig && config.llmConfig.providers) {
+        for (const provider of config.llmConfig.providers) {
+          if (!provider.apiKey || provider.apiKey === '') {
+            emptyKeyProviders.push(provider.name);
+            providersToRemove.push(provider.name);
+            logger.info(`Provider ${provider.name} has an empty API key and will be removed`);
+          }
+        }
+        
+        // Remove providers with empty API keys
+        if (providersToRemove.length > 0) {
+          logger.info(`Removing ${providersToRemove.length} providers with empty API keys before saving`);
+          config.llmConfig.providers = config.llmConfig.providers.filter(p => p.apiKey && p.apiKey !== '');
+          config.markModified('llmConfig.providers');
+        }
+      }
+      
+      // Add detailed logging before save
+      logger.info('Saving configuration with the following LLM providers:', {
+        providers: config.llmConfig.providers.map(p => ({
+          name: p.name,
+          isEnabled: p.isEnabled,
+          status: p.status,
+          hasApiKey: p.apiKey ? (p.apiKey.length > 0 ? 'yes' : 'empty') : 'none',
+          apiKeyLength: p.apiKey ? p.apiKey.length : 0,
+          modelsCount: p.availableModels ? p.availableModels.length : 0
+        }))
+      });
+      
+      // Force Mongoose to detect changes to nested subdocuments
+      config.markModified('llmConfig');
+      config.markModified('llmConfig.providers');
+      config.markModified('elevenLabsConfig');
+      config.markModified('twilioConfig');
+      
+      // Also mark each provider individually to ensure status changes are detected
+      if (config.llmConfig && config.llmConfig.providers) {
+        config.llmConfig.providers.forEach((provider, index) => {
+          config.markModified(`llmConfig.providers.${index}.status`);
+          config.markModified(`llmConfig.providers.${index}.lastVerified`);
+        });
+      }
+      
+      // Save with a retry mechanism in case of Mongoose optimistic concurrency issues
+      let saveAttempt = 0;
+      const maxSaveAttempts = 3;
+      
+      while (saveAttempt < maxSaveAttempts) {
+        try {
+          await config.save();
+          logger.info(`Configuration saved successfully on attempt ${saveAttempt + 1}`);
+          
+          // Verify the save was successful by immediately querying the database
+          const verifiedConfig = await Configuration.findById(config._id);
+          if (verifiedConfig) {
+            // Check that any empty API keys were properly saved
+            let verificationSuccessful = true;
+            for (const providerName of emptyKeyProviders) {
+              const provider = verifiedConfig.llmConfig.providers.find(p => p.name === providerName);
+              if (provider) {
+                logger.error(`❌ Provider ${providerName} with empty API key still exists after save - should have been removed`);
+                verificationSuccessful = false;
+              } else {
+                logger.info(`✅ Verified provider ${providerName} with empty API key was properly removed`);
+              }
+            }
+            
+            // Also verify that the provider count matches expected count
+            const expectedProviderCount = config.llmConfig.providers.length;
+            if (verifiedConfig.llmConfig.providers.length !== expectedProviderCount) {
+              logger.error(`❌ Provider count mismatch after save: expected ${expectedProviderCount}, got ${verifiedConfig.llmConfig.providers.length}`);
+              verificationSuccessful = false;
+            } else {
+              logger.info(`✅ Verified provider count matches expected count: ${expectedProviderCount}`);
+            }
+            
+            // Verify status preservation for verified providers
+            for (const provider of config.llmConfig.providers) {
+              if (provider.status === 'verified') {
+                const savedProvider = verifiedConfig.llmConfig.providers.find(p => p.name === provider.name);
+                if (savedProvider && savedProvider.status === 'verified') {
+                  logger.info(`✅ Verified status correctly preserved for provider ${provider.name}`);
+                } else if (savedProvider) {
+                  logger.error(`❌ Provider ${provider.name} status not preserved - expected 'verified' but got '${savedProvider.status}'`);
+                  verificationSuccessful = false;
+                }
+              }
+            }
+            
+            if (verificationSuccessful) {
+              logger.info('All empty API keys were properly removed from the database and status preserved');
+            } else {
+              logger.warn('Some empty API keys were not properly removed or status was not preserved - may reappear after page refresh');
+            }
+          }
+          
+          break;
+        } catch (saveErr) {
+          saveAttempt++;
+          if (saveAttempt >= maxSaveAttempts) {
+            throw saveErr; // Rethrow if we've exhausted our attempts
+          }
+          logger.warn(`Save attempt ${saveAttempt} failed, retrying...`, saveErr);
+          await new Promise(resolve => setTimeout(resolve, 200)); // Small delay before retry
+        }
+      }
       
       // Update services with new API keys
       await updateServicesWithNewConfig(config);
@@ -1149,11 +1480,16 @@ export const deleteApiKey = async (req: Request, res: Response) => {
           );
           
           if (providerIndex >= 0) {
-            configuration.llmConfig.providers[providerIndex].apiKey = '';
-            configuration.llmConfig.providers[providerIndex].isEnabled = false;
+            // Remove the provider completely from the array
+            logger.info(`Removing provider ${name} completely from the configuration`);
+            configuration.llmConfig.providers.splice(providerIndex, 1);
+            
+            // Force Mongoose to detect the change
+            configuration.markModified('llmConfig.providers');
+            
             success = true;
-            message = `${name} API key deleted successfully`;
-            logger.info(`${name} API key deleted`);
+            message = `${name} provider deleted successfully`;
+            logger.info(`${name} provider deleted completely`);
             
             // If this was the default provider, update to another provider if available
             if (configuration.llmConfig.defaultProvider === name) {
@@ -1194,13 +1530,54 @@ export const deleteApiKey = async (req: Request, res: Response) => {
     
     // Save the updated configuration
     if (success) {
-      try {
-        await configuration.save();
+      try {          // Force Mongoose to detect changes to the entire array
+        configuration.markModified('llmConfig');
+        configuration.markModified('llmConfig.providers');
+        
+        // Log state before saving
+        logger.info('Saving configuration with the following LLM providers state:', {
+          providers: configuration.llmConfig.providers.map((p: any) => ({
+            name: p.name,
+            isEnabled: p.isEnabled,
+            status: p.status,
+            hasApiKey: p.apiKey ? (p.apiKey.length > 0 ? 'yes' : 'empty') : 'none',
+            apiKeyLength: p.apiKey ? p.apiKey.length : 0
+          }))
+        });
+        
+        // Save with retry mechanism for optimistic concurrency issues
+        let saveAttempt = 0;
+        const maxSaveAttempts = 3;
+        
+        while (saveAttempt < maxSaveAttempts) {
+          try {
+            await configuration.save();
+            logger.info(`Configuration saved successfully after API key deletion (attempt ${saveAttempt + 1})`);
+            
+            // Verify the removal persisted
+            const verifiedConfig = await Configuration.findById(configuration._id);
+            if (verifiedConfig && provider === 'llm' && name) {
+              const providerStillExists = verifiedConfig.llmConfig.providers.some((p: any) => p.name === name);
+              if (providerStillExists) {
+                logger.error(`Provider ${name} still exists after deletion - persistence issue detected`);
+              } else {
+                logger.info(`✅ Verified provider ${name} was successfully removed from database`);
+              }
+            }
+            
+            break;
+          } catch (saveErr) {
+            saveAttempt++;
+            if (saveAttempt >= maxSaveAttempts) {
+              throw saveErr; // Rethrow if we've exhausted our attempts
+            }
+            logger.warn(`Save attempt ${saveAttempt} failed after API key deletion, retrying...`, saveErr);
+            await new Promise(resolve => setTimeout(resolve, 200)); // Small delay before retry
+          }
+        }
         
         // Update services with new configuration (removed API keys)
         await updateServicesWithNewConfig(configuration);
-        
-        logger.info('Configuration saved after API key deletion');
       } catch (error) {
         logger.error('Error saving configuration after API key deletion:', error);
         return res.status(500).json({

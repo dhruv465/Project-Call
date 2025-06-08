@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 const Register = () => {
   const [name, setName] = useState('');
@@ -63,10 +64,9 @@ const Register = () => {
           >
             Name
           </label>
-          <input
+          <Input
             id="name"
             type="text"
-            className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             placeholder="John Doe"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -81,10 +81,9 @@ const Register = () => {
           >
             Email
           </label>
-          <input
+          <Input
             id="email"
             type="email"
-            className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             placeholder="m@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -99,10 +98,9 @@ const Register = () => {
           >
             Password
           </label>
-          <input
+          <Input
             id="password"
             type="password"
-            className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -116,10 +114,9 @@ const Register = () => {
           >
             Confirm Password
           </label>
-          <input
+          <Input
             id="confirmPassword"
             type="password"
-            className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required

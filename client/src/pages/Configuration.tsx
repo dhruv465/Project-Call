@@ -47,7 +47,6 @@ import {
   PhoneCall,
   Save,
   Settings,
-  TestTube,
   Trash2,
   Volume2,
   Zap,
@@ -159,7 +158,6 @@ Keep the conversation natural and engaging. If they're not interested, politely 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingVoice, setTestingVoice] = useState(false);
-  const [testingConnection, setTestingConnection] = useState(false);
   const [testingCall, setTestingCall] = useState(false);
   const [openTestCallDialog, setOpenTestCallDialog] = useState(false);
   const [testCallNumber, setTestCallNumber] = useState("");
@@ -827,90 +825,6 @@ Keep the conversation natural and engaging. If they're not interested, politely 
     }
   };
 
-  const handleTestConnection = async () => {
-    setTestingConnection(true);
-    try {
-      // Test Twilio connection
-      if (config.twilioAccountSid && config.twilioAuthToken) {
-        try {
-          const twilioResult = await configApi.testTwilioConnection({
-            accountSid: config.twilioAccountSid,
-            authToken: config.twilioAuthToken,
-            phoneNumber: config.twilioPhoneNumber,
-          });
-
-          // Update Twilio status based on test result
-          setConfig((prev) => ({
-            ...prev,
-            twilioStatus: twilioResult.success ? "verified" : "failed",
-          }));
-        } catch (error) {
-          setConfig((prev) => ({
-            ...prev,
-            twilioStatus: "failed",
-          }));
-        }
-      }
-
-      // Test LLM connection
-      if (config.llmApiKey) {
-        try {
-          const llmResult = await configApi.testLLMConnection({
-            provider: config.llmProvider,
-            apiKey: config.llmApiKey,
-            model: config.llmModel,
-          });
-
-          // Update LLM status based on test result
-          setConfig((prev) => ({
-            ...prev,
-            llmStatus: llmResult.success ? "verified" : "failed",
-          }));
-        } catch (error) {
-          setConfig((prev) => ({
-            ...prev,
-            llmStatus: "failed",
-          }));
-        }
-      }
-
-      // Test ElevenLabs connection if it's the current voice provider
-      if (config.voiceProvider === "elevenlabs" && config.elevenLabsApiKey) {
-        try {
-          const elevenLabsResult = await configApi.testElevenLabsConnection({
-            apiKey: config.elevenLabsApiKey,
-          });
-
-          // Update ElevenLabs status based on test result
-          setConfig((prev) => ({
-            ...prev,
-            elevenLabsStatus: elevenLabsResult.success ? "verified" : "failed",
-          }));
-        } catch (error) {
-          setConfig((prev) => ({
-            ...prev,
-            elevenLabsStatus: "failed",
-          }));
-        }
-      }
-
-      toast({
-        title: "Connection Test Completed",
-        description:
-          "All services have been tested. Check status indicators for results.",
-      });
-    } catch (error) {
-      console.error("Connection test error:", error);
-      toast({
-        title: "Connection Test Failed",
-        description: "An error occurred while testing connections.",
-        variant: "destructive",
-      });
-    } finally {
-      setTestingConnection(false);
-    }
-  };
-
   // Updates the API key and resets verification status
   const updateApiKey = useCallback(
     (field: keyof Configuration, value: string) => {
@@ -1328,19 +1242,6 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           </p>
         </div>
         <div className="flex flex-row gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleTestConnection}
-            disabled={testingConnection}
-          >
-            {testingConnection ? (
-              <TestTube className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <TestTube className="h-4 w-4 mr-2" />
-            )}
-            Test Connection
-          </Button>
           <Button size="sm" onClick={handleSave} disabled={saving}>
             {saving ? (
               <Save className="h-4 w-4 mr-2 animate-spin" />

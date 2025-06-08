@@ -210,6 +210,11 @@ const ConfigurationSchema = new mongoose.Schema(
             type: String,
             required: false,
             default: '',
+            set: function(val: string) {
+              // This ensures that empty strings are properly saved to the database
+              // and not converted to null or ignored
+              return val === '' ? '' : val;
+            }
           },
           availableModels: {
             type: [String],
@@ -351,6 +356,25 @@ const ConfigurationSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Pre-save hook to ensure empty API keys are properly saved
+ConfigurationSchema.pre('save', function(next) {
+  try {
+    // Ensure empty API keys for LLM providers are saved correctly
+    if (this.llmConfig && this.llmConfig.providers) {
+      for (let i = 0; i < this.llmConfig.providers.length; i++) {
+        // Explicitly check and handle empty API keys
+        if (this.llmConfig.providers[i].apiKey === '') {
+          // Ensure the field is marked as modified
+          this.markModified(`llmConfig.providers.${i}.apiKey`);
+        }
+      }
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
 const Configuration = mongoose.model<IConfiguration>('Configuration', ConfigurationSchema);
 

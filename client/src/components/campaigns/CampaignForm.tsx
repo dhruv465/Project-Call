@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -24,8 +25,6 @@ import { configApi } from "@/services/configApi";
 import { toast } from "@/hooks/useToast";
 
 // Custom styles with consistent spacing
-const inputStyles =
-  "w-full rounded-xl border border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
 const textareaStyles =
   "w-full rounded-xl border border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 min-h-[100px]";
 const labelStyles = "block text-sm font-medium mb-2";
@@ -784,12 +783,11 @@ const CampaignForm = ({
                       <div className="grid grid-cols-1 gap-6">
                         <div className="space-y-2">
                           <label className={labelStyles}>Campaign Name *</label>
-                          <input
+                          <Input
                             type="text"
                             name="name"
                             value={formData.name}
                             onChange={handleChange}
-                            className={inputStyles}
                             placeholder="Enter campaign name"
                             required
                           />
@@ -812,12 +810,11 @@ const CampaignForm = ({
                             <label className="block text-sm font-medium mb-1">
                               Campaign Goal *
                             </label>
-                            <input
+                            <Input
                               type="text"
                               name="goal"
                               value={formData.goal}
                               onChange={handleChange}
-                              className={inputStyles}
                               placeholder="e.g., Book demos, qualify leads"
                               required
                             />
@@ -827,12 +824,11 @@ const CampaignForm = ({
                             <label className="block text-sm font-medium mb-1">
                               Target Audience *
                             </label>
-                            <input
+                            <Input
                               type="text"
                               name="targetAudience"
                               value={formData.targetAudience}
                               onChange={handleChange}
-                              className={inputStyles}
                               placeholder="e.g., Tech companies in Bangalore"
                               required
                             />
@@ -889,7 +885,7 @@ const CampaignForm = ({
                                   key={index}
                                   className="flex items-center gap-2"
                                 >
-                                  <input
+                                  <Input
                                     type="text"
                                     value={source}
                                     onChange={(
@@ -897,7 +893,6 @@ const CampaignForm = ({
                                     ) =>
                                       updateLeadSource(index, e.target.value)
                                     }
-                                    className={inputStyles}
                                     placeholder="e.g., Website Form, Trade Show"
                                     required
                                   />
@@ -1001,12 +996,11 @@ const CampaignForm = ({
                         <label className="block text-sm font-medium mb-1">
                           Script Name
                         </label>
-                        <input
+                        <Input
                           type="text"
                           name="script.name"
                           value={formData.script.name}
                           onChange={handleChange}
-                          className={inputStyles}
                           placeholder="e.g., Primary Script, Version A"
                         />
                       </div>
@@ -1079,12 +1073,11 @@ const CampaignForm = ({
                           <label className="block text-sm font-medium mb-1">
                             Start Time
                           </label>
-                          <input
+                          <Input
                             type="time"
                             name="callTiming.startTime"
                             value={formData.callTiming.startTime}
                             onChange={handleChange}
-                            className={inputStyles}
                           />
                         </div>
 
@@ -1092,12 +1085,11 @@ const CampaignForm = ({
                           <label className="block text-sm font-medium mb-1">
                             End Time
                           </label>
-                          <input
+                          <Input
                             type="time"
                             name="callTiming.endTime"
                             value={formData.callTiming.endTime}
                             onChange={handleChange}
-                            className={inputStyles}
                           />
                         </div>
 
@@ -1287,12 +1279,12 @@ const CampaignForm = ({
                               </SelectContent>
                             </Select>
                           ) : (
-                            <input
+                            <Input
                               type="text"
                               name="voiceConfiguration.voiceId"
                               value={formData.voiceConfiguration.voiceId}
                               onChange={handleChange}
-                              className={`${inputStyles} ${!formData.voiceConfiguration.voiceId ? "border-red-500" : ""}`}
+                              className={!formData.voiceConfiguration.voiceId ? "border-red-500" : ""}
                               placeholder="Enter voice ID from provider"
                               required
                             />
@@ -1308,7 +1300,7 @@ const CampaignForm = ({
                           <label className="block text-sm font-medium mb-1">
                             Max Tokens
                           </label>
-                          <input
+                          <Input
                             type="number"
                             value={formData.llmConfiguration.maxTokens}
                             onChange={(
@@ -1319,7 +1311,6 @@ const CampaignForm = ({
                                 e.target.value
                               )
                             }
-                            className={inputStyles}
                             min="100"
                             max="4000"
                           />
