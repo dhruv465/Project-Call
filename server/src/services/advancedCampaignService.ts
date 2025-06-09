@@ -8,59 +8,148 @@ import { LLMConfig, LLMProvider } from './llm/types';
 
 // Initialize LLM service instance with database configuration
 let llmService: LLMService;
-let defaultModel: string = 'gpt-4';
+let defaultLLMModel: string = 'gpt-4'; // Renamed from defaultModel
+let isLLMServiceProperlyInitialized = false; // Tracks if initialized with DB config
+let llmInitializationPromise: Promise<void> | null = null;
 
-const initializeLLMService = async () => {
+const initializeLLMServiceInternal = async (): Promise<void> => {
   try {
-    const config = await Configuration.findOne();
-    if (config && config.llmConfig?.providers) {
-      // Store default model first
-      defaultModel = config.llmConfig.defaultModel || 'gpt-4';
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1) {
+      logger.warn('MongoDB not connected. AdvancedCampaignService LLM service will use fallback or existing instance.');
+      if (!llmService) { // Only create a new fallback if no service exists at all
+        defaultLLMModel = 'gpt-4';
+        const emptyConfig: LLMConfig = {
+          providers: [],
+          defaultProvider: 'openai' as LLMProvider,
+          defaultModel: defaultLLMModel,
+          timeoutMs: 30000,
+          retryConfig: { maxRetries: 2, initialDelayMs: 1000, maxDelayMs: 5000 }
+        };
+        llmService = new LLMService(emptyConfig);
+        logger.info('AdvancedCampaignService: LLM service created with fallback empty config (MongoDB not ready).');
+      }
+      isLLMServiceProperlyInitialized = false; // Explicitly mark as not properly initialized
+      return;
+    }
+
+    const configDoc = await Configuration.findOne();
+    const dbLlmConfig = configDoc?.llmConfig;
+
+    if (dbLlmConfig && dbLlmConfig.providers) {
+      defaultLLMModel = dbLlmConfig.defaultModel || 'gpt-4';
       
-      // Transform database configuration to LLM service configuration
-      const llmConfig: LLMConfig = {
-        providers: config.llmConfig.providers.map(p => ({
+      const llmServiceConfig: LLMConfig = {
+        providers: dbLlmConfig.providers.map(p => ({
           name: p.name.toLowerCase() as LLMProvider,
           apiKey: p.apiKey,
           isEnabled: p.isEnabled,
           models: p.availableModels || []
         })),
-        defaultProvider: (config.llmConfig.defaultProvider?.toLowerCase() || 'openai') as LLMProvider,
-        defaultModel: defaultModel,
-        timeoutMs: 30000,
-        retryConfig: {
+        defaultProvider: (dbLlmConfig.defaultProvider?.toLowerCase() || 'openai') as LLMProvider,
+        defaultModel: defaultLLMModel,
+        timeoutMs: (dbLlmConfig as any).timeoutMs || 30000, // Cast to any to bypass strict type checking if schema is out of sync
+        retryConfig: (dbLlmConfig as any).retryConfig || { // Cast to any for retryConfig as well
           maxRetries: 2,
           initialDelayMs: 1000,
           maxDelayMs: 5000
         }
       };
       
-      llmService = new LLMService(llmConfig);
+      llmService = new LLMService(llmServiceConfig); // Create new instance with DB config
+      logger.info('AdvancedCampaignService: LLM service initialized/updated with database configuration.');
+      isLLMServiceProperlyInitialized = true;
     } else {
-      // Create empty configuration if no config found
-      defaultModel = 'gpt-4';
+      logger.warn('AdvancedCampaignService: No LLM configuration in DB. Using fallback empty configuration.');
+      defaultLLMModel = 'gpt-4';
       const emptyConfig: LLMConfig = {
         providers: [],
         defaultProvider: 'openai' as LLMProvider,
-        timeoutMs: 30000
+        defaultModel: defaultLLMModel,
+        timeoutMs: 30000,
+        retryConfig: { maxRetries: 2, initialDelayMs: 1000, maxDelayMs: 5000 }
       };
-      llmService = new LLMService(emptyConfig);
+      llmService = new LLMService(emptyConfig); // Create new instance with fallback
+      isLLMServiceProperlyInitialized = false;
     }
   } catch (error) {
-    logger.error('Failed to initialize LLM service from database configuration:', error);
-    // Create empty configuration on error
-    defaultModel = 'gpt-4';
-    const emptyConfig: LLMConfig = {
+    logger.error('AdvancedCampaignService: Failed to initialize LLM service:', error);
+    defaultLLMModel = 'gpt-4';
+    const errorFallbackConfig: LLMConfig = {
       providers: [],
       defaultProvider: 'openai' as LLMProvider,
-      timeoutMs: 30000
+      defaultModel: defaultLLMModel,
+      timeoutMs: 30000,
+      retryConfig: { maxRetries: 2, initialDelayMs: 1000, maxDelayMs: 5000 }
     };
-    llmService = new LLMService(emptyConfig);
+    if (!llmService || !isLLMServiceProperlyInitialized) { // Create if doesn't exist or wasn't proper
+        llmService = new LLMService(errorFallbackConfig);
+        logger.info('AdvancedCampaignService: LLM service created with error fallback config.');
+    }
+    isLLMServiceProperlyInitialized = false;
   }
 };
 
-// Initialize service on startup
-initializeLLMService();
+// IMPORTANT: This function should be called by your main application startup sequence
+// AFTER MongoDB is connected and configurations are loaded.
+// For example, in your main server setup file (e.g., index.ts or app.ts):
+// import { reinitializeLLMServiceWithDbConfig } from './services/advancedCampaignService';
+// await reinitializeLLMServiceWithDbConfig();
+export const reinitializeLLMServiceWithDbConfig = async (): Promise<void> => {
+    logger.info('AdvancedCampaignService: Received signal to re-initialize LLM service with DB config.');
+    isLLMServiceProperlyInitialized = false; 
+    if (llmInitializationPromise) {
+        logger.info('AdvancedCampaignService: Waiting for existing LLM initialization to complete before re-initializing.');
+        await llmInitializationPromise.catch(() => {}); // Wait for any ongoing promise to settle
+    }
+    llmInitializationPromise = null; // Clear promise to force new initialization
+    await ensureLLMServiceInitialized(); // Trigger re-initialization
+};
+
+const ensureLLMServiceInitialized = async (): Promise<void> => {
+  const mongoose = require('mongoose');
+  const needsInitialization = !isLLMServiceProperlyInitialized || !llmService;
+  const dbReady = mongoose.connection.readyState === 1;
+
+  if (needsInitialization) {
+    if (llmInitializationPromise) {
+      logger.debug('AdvancedCampaignService: Waiting for ongoing LLM initialization.');
+      await llmInitializationPromise;
+      if (isLLMServiceProperlyInitialized && llmService) {
+        logger.debug('AdvancedCampaignService: LLM service became properly initialized while waiting.');
+        return; 
+      }
+      logger.debug('AdvancedCampaignService: LLM service still needs initialization after waiting.');
+    }
+    
+    // Conditions to start a new initialization:
+    // 1. Service doesn't exist yet.
+    // 2. Service exists but is not properly initialized, AND the DB is now ready.
+    if (!llmService || (!isLLMServiceProperlyInitialized && dbReady)) {
+        logger.info(`AdvancedCampaignService: LLM service requires initialization (ProperlyInitialized: ${isLLMServiceProperlyInitialized}, DBReady: ${dbReady}, ServiceExists: ${!!llmService}).`);
+        llmInitializationPromise = initializeLLMServiceInternal().finally(() => {
+            llmInitializationPromise = null; 
+        });
+        await llmInitializationPromise;
+    } else if (!llmService && !dbReady) { // Service doesn't exist, DB not ready -> fallback
+        logger.info('AdvancedCampaignService: LLM service requires fallback initialization (DB not ready, service does not exist).');
+        llmInitializationPromise = initializeLLMServiceInternal().finally(() => {
+            llmInitializationPromise = null;
+        });
+        await llmInitializationPromise;
+    }
+  }
+
+  if (!llmService) {
+    logger.error('AdvancedCampaignService: LLMService is CRITICALLY UNINITIALIZED after all attempts. This indicates a severe startup issue.'); // Changed from fatal to error
+    const minimalFallbackConfig: LLMConfig = {
+      providers: [], defaultProvider: 'openai' as LLMProvider, defaultModel: 'gpt-4', timeoutMs: 1000,
+      retryConfig: { maxRetries: 1, initialDelayMs: 500, maxDelayMs: 1000 }
+    };
+    llmService = new LLMService(minimalFallbackConfig);
+    isLLMServiceProperlyInitialized = false;
+  }
+};
 
 export interface ScriptGenerationOptions {
   industry: string;
@@ -98,6 +187,9 @@ export class AdvancedCampaignService {
   // Script Generation
   async generateScript(options: ScriptGenerationOptions): Promise<any> {
     try {
+      // Ensure LLM service is initialized
+      await ensureLLMServiceInitialized();
+      
       // Find similar templates for reference
       const similarTemplates = await this.findSimilarTemplates(options);
       
@@ -108,7 +200,7 @@ export class AdvancedCampaignService {
       const defaultProvider = llmService.getDefaultProvider();
       const llmResponse = await llmService.chat({
         provider: defaultProvider.getProviderName(),
-        model: defaultModel,
+        model: defaultLLMModel, // Changed from defaultModel
         messages: [
           { role: 'user', content: prompt }
         ],

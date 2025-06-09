@@ -487,6 +487,7 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
       config.elevenLabsConfig = {
         ...existingConfig.elevenLabsConfig,
         apiKey: updateApiKeyIfChanged(updatedConfig.elevenLabsConfig.apiKey, existingConfig.elevenLabsConfig.apiKey),
+        selectedVoiceId: handleFieldUpdate(updatedConfig.elevenLabsConfig.selectedVoiceId, existingConfig.elevenLabsConfig.selectedVoiceId),
         availableVoices: handleFieldUpdate(updatedConfig.elevenLabsConfig.availableVoices, existingConfig.elevenLabsConfig.availableVoices),
         isEnabled: handleFieldUpdate(updatedConfig.elevenLabsConfig.isEnabled, existingConfig.elevenLabsConfig.isEnabled),
         voiceSpeed: handleFieldUpdate(updatedConfig.elevenLabsConfig.voiceSpeed, existingConfig.elevenLabsConfig.voiceSpeed),

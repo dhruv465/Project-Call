@@ -36,6 +36,7 @@ export interface VoiceConfig {
 
 export interface ElevenLabsConfig {
   apiKey: string;
+  selectedVoiceId?: string;
   availableVoices: VoiceConfig[];
   isEnabled: boolean;
   voiceSpeed: number;

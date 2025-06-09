@@ -14,6 +14,8 @@ import {
   ConversationEvent as SDKConversationEvent,
   initializeSDKService
 } from './elevenlabsSDKService';
+import { LLMService } from './llm/service';
+import { LLMConfig, LLMProvider, LLMMessage } from './llm/types';
 
 export interface VoicePersonality {
   id: string;
@@ -38,17 +40,21 @@ type Language = 'English' | 'Hindi';
 
 export class EnhancedVoiceAIService {
   private elevenLabsApiKey: string;
-  private openAIApiKey: string;
   private conversationalService: ElevenLabsConversationalService | null = null;
   private sdkService: ElevenLabsSDKService | null = null;
+  private llmService: LLMService | null = null;
 
-  constructor(elevenLabsApiKey: string, openAIApiKey: string) {
+  constructor(elevenLabsApiKey: string) {
     this.elevenLabsApiKey = elevenLabsApiKey;
-    this.openAIApiKey = openAIApiKey;
     
     // Initialize services
     this.initializeConversationalService();
     this.initializeSDKService();
+    
+    // Initialize LLM service asynchronously - it will fetch from the database
+    this.initializeLLMService().catch(error => {
+      logger.error(`Failed to initialize LLM Service: ${getErrorMessage(error)}`);
+    });
   }
   
   /**
@@ -56,9 +62,10 @@ export class EnhancedVoiceAIService {
    */
   private initializeConversationalService(): void {
     try {
+      // Initialize without OpenAI dependency - LLM service will handle AI responses
       this.conversationalService = initializeConversationalService(
         this.elevenLabsApiKey,
-        this.openAIApiKey
+        '' // Empty OpenAI key since we'll use LLM service
       );
       logger.info('ElevenLabs Conversational AI Service initialized');
     } catch (error) {
@@ -76,9 +83,10 @@ export class EnhancedVoiceAIService {
         throw new Error('ElevenLabs API key is missing');
       }
       
+      // Initialize without OpenAI dependency - LLM service will handle AI responses
       this.sdkService = initializeSDKService(
         this.elevenLabsApiKey,
-        this.openAIApiKey
+        '' // Empty OpenAI key since we'll use LLM service
       );
       
       if (this.sdkService) {
@@ -93,17 +101,50 @@ export class EnhancedVoiceAIService {
   }
 
   /**
+   * Initialize the LLM Service
+   */
+  private async initializeLLMService(): Promise<void> {
+    try {
+      // Get LLM configuration from database instead of hardcoding
+      const configuration = await mongoose.model('Configuration').findOne();
+      if (!configuration || !configuration.llmConfig) {
+        logger.warn('LLM configuration not found in database');
+        return;
+      }
+      
+      // Extract provider configurations from database
+      const providers = configuration.llmConfig.providers.map(provider => ({
+        name: provider.name as LLMProvider,
+        apiKey: provider.apiKey,
+        isEnabled: provider.isEnabled !== false,
+        defaultModel: provider.defaultModel,
+        baseUrl: provider.baseUrl
+      })).filter(provider => provider.isEnabled && provider.apiKey);
+      
+      if (providers.length === 0) {
+        logger.warn('No enabled LLM providers found in configuration');
+        return;
+      }
+      
+      // Configure LLM service with providers from database
+      const llmConfig: LLMConfig = {
+        providers,
+        defaultProvider: configuration.llmConfig.defaultProvider as LLMProvider || providers[0].name
+      };
+      
+      this.llmService = new LLMService(llmConfig);
+      logger.info(`LLM Service initialized with ${providers.length} providers from database`);
+    } catch (error) {
+      logger.error(`Failed to initialize LLM Service: ${getErrorMessage(error)}`);
+      this.llmService = null;
+    }
+  }
+
+  /**
    * Get current ElevenLabs API key
    */
   public getElevenLabsApiKey(): string {
     return this.elevenLabsApiKey;
-  }
-
-  /**
-   * Get current OpenAI API key
-   */
-  public getOpenAIApiKey(): string {
-    return this.openAIApiKey;
   }
 
   /**
@@ -572,26 +613,41 @@ export class EnhancedVoiceAIService {
       - text: response text
       - intent: detected intent (greeting, question, concern, interest, etc.)`;
 
-      const response = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model: 'gpt-4',
-          messages: [
-            { role: 'system', content: prompt },
-            { role: 'user', content: 'Generate response based on the context provided' }
-          ],
-          temperature: 0.7,
-          max_tokens: 200
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${this.openAIApiKey}`,
-            'Content-Type': 'application/json'
-          }
+      // Check if LLM service is available
+      if (!this.llmService) {
+        logger.warn('LLM Service not initialized, attempting to initialize now');
+        await this.initializeLLMService();
+        
+        if (!this.llmService) {
+          throw new Error('Failed to initialize LLM Service - no LLM providers configured in database');
         }
-      );
+      }
 
-      const result = JSON.parse(response.data.choices[0].message.content);
+      // Use LLM service to generate response with configured provider
+      const messages: LLMMessage[] = [
+        { role: 'system', content: prompt },
+        { role: 'user', content: 'Generate response based on the context provided' }
+      ];
+
+      // Get the default provider configured in the database
+      const providers = this.llmService.listProviders();
+      if (providers.length === 0) {
+        throw new Error('No LLM providers available');
+      }
+
+      // Use the first available provider (which should be the default one from database)
+      const llmResponse = await this.llmService.chat({
+        provider: providers[0],
+        model: '', // Empty string will use the default model from the provider config
+        messages: messages,
+        options: {
+          temperature: 0.7,
+          maxTokens: 200
+        }
+      });
+
+      // Parse the JSON response
+      const result = JSON.parse(llmResponse.content);
       
       return {
         text: result.text,
@@ -645,12 +701,25 @@ export class EnhancedVoiceAIService {
         throw new Error('Conversational service not initialized');
       }
 
-      const voiceId = params.personalityId || 'default';
+      // Check for empty text
+      if (!params.text || params.text.trim() === '') {
+        logger.warn('Empty text provided to synthesizeVoice, using fallback text');
+        params.text = 'I apologize, but there was an issue with the message.';
+      }
+
+      // Get and validate voice ID
+      const voiceId = await EnhancedVoiceAIService.getValidVoiceId(params.personalityId || 'default');
+      
+      logger.info(`Synthesizing voice for ID: ${voiceId}, text length: ${params.text.length} chars`);
+
+      // Set stability based on language (Hindi needs higher stability)
+      const stability = params.language === 'Hindi' ? 0.85 : 0.75;
+      
       const audioBuffer = await this.conversationalService.generateSpeech(
         params.text,
         voiceId,
         {
-          stability: 0.75,
+          stability,
           similarityBoost: 0.75,
           style: 0.0
         }
@@ -661,11 +730,44 @@ export class EnhancedVoiceAIService {
       const outputPath = `/tmp/${filename}`;
       
       require('fs').writeFileSync(outputPath, audioBuffer);
+      logger.info(`Voice synthesis complete, saved to ${outputPath}, size: ${audioBuffer.length} bytes`);
       
       return outputPath;
     } catch (error) {
       logger.error('Error synthesizing voice:', error);
-      throw error;
+      
+      // Try to generate a fallback audio if possible
+      try {
+        if (this.conversationalService) {
+          // Use a fallback voice ID (Rachel) and simple error message
+          const fallbackVoiceId = '21m00Tcm4TlvDq8ikWAM'; // Rachel - most reliable voice
+          const fallbackText = 'I apologize, but there was a technical issue. Please try again later.';
+          
+          logger.info('Attempting to generate fallback audio with voice Rachel');
+          
+          const fallbackBuffer = await this.conversationalService.generateSpeech(
+            fallbackText,
+            fallbackVoiceId,
+            {
+              stability: 0.9, // High stability for reliability
+              similarityBoost: 0.75,
+              style: 0.0
+            }
+          );
+          
+          const filename = `fallback_${Date.now()}_${Math.floor(Math.random() * 1000)}.mp3`;
+          const outputPath = `/tmp/${filename}`;
+          
+          require('fs').writeFileSync(outputPath, fallbackBuffer);
+          logger.info(`Fallback audio generated successfully, saved to ${outputPath}`);
+          
+          return outputPath;
+        }
+      } catch (fallbackError) {
+        logger.error('Failed to generate fallback audio:', fallbackError);
+      }
+      
+      throw new Error(`Voice synthesis failed: ${getErrorMessage(error)}`);
     }
   }
 
@@ -674,9 +776,14 @@ export class EnhancedVoiceAIService {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      // Check if services are initialized
-      if (!this.elevenLabsApiKey || !this.openAIApiKey) {
+      // Check if ElevenLabs API key is available
+      if (!this.elevenLabsApiKey) {
         return false;
+      }
+      
+      // Check if LLM service is initialized
+      if (!this.llmService) {
+        await this.initializeLLMService();
       }
       
       // Basic connectivity test - just return true for now

@@ -39,7 +39,7 @@ export class ConversationEngineService {
   private activeSessions: Map<string, CallSession> = new Map();
 
   constructor(elevenLabsApiKey: string, openAIApiKey: string, anthropicApiKey?: string, googleSpeechKey?: string) {
-    this.voiceAI = new EnhancedVoiceAIService(elevenLabsApiKey, openAIApiKey);
+    this.voiceAI = new EnhancedVoiceAIService(elevenLabsApiKey);
     this.speechAnalysis = new SpeechAnalysisService(openAIApiKey, googleSpeechKey);
     
     // Configure LLM service

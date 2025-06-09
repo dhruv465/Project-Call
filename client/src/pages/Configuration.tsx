@@ -221,19 +221,20 @@ Keep the conversation natural and engaging. If they're not interested, politely 
         }
       }
       setAvailableVoices(currentVoices);
-      // If no voices are loaded and a voiceId was previously set,
-      // you might want to clear it or set it to the first available voice if any.
-      if (
-        currentVoices.length > 0 &&
-        !currentVoices.find((v) => v.voiceId === config.voiceId)
-      ) {
+      // Only update voiceId if it's empty or if no voices are available at all
+      if (currentVoices.length === 0) {
+        // Clear voiceId if no voices are available
+        setConfig((prevConfig) => ({ ...prevConfig, voiceId: "" }));
+      } else if (!config.voiceId) {
+        // Set to first voice only if no voice is currently selected
         setConfig((prevConfig) => ({
           ...prevConfig,
           voiceId: currentVoices[0].voiceId,
         }));
-      } else if (currentVoices.length === 0) {
-        setConfig((prevConfig) => ({ ...prevConfig, voiceId: "" }));
       }
+      // Note: We intentionally don't override the user's selection even if 
+      // their selected voice isn't in the current available voices list,
+      // as this could be temporary (API issues, etc.)
     } catch (error) {
       console.error("Error in loadVoices function:", error);
       setAvailableVoices([]); // Ensure availableVoices is empty on error
@@ -374,6 +375,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             voiceSpeed: data.elevenLabsConfig?.voiceSpeed,
             voiceStability: data.elevenLabsConfig?.voiceStability,
             voiceClarity: data.elevenLabsConfig?.voiceClarity,
+            selectedVoiceId: data.elevenLabsConfig?.selectedVoiceId,
             isEnabled: data.elevenLabsConfig?.isEnabled,
           },
           llmConfig: {
@@ -405,7 +407,9 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             ? "openai"
             : "google",
           voiceId:
-            data.elevenLabsConfig?.availableVoices?.[0]?.voiceId || "rachel",
+            data.elevenLabsConfig?.selectedVoiceId || 
+            data.elevenLabsConfig?.availableVoices?.[0]?.voiceId || 
+            "rachel",
           voiceSpeed: data.elevenLabsConfig?.voiceSpeed || 1.0,
           voiceStability: data.elevenLabsConfig?.voiceStability || 0.8,
           voiceClarity: data.elevenLabsConfig?.voiceClarity || 0.9,
@@ -499,6 +503,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
         },
         elevenLabsConfig: {
           apiKey: config.elevenLabsApiKey,
+          selectedVoiceId: config.voiceId,
           isEnabled:
             config.voiceProvider === "elevenlabs" && !!config.elevenLabsApiKey,
           voiceSpeed: config.voiceSpeed,
@@ -565,6 +570,11 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           secret: config.webhookSecret,
           status: config.webhookStatus,
         },
+        voiceAIConfig: {
+          conversationalAI: {
+            defaultVoiceId: config.voiceId,
+          },
+        },
       };
 
       await configApi.updateConfiguration(apiConfig);
@@ -579,6 +589,7 @@ Keep the conversation natural and engaging. If they're not interested, politely 
         },
         elevenLabsConfig: {
           apiKey: apiConfig.elevenLabsConfig.apiKey ? "SET" : "NOT SET",
+          selectedVoiceId: apiConfig.elevenLabsConfig.selectedVoiceId || "NOT SET",
           voiceSpeed: apiConfig.elevenLabsConfig.voiceSpeed,
           voiceStability: apiConfig.elevenLabsConfig.voiceStability,
           voiceClarity: apiConfig.elevenLabsConfig.voiceClarity,
@@ -593,6 +604,11 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           defaultProvider: apiConfig.llmConfig.defaultProvider,
           temperature: apiConfig.llmConfig.temperature,
           maxTokens: apiConfig.llmConfig.maxTokens,
+        },
+        voiceAIConfig: {
+          conversationalAI: {
+            defaultVoiceId: apiConfig.voiceAIConfig?.conversationalAI?.defaultVoiceId || "NOT SET",
+          },
         },
       });
 

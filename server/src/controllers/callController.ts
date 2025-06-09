@@ -102,13 +102,16 @@ export const initiateCall = async (req: Request & { user?: any }, res: Response)
         });
       }
       
+      // Import the webhook URL utility
+      const webhookUrls = require('../utils/webhookUrls').default;
+      
       // Create the Twilio call with webhook URL
       // The webhook will handle voice synthesis to avoid API key issues here
       const twilioCall = await client.calls.create({
-        url: `${baseUrl}/api/calls/voice-webhook?callId=${newCall._id}`,
+        url: webhookUrls.getVoiceWebhookUrl(newCall._id.toString()),
         to: lead.phoneNumber,
         from: configuration.twilioConfig.phoneNumbers[0],
-        statusCallback: `${baseUrl}/api/calls/status-webhook?callId=${newCall._id}`,
+        statusCallback: webhookUrls.getStatusWebhookUrl(newCall._id.toString()),
         statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
         record: configuration.complianceSettings.recordCalls,
         recordingStatusCallback: `${baseUrl}/api/calls/recording-webhook?callId=${newCall._id}`,

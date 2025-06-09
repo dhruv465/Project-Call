@@ -11,6 +11,7 @@ export interface IConfiguration extends mongoose.Document {
   };
   elevenLabsConfig: {
     apiKey: string;
+    selectedVoiceId?: string;
     availableVoices: {
       voiceId: string;
       name: string;
@@ -181,6 +182,11 @@ const ConfigurationSchema = new mongoose.Schema(
     },
     elevenLabsConfig: {
       apiKey: {
+        type: String,
+        required: false,
+        default: '',
+      },
+      selectedVoiceId: {
         type: String,
         required: false,
         default: '',
@@ -490,7 +496,7 @@ const ConfigurationSchema = new mongoose.Schema(
       },
       callIntroduction: {
         type: String,
-        default: 'Hello, this is an automated call from [Company Name]. This call may be recorded for quality and training purposes.',
+        default: 'Hello, this is an automated call from Lumina Outreach. This call may be recorded for quality and training purposes.',
       },
       maxCallsPerLeadPerDay: {
         type: Number,

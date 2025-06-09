@@ -170,6 +170,22 @@ export class ElevenLabsConversationalService extends EventEmitter {
     }
   ): Promise<Buffer> {
     try {
+      // Validate inputs
+      if (!text || text.trim() === '') {
+        throw new Error('Empty text provided for speech generation');
+      }
+
+      if (!voiceId || voiceId.trim() === '') {
+        throw new Error('Invalid voice ID provided');
+      }
+
+      if (!this.apiKey || this.apiKey.trim() === '') {
+        throw new Error('ElevenLabs API key is not configured');
+      }
+
+      // Log request details for debugging (without the API key)
+      logger.info(`Generating speech for voice ${voiceId}, text length: ${text.length} chars`);
+
       const voiceSettings = {
         stability: options?.stability || 0.75,
         similarity_boost: options?.similarityBoost || 0.75,
@@ -179,24 +195,60 @@ export class ElevenLabsConversationalService extends EventEmitter {
 
       const modelId = options?.modelId || 'eleven_multilingual_v2';
 
-      const response = await axios.post(
-        `${this.apiUrl}/text-to-speech/${voiceId}`,
-        {
-          text,
-          model_id: modelId,
-          voice_settings: voiceSettings
-        },
-        {
-          headers: {
-            'Accept': 'audio/mpeg',
-            'Content-Type': 'application/json',
-            'xi-api-key': this.apiKey
+      // Make the request with detailed error handling
+      try {
+        const response = await axios.post(
+          `${this.apiUrl}/text-to-speech/${voiceId}`,
+          {
+            text,
+            model_id: modelId,
+            voice_settings: voiceSettings
           },
-          responseType: 'arraybuffer'
-        }
-      );
+          {
+            headers: {
+              'Accept': 'audio/mpeg',
+              'Content-Type': 'application/json',
+              'xi-api-key': this.apiKey
+            },
+            responseType: 'arraybuffer',
+            timeout: 30000 // 30 second timeout
+          }
+        );
 
-      return Buffer.from(response.data);
+        // Check if we got a successful response
+        if (response.status === 200 && response.data) {
+          logger.info(`Speech generated successfully for voice ${voiceId}, size: ${response.data.byteLength} bytes`);
+          return Buffer.from(response.data);
+        } else {
+          throw new Error(`Unexpected response: ${response.status}`);
+        }
+      } catch (axiosError: any) {
+        // Handle Axios specific errors
+        if (axiosError.response) {
+          // The request was made and the server responded with a status code
+          // outside the 2xx range
+          let errorData = axiosError.response.data;
+          
+          // Try to parse the error data if it's in arraybuffer format
+          if (errorData instanceof ArrayBuffer || Buffer.isBuffer(errorData)) {
+            try {
+              const dataString = Buffer.from(errorData).toString('utf8');
+              errorData = JSON.parse(dataString);
+              logger.error(`ElevenLabs API error response: ${JSON.stringify(errorData)}`);
+            } catch (e) {
+              logger.error(`Could not parse error response: ${e.message}`);
+            }
+          }
+          
+          throw new Error(`ElevenLabs API responded with ${axiosError.response.status}: ${JSON.stringify(errorData)}`);
+        } else if (axiosError.request) {
+          // The request was made but no response was received
+          throw new Error(`No response received from ElevenLabs API: ${axiosError.message}`);
+        } else {
+          // Something happened in setting up the request that triggered an Error
+          throw new Error(`Request setup error: ${axiosError.message}`);
+        }
+      }
     } catch (error) {
       logger.error(`Error generating speech: ${getErrorMessage(error)}`);
       throw new Error(`Speech generation failed: ${getErrorMessage(error)}`);

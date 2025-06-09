@@ -16,17 +16,65 @@ import { logger } from '../../index';
 
 export class GoogleClient implements ILLMProviderClient {
   readonly provider: LLMProvider = 'google';
-  private client: GoogleGenerativeAI;
+  private client: GoogleGenerativeAI | null = null;
   private defaultModel: string;
+  private apiKey: string = '';
   
   constructor(
-    apiKey: string, 
+    apiKey?: string, 
     options?: { 
       defaultModel?: string;
     }
   ) {
-    this.client = new GoogleGenerativeAI(apiKey);
-    this.defaultModel = options?.defaultModel || 'gemini-1.5-pro';
+    this.apiKey = apiKey || '';
+    this.defaultModel = options?.defaultModel || 'gemini-1.5-flash';
+    
+    if (this.apiKey && this.apiKey.trim() !== '') {
+      this.initializeClient();
+    } else {
+      logger.info('Google/Gemini client created without API key - will initialize when configuration is loaded from database');
+    }
+  }
+  
+  /**
+   * Initialize the Google client with current API key
+   */
+  private initializeClient(): void {
+    try {
+      if (!this.apiKey || this.apiKey.trim() === '') {
+        throw new Error('Google API key is required but not provided');
+      }
+      
+      this.client = new GoogleGenerativeAI(this.apiKey);
+      
+      // Validate model name
+      if (!this.defaultModel || this.defaultModel.trim() === '') {
+        this.defaultModel = 'gemini-1.5-flash';
+      }
+      
+      logger.info(`Google/Gemini client initialized with model: ${this.defaultModel}`);
+    } catch (error) {
+      logger.error('Failed to initialize Google/Gemini client:', error);
+      this.client = null;
+      throw error;
+    }
+  }
+  
+  /**
+   * Update configuration from database
+   */
+  public updateConfiguration(apiKey: string, defaultModel?: string): void {
+    this.apiKey = apiKey;
+    if (defaultModel) {
+      this.defaultModel = defaultModel;
+    }
+    
+    if (this.apiKey && this.apiKey.trim() !== '') {
+      this.initializeClient();
+    } else {
+      this.client = null;
+      logger.info('Google/Gemini client API key cleared');
+    }
   }
   
   getProviderName(): LLMProvider {
@@ -34,11 +82,16 @@ export class GoogleClient implements ILLMProviderClient {
   }
   
   isConfigured(): boolean {
-    return !!this.client;
+    return !!this.client && !!this.apiKey && this.apiKey.trim() !== '';
   }
   
   async testConnection(): Promise<boolean> {
     try {
+      if (!this.client) {
+        logger.warn('Google/Gemini client not initialized - cannot test connection');
+        return false;
+      }
+      
       const model = this.client.getGenerativeModel({ model: this.defaultModel });
       await model.generateContent("Hello");
       return true;
@@ -50,6 +103,10 @@ export class GoogleClient implements ILLMProviderClient {
   
   async completion(request: Omit<import('./types').LLMCompletionRequest, 'provider'>): Promise<LLMResponse> {
     try {
+      if (!this.client) {
+        throw new Error('Google/Gemini client not initialized - API key may be missing');
+      }
+      
       const { model = this.defaultModel, prompt, options } = request;
       
       const googleModel = this.client.getGenerativeModel({
@@ -91,6 +148,10 @@ export class GoogleClient implements ILLMProviderClient {
   
   async chat(request: Omit<import('./types').LLMChatRequest, 'provider'>): Promise<LLMResponse> {
     try {
+      if (!this.client) {
+        throw new Error('Google/Gemini client not initialized - API key may be missing');
+      }
+      
       const { model = this.defaultModel, messages, options } = request;
       
       const googleModel = this.client.getGenerativeModel({
@@ -146,6 +207,10 @@ export class GoogleClient implements ILLMProviderClient {
     onChunk: (chunk: LLMStreamChunk) => void
   ): Promise<void> {
     try {
+      if (!this.client) {
+        throw new Error('Google/Gemini client not initialized - API key may be missing');
+      }
+      
       const { model = this.defaultModel, messages, options } = request;
       
       const googleModel = this.client.getGenerativeModel({

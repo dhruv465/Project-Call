@@ -21,6 +21,7 @@ import configurationRoutes from './routes/configurationRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import debugRoutes from './routes/debugRoutes';
 import leadRoutes from './routes/leadRoutes';
+import rootWebhookRoutes from './routes/rootWebhookRoutes';
 import streamRoutes from './routes/streamRoutes';
 import telephonyRoutes from './routes/telephonyRoutes';
 import userRoutes from './routes/userRoutes';
@@ -31,6 +32,11 @@ import CampaignService from './services/campaignService';
 import ConversationEngineService from './services/conversationEngineService';
 import leadService from './services/leadService';
 import { initializeSpeechService } from './services/realSpeechService';
+
+// Configuration and health services
+import { validateStartupConfig } from './config/database-validation';
+import { connectToDatabase } from './database/connection';
+import { healthCheckHandler, readinessCheckHandler } from './health/service';
 
 // Load environment variables
 dotenv.config();
@@ -274,73 +280,10 @@ const apiAbuseMiddleware = async (req: express.Request, res: express.Response, n
 };
 
 // Enhanced health check route with system information
-app.get('/health', async (_req, res) => {
-  try {
-    const healthStatus = {
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      environment: process.env.NODE_ENV,
-      version: process.env.npm_package_version || '1.0.0',
-      memory: {
-        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + ' MB',
-        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + ' MB'
-      },
-      database: 'unknown',
-      services: {
-        mongodb: 'unknown',
-        redis: 'unknown'
-      }
-    };
-
-    // Check database connection
-    try {
-      if (mongoose.connection.readyState === 1) {
-        await mongoose.connection.db.admin().ping();
-        healthStatus.database = 'connected';
-        healthStatus.services.mongodb = 'healthy';
-      } else {
-        healthStatus.database = 'disconnected';
-        healthStatus.services.mongodb = 'unhealthy';
-      }
-    } catch (error) {
-      healthStatus.database = 'error';
-      healthStatus.services.mongodb = 'error';
-      logger.error('Database health check failed:', error);
-    }
-
-    // Determine overall status
-    if (healthStatus.database !== 'connected') {
-      healthStatus.status = 'degraded';
-      return res.status(503).json(healthStatus);
-    }
-
-    res.status(200).json(healthStatus);
-  } catch (error) {
-    logger.error('Health check failed:', error);
-    res.status(500).json({
-      status: 'error',
-      timestamp: new Date().toISOString(),
-      error: 'Health check failed'
-    });
-  }
-});
+app.get('/health', healthCheckHandler);
 
 // Readiness probe (for Kubernetes/Docker)
-app.get('/ready', async (_req, res) => {
-  try {
-    // Check if services are ready
-    const isMongoReady = mongoose.connection.readyState === 1;
-    
-    if (isMongoReady) {
-      res.status(200).json({ status: 'ready' });
-    } else {
-      res.status(503).json({ status: 'not ready' });
-    }
-  } catch (error) {
-    res.status(503).json({ status: 'not ready', error: error.message });
-  }
-});
+app.get('/ready', readinessCheckHandler);
 
 // Metrics endpoint for monitoring
 app.get('/metrics', (_req, res) => {
@@ -365,6 +308,10 @@ app.use('/api/users/register', authLimiter); // Apply strict rate limiting to re
 
 // Apply API abuse protection to all API routes
 app.use('/api', apiAbuseMiddleware);
+
+// Mount root webhook route to handle incoming Twilio webhooks (before API routes)
+// This is critical for receiving webhooks directly at the root path
+app.use('/', rootWebhookRoutes);
 
 // API Routes
 app.use('/api/users', userRoutes);
@@ -461,72 +408,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Enhanced MongoDB connection with production optimizations
-const connectDB = async () => {
-  try {
-    const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/lumina-outreach';
-    
-    // Connection options for production
-    const mongoOptions = {
-      maxPoolSize: parseInt(process.env.DB_CONNECTION_POOL_SIZE || '10'),
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-      family: 4, // Use IPv4, skip trying IPv6
-      retryWrites: true,
-      w: 'majority' as const,
-      bufferCommands: false,
-      ...(process.env.NODE_ENV === 'production' && {
-        ssl: true,
-        sslValidate: true
-      })
-    };
-
-    // Set mongoose options
-    mongoose.set('strictQuery', true);
-    
-    await mongoose.connect(mongoUri, mongoOptions);
-    
-    logger.info('MongoDB connected successfully', {
-      database: mongoose.connection.name,
-      host: mongoose.connection.host,
-      port: mongoose.connection.port,
-      poolSize: mongoOptions.maxPoolSize
-    });
-
-    // MongoDB connection event handlers
-    mongoose.connection.on('error', (error) => {
-      logger.error('MongoDB connection error:', error);
-    });
-
-    mongoose.connection.on('disconnected', () => {
-      logger.warn('MongoDB disconnected');
-    });
-
-    mongoose.connection.on('reconnected', () => {
-      logger.info('MongoDB reconnected');
-    });
-
-    // Graceful disconnect on process termination
-    process.on('SIGINT', async () => {
-      try {
-        await mongoose.connection.close();
-        logger.info('MongoDB connection closed through app termination');
-        process.exit(0);
-      } catch (error) {
-        logger.error('Error closing MongoDB connection:', error);
-        process.exit(1);
-      }
-    });
-
-  } catch (error) {
-    logger.error('MongoDB connection error:', {
-      message: error.message,
-      stack: error.stack
-    });
-    process.exit(1);
-  }
-};
-
 // Initialize services with configuration from database
 const initializeServices = async () => {
   try {
@@ -586,6 +467,11 @@ const initializeServices = async () => {
       googleSpeechApiKey
     );
     
+    // Initialize AdvancedTelephonyService manually (safe initialization)
+    const { advancedTelephonyService } = require('./services/advancedTelephonyService');
+    await advancedTelephonyService.updateConfiguration();
+    logger.info('Advanced telephony service initialized');
+    
     // Export services
     global.speechService = speechService;
     global.conversationEngine = conversationEngine;
@@ -608,14 +494,54 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 const startServer = async () => {
   try {
-    // Connect to database first
-    await connectDB();
+    logger.info('Starting Lumina Outreach server...');
     
-    // Initialize services
+    // Step 1: Validate startup configuration (environment variables only)
+    logger.info('Validating startup configuration...');
+    const configValidation = validateStartupConfig();
+    if (!configValidation.isValid) {
+      logger.error('Startup configuration validation failed:', configValidation);
+      throw new Error(`Invalid startup configuration: ${configValidation.error}`);
+    }
+    logger.info('Startup configuration validation passed');
+    
+    // Step 2: Connect to database
+    logger.info('Establishing database connection...');
+    await connectToDatabase();
+    logger.info('Database connection established');
+    
+    // Step 2.5: Validate database-loaded configuration (optional)
+    logger.info('Validating database configuration...');
+    try {
+      const { validateDatabaseLoadedConfig } = await import('./config/database-validation');
+      const Configuration = require('./models/Configuration').default;
+      const config = await Configuration.findOne();
+      
+      const dbConfigValidation = validateDatabaseLoadedConfig(config);
+      if (!dbConfigValidation.isValid) {
+        logger.warn('Database configuration has issues:', dbConfigValidation.error);
+        logger.warn('Services will start with limited functionality. Configure API keys in the Configuration page.');
+      } else {
+        logger.info('Database configuration is valid');
+      }
+    } catch (error) {
+      logger.warn('Could not validate database configuration:', error);
+      logger.warn('Services will start with empty credentials - configure via Configuration page');
+    }
+    
+    // Step 3: Initialize services with database-driven configuration
     logger.info('Initializing application services...');
+    
+    // Initialize services that load configuration from database
     await initializeServices();
     
-    // Start server
+    // Initialize post-database services
+    const { initializeServicesAfterDB } = await import('./services');
+    await initializeServicesAfterDB();
+    
+    logger.info('Services initialization completed');
+    
+    // Step 4: Start server
     server.listen(PORT, HOST, () => {
       logger.info('Server started successfully', {
         port: PORT,

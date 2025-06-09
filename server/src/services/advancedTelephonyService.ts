@@ -97,6 +97,8 @@ export class AdvancedTelephonyService {
   private fallbackVoiceProvider: any | null = null;
   private activeDialerStatus: 'active' | 'paused' | 'stopped' = 'stopped';
   private configuration: any = null;
+  private initialized: boolean = false;
+  private initializationPromise: Promise<void> | null = null;
   private dialingWindowsByTimezone: Record<string, {start: number, end: number}> = {
     'America/New_York': {start: 9, end: 20},
     'America/Chicago': {start: 9, end: 20},
@@ -106,8 +108,25 @@ export class AdvancedTelephonyService {
   };
 
   constructor() {
-    // Initialize with database configuration
-    this.initializeWithConfiguration();
+    // Don't initialize immediately - wait for database to be ready
+    // this.initializeWithConfiguration();
+  }
+
+  /**
+   * Ensure the service is initialized before use
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+    
+    if (this.initializationPromise) {
+      await this.initializationPromise;
+      return;
+    }
+    
+    this.initializationPromise = this.initializeWithConfiguration();
+    await this.initializationPromise;
   }
 
   /**
@@ -115,10 +134,18 @@ export class AdvancedTelephonyService {
    */
   private async initializeWithConfiguration(): Promise<void> {
     try {
+      // Check if mongoose is connected
+      const mongoose = require('mongoose');
+      if (mongoose.connection.readyState !== 1) {
+        logger.warn('MongoDB not connected yet. Skipping Twilio initialization.');
+        return;
+      }
+
       this.configuration = await Configuration.findOne();
       
       if (!this.configuration || !this.configuration.twilioConfig.isEnabled) {
         logger.warn('Twilio configuration not found or disabled. Telephony features will be limited.');
+        this.initialized = true;
         return;
       }
 
@@ -144,21 +171,12 @@ export class AdvancedTelephonyService {
       
       // Start periodic cleanup of expired conversations
       setInterval(() => this.cleanupStaleConversations(), 60000);
+      
+      this.initialized = true;
     } catch (error) {
       logger.error('Error initializing advanced telephony service:', error);
-    }
-  }
-
-  /**
-   * Ensure configuration is loaded and Twilio client is initialized
-   */
-  private async ensureInitialized(): Promise<void> {
-    if (!this.twilioClient || !this.configuration) {
-      await this.initializeWithConfiguration();
-    }
-    
-    if (!this.twilioClient) {
-      throw new Error('Twilio client not initialized - check configuration');
+      // Don't throw - allow service to work without Twilio if needed
+      this.initialized = true;
     }
   }
 

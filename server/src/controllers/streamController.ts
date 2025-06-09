@@ -75,8 +75,7 @@ export const handleVoiceStream = async (ws: WebSocket, req: Request): Promise<vo
     
     // Initialize ElevenLabs for voice synthesis
     voiceAI = new EnhancedVoiceAIService(
-      config.elevenLabsConfig.apiKey,
-      openAIProvider.apiKey
+      config.elevenLabsConfig.apiKey
     );
     
     // Generate initial greeting if this is the first interaction
@@ -285,8 +284,7 @@ export const handleConversationalAIStream = async (ws: WebSocket, req: Request):
     
     // Create voice AI service instance
     voiceAI = new EnhancedVoiceAIService(
-      config.elevenLabsConfig.apiKey,
-      openAIProvider.apiKey
+      config.elevenLabsConfig.apiKey
     );
     
     // Initialize conversational settings from configuration

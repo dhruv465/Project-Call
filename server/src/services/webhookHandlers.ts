@@ -46,8 +46,7 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
           const openAIProvider = config.llmConfig.providers.find(p => p.name === 'openai');
           if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
             const voiceAI = new EnhancedVoiceAIService(
-              config.elevenLabsConfig.apiKey,
-              openAIProvider.apiKey
+              config.elevenLabsConfig.apiKey
             );
             
             const defaultVoiceId = config.voiceAIConfig?.conversationalAI?.defaultVoiceId || 
@@ -126,8 +125,7 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
           const openAIProvider = configuration.llmConfig.providers.find(p => p.name === 'openai');
           if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
             const voiceAI = new EnhancedVoiceAIService(
-              configuration.elevenLabsConfig.apiKey,
-              openAIProvider.apiKey
+              configuration.elevenLabsConfig.apiKey
             );
             
             const defaultVoiceId = configuration.voiceAIConfig?.conversationalAI?.defaultVoiceId || 
@@ -184,7 +182,7 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
       
       // Get message from configuration
       const config = await Configuration.findOne();
-      const errorMessage = config?.errorMessages?.serverError || 'We apologize, but there was a server configuration error.';
+      const errorMessage = config?.errorMessages?.noCallFound || 'We apologize, but we cannot find your call record.';
       
       // Try to use ElevenLabs if possible
       if (config?.elevenLabsConfig?.isEnabled && config?.elevenLabsConfig?.apiKey) {
@@ -192,8 +190,7 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
           const openAIProvider = config.llmConfig.providers.find(p => p.name === 'openai');
           if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
             const voiceAI = new EnhancedVoiceAIService(
-              config.elevenLabsConfig.apiKey,
-              openAIProvider.apiKey
+              config.elevenLabsConfig.apiKey
             );
             
             const defaultVoiceId = config.voiceAIConfig?.conversationalAI?.defaultVoiceId || 
@@ -238,8 +235,7 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
         const openAIProvider = configuration.llmConfig.providers.find(p => p.name === 'openai');
         if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
           const voiceAI = new EnhancedVoiceAIService(
-            configuration.elevenLabsConfig.apiKey,
-            openAIProvider.apiKey
+            configuration.elevenLabsConfig.apiKey
           );
           
           // Debug campaign voice configuration for initial greeting
@@ -293,8 +289,8 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
       input: 'speech',
       action: `${baseUrl}/api/calls/gather?callId=${callId}&conversationId=${conversationId}`,
       method: 'POST',
-      speechTimeout: 'auto',
-      speechModel: 'enhanced',
+      speechTimeout: 3,
+      speechModel: 'phone_call',
       timeout: 5
     });
     
@@ -309,8 +305,7 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
         const openAIProvider = configuration.llmConfig.providers.find(p => p.name === 'openai');
         if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
           const voiceAI = new EnhancedVoiceAIService(
-            configuration.elevenLabsConfig.apiKey,
-            openAIProvider.apiKey
+            configuration.elevenLabsConfig.apiKey
           );
           
           const requestedVoiceId = campaign.voiceConfiguration?.voiceId || 'default';
@@ -348,8 +343,8 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
       input: 'speech',
       action: `${baseUrl}/api/calls/gather?callId=${callId}&conversationId=${conversationId}`,
       method: 'POST',
-      speechTimeout: 'auto',
-      speechModel: 'enhanced',
+      speechTimeout: 3,
+      speechModel: 'phone_call',
       timeout: 5
     });
     
@@ -529,8 +524,7 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
             if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
               // Initialize ElevenLabs service
               const voiceAI = new EnhancedVoiceAIService(
-                config.elevenLabsConfig.apiKey,
-                openAIProvider.apiKey
+                config.elevenLabsConfig.apiKey
               );
               
               // Get voice configuration with detailed debugging
@@ -591,8 +585,8 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
           input: 'speech',
           action: `${baseUrl}/api/calls/gather?callId=${callId}&conversationId=${conversationId}`,
           method: 'POST',
-          speechTimeout: 'auto',
-          speechModel: 'enhanced',
+          speechTimeout: 3,
+          speechModel: 'phone_call',
           timeout: 5
         });
         
@@ -617,8 +611,8 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
           input: 'speech',
           action: `${baseUrl}/api/calls/gather?callId=${callId}&conversationId=${conversationId}`,
           method: 'POST',
-          speechTimeout: 'auto',
-          speechModel: 'enhanced',
+          speechTimeout: 3,
+          speechModel: 'phone_call',
           timeout: 5
         });
       } else {
@@ -679,8 +673,8 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
         input: 'speech',
         action: `${baseUrl}/api/calls/gather?callId=${callId}&conversationId=${conversationId}`,
         method: 'POST',
-        speechTimeout: 'auto',
-        speechModel: 'enhanced',
+        speechTimeout: 3,
+        speechModel: 'phone_call',
         timeout: 8 // Give more time
       });
       
@@ -844,15 +838,16 @@ async function generateCallMetrics(callId: string): Promise<void> {
       outcome: outcome as 'connected' | 'no-answer' | 'busy' | 'failed' | 'voicemail',
       conversationMetrics: {
         customerEngagement: calculateEngagementScore(conversationLog),
-        objectionCount: countObjections(conversationLog),
+        emotionalTone: extractEmotionalTones(conversationLog),
+        objectionCount: await countObjections(conversationLog),
         interruptionCount: countInterruptions(conversationLog),
         conversionIndicators: identifyConversionIndicators(conversationLog)
       },
       qualityScore: calculateQualityScore(call),
       complianceScore: calculateComplianceScore(call, conversationLog),
-      intentDetection: detectIntent(conversationLog),
+      intentDetection: await detectIntent(conversationLog),
       callRecordingUrl: call.recordingUrl,
-      transcriptionAnalysis: analyzeTranscription(conversationLog)
+      transcriptionAnalysis: await analyzeTranscription(conversationLog)
     };
     
     // Save metrics to the call record
@@ -883,7 +878,7 @@ function calculateEngagementScore(conversationLog: Array<{role: string, content:
   return (interactionScore * 0.6 + lengthScore * 0.4);
 }
 
-function countObjections(conversationLog: Array<{role: string, content: string, intent?: string}>): number {
+async function countObjections(conversationLog: Array<{role: string, content: string, intent?: string}>): Promise<number> {
   // Use LLM-detected intents when available
   const explicitObjections = conversationLog.filter(entry => 
     entry.role === 'user' && entry.intent === 'objection'
@@ -894,17 +889,16 @@ function countObjections(conversationLog: Array<{role: string, content: string, 
     // Get configuration for dynamic objection phrases
     try {
       const config = require('../models/Configuration').default;
-      return config.findOne().then(config => {
-        const objectionPhrases = config?.intentDetection?.objectionPhrases || [];
-        
-        // Count objections based on configured phrases
-        return conversationLog.filter(entry => 
-          entry.role === 'user' && 
-          objectionPhrases.some(phrase => 
-            entry.content.toLowerCase().includes(phrase.toLowerCase())
-          )
-        ).length;
-      }).catch(() => 0);
+      const configDoc = await config.findOne();
+      const objectionPhrases = configDoc?.intentDetection?.objectionPhrases || [];
+      
+      // Count objections based on configured phrases
+      return conversationLog.filter(entry => 
+        entry.role === 'user' && 
+        objectionPhrases.some(phrase => 
+          entry.content.toLowerCase().includes(phrase.toLowerCase())
+        )
+      ).length;
     } catch (error) {
       return 0;
     }
@@ -1048,11 +1042,54 @@ function calculateComplianceScore(call: ICall, conversationLog: Array<{role: str
   return Math.max(score, 0);
 }
 
-function detectIntent(conversationLog: Array<{role: string, content: string, intent?: string}>): {
+function extractEmotionalTones(conversationLog: Array<{role: string, content: string, emotion?: string}>): string[] {
+  // Extract emotional tones from conversation log
+  if (conversationLog.length === 0) return [];
+  
+  // Collect emotions from explicitly tagged entries
+  const explicitEmotions = conversationLog
+    .filter(entry => entry.emotion)
+    .map(entry => entry.emotion as string);
+  
+  if (explicitEmotions.length > 0) {
+    // Return unique emotions
+    return [...new Set(explicitEmotions)];
+  }
+  
+  // Fall back to basic sentiment analysis if no explicit emotions
+  const emotionalKeywords = {
+    'positive': ['great', 'excellent', 'wonderful', 'amazing', 'fantastic', 'love', 'like', 'good', 'yes', 'interested'],
+    'negative': ['bad', 'terrible', 'awful', 'hate', 'dislike', 'no', 'not interested', 'angry', 'frustrated'],
+    'neutral': ['okay', 'maybe', 'think', 'consider', 'unsure'],
+    'excited': ['excited', 'eager', 'can\'t wait', 'looking forward'],
+    'concerned': ['worried', 'concerned', 'nervous', 'hesitant', 'unsure'],
+    'confused': ['confused', 'don\'t understand', 'unclear', 'what do you mean']
+  };
+  
+  const detectedEmotions = new Set<string>();
+  
+  conversationLog
+    .filter(entry => entry.role === 'user')
+    .forEach(entry => {
+      const content = entry.content.toLowerCase();
+      
+      for (const [emotion, keywords] of Object.entries(emotionalKeywords)) {
+        if (keywords.some(keyword => content.includes(keyword))) {
+          detectedEmotions.add(emotion);
+        }
+      }
+    });
+  
+  // Return detected emotions or default to neutral
+  const result = Array.from(detectedEmotions);
+  return result.length > 0 ? result : ['neutral'];
+}
+
+async function detectIntent(conversationLog: Array<{role: string, content: string, intent?: string}>): Promise<{
   primaryIntent: string;
   confidence: number;
   secondaryIntents: Array<{intent: string, confidence: number}>;
-} {
+}> {
   // Simplified intent detection
   const userEntries = conversationLog.filter(entry => entry.role === 'user');
   
@@ -1096,21 +1133,12 @@ function detectIntent(conversationLog: Array<{role: string, content: string, int
     const { voiceAIService } = require('../services');
     const userTexts = userEntries.map(entry => entry.content).join(' ');
     
-    return voiceAIService.detectIntent(userTexts)
-      .then((result: any) => {
-        return {
-          primaryIntent: result.primaryIntent || 'general_conversation',
-          confidence: result.confidence || 0.5,
-          secondaryIntents: result.secondaryIntents || []
-        };
-      })
-      .catch(() => {
-        return {
-          primaryIntent: 'general_conversation',
-          confidence: 0.5,
-          secondaryIntents: []
-        };
-      });
+    const result = await voiceAIService.detectIntent(userTexts);
+    return {
+      primaryIntent: result.primaryIntent || 'general_conversation',
+      confidence: result.confidence || 0.5,
+      secondaryIntents: result.secondaryIntents || []
+    };
   } catch (error) {
     // If import fails, return default intent
     return {
@@ -1121,11 +1149,11 @@ function detectIntent(conversationLog: Array<{role: string, content: string, int
   }
 }
 
-function analyzeTranscription(conversationLog: Array<{role: string, content: string}>): {
+async function analyzeTranscription(conversationLog: Array<{role: string, content: string}>): Promise<{
   keyPhrases: string[];
   sentimentBySegment: Array<{segment: string, sentiment: number}>;
   followUpRecommendations: string[];
-} {
+}> {
   // Extract user messages
   const userMessages = conversationLog
     .filter(entry => entry.role === 'user')
@@ -1143,25 +1171,18 @@ function analyzeTranscription(conversationLog: Array<{role: string, content: str
     // Use LLM service for real sentiment analysis
     const { llmService } = require('../services');
     
-    return llmService.analyzeConversation({
+    const result = await llmService.analyzeConversation({
       messages: userMessages,
       analyzeFor: ['sentiment', 'keyPhrases', 'followUpRecommendations']
-    }).then((result: any) => {
-      return {
-        keyPhrases: result.keyPhrases || [],
-        sentimentBySegment: result.sentimentBySegment || [],
-        followUpRecommendations: result.followUpRecommendations || []
-      };
-    }).catch(() => {
-      // Fall back to default response if LLM service fails
-      return {
-        keyPhrases: ['Error analyzing conversation'],
-        sentimentBySegment: userMessages.map(msg => ({ segment: msg.substring(0, 50), sentiment: 0 })),
-        followUpRecommendations: ['Follow up with standard process']
-      };
     });
+    
+    return {
+      keyPhrases: result.keyPhrases || [],
+      sentimentBySegment: result.sentimentBySegment || [],
+      followUpRecommendations: result.followUpRecommendations || []
+    };
   } catch (error) {
-    // Fall back to default response if import fails
+    // Fall back to default response if LLM service fails
     return {
       keyPhrases: ['Error processing conversation'],
       sentimentBySegment: userMessages.map(msg => ({ segment: msg.substring(0, 50), sentiment: 0 })),
