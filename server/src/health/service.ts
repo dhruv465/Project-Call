@@ -7,6 +7,7 @@ import { Request, Response } from 'express';
 import { logger } from '../index';
 import { checkDatabaseHealth, isDatabaseConnected } from '../database/connection';
 import { validateGoogleConfig, validateElevenLabsConfig } from '../config/validation';
+import { getMemoryUsage } from '../utils/memoryOptimization';
 
 export interface HealthCheck {
   service: string;
@@ -22,6 +23,14 @@ export interface SystemHealth {
   checks: HealthCheck[];
   uptime: number;
   version?: string;
+  memory?: {
+    heapUsed: number;
+    heapTotal: number;
+    rss: number;
+    external: number;
+    arrayBuffers: number;
+    status: 'healthy' | 'warning' | 'critical';
+  };
 }
 
 /**
@@ -183,6 +192,20 @@ export async function performSystemHealthCheck(): Promise<SystemHealth> {
     checks.push(await checkElevenLabsHealth());
     checks.push(await checkTwilioHealth());
     
+    // Memory health check
+    const memoryUsage = getMemoryUsage();
+    const memoryStatus = memoryUsage.heapUsed > 1400 ? 'critical' : 
+                        memoryUsage.heapUsed > 1200 ? 'warning' : 'healthy';
+    
+    checks.push({
+      service: 'memory',
+      status: memoryStatus === 'critical' ? 'unhealthy' : 
+              memoryStatus === 'warning' ? 'degraded' : 'healthy',
+      message: `Heap usage: ${memoryUsage.heapUsed}MB / RSS: ${memoryUsage.rss}MB`,
+      timestamp: new Date(),
+      details: memoryUsage
+    });
+    
     // Determine overall system status
     const unhealthyCount = checks.filter(c => c.status === 'unhealthy').length;
     const degradedCount = checks.filter(c => c.status === 'degraded').length;
@@ -201,7 +224,11 @@ export async function performSystemHealthCheck(): Promise<SystemHealth> {
       timestamp: new Date(),
       checks,
       uptime: process.uptime(),
-      version: process.env.npm_package_version
+      version: process.env.npm_package_version,
+      memory: {
+        ...memoryUsage,
+        status: memoryStatus
+      }
     };
     
     const duration = Date.now() - startTime;
