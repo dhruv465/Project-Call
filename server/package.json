@@ -24,9 +24,7 @@
     "logs:clear": "rm -f logs/*.log",
     "security:audit": "npm audit",
     "security:fix": "npm audit fix",
-    "memory:analyze": "node scripts/memory-analysis.js",
-    "memory:monitor": "node --expose-gc --max-old-space-size=1536 --optimize-for-size dist/index.js",
-    "deploy:check": "node scripts/pre-deploy-check.js"
+    "memory:monitor": "node --expose-gc --max-old-space-size=1536 --optimize-for-size dist/index.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",

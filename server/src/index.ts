@@ -37,13 +37,9 @@ import { initializeSpeechService } from './services/realSpeechService';
 import { validateStartupConfig } from './config/database-validation';
 import { connectToDatabase } from './database/connection';
 import { healthCheckHandler, readinessCheckHandler } from './health/service';
-import { initializeMemoryOptimization } from './utils/memoryOptimization';
 
 // Load environment variables
 dotenv.config();
-
-// Initialize memory optimization for production
-initializeMemoryOptimization();
 
 // Create enhanced logger with production features
 const logLevel = process.env.LOG_LEVEL || 'info';

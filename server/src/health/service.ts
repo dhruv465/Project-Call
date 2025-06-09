@@ -1,8 +1,3 @@
-/**
- * Health Check Service
- * 
- * Provides system health monitoring and status endpoints
- */
 import { Request, Response } from 'express';
 import { logger } from '../index';
 import { checkDatabaseHealth, isDatabaseConnected } from '../database/connection';
