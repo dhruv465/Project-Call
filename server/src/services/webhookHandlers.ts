@@ -7,6 +7,8 @@ import { conversationEngine } from './index';
 import { AdvancedTelephonyService } from './advancedTelephonyService';
 import { EnhancedVoiceAIService } from './enhancedVoiceAIService';
 import { synthesizeVoiceResponse } from '../utils/voiceSynthesis';
+import { getPreferredVoiceId } from '../utils/voiceUtils';
+import fs from 'fs';
 
 // Import Twilio
 const twilio = require('twilio');
@@ -43,8 +45,9 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
       
       if (config?.elevenLabsConfig?.isEnabled && config?.elevenLabsConfig?.apiKey) {
         try {
-          const openAIProvider = config.llmConfig.providers.find(p => p.name === 'openai');
-          if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
+          // Check for ANY enabled LLM provider, not just OpenAI
+          const enabledProvider = config.llmConfig.providers.find(p => p.isEnabled && p.apiKey);
+          if (enabledProvider) {
             const voiceAI = new EnhancedVoiceAIService(
               config.elevenLabsConfig.apiKey
             );
@@ -122,8 +125,9 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
       // Try to use ElevenLabs if possible
       if (configuration?.elevenLabsConfig?.isEnabled && configuration?.elevenLabsConfig?.apiKey) {
         try {
-          const openAIProvider = configuration.llmConfig.providers.find(p => p.name === 'openai');
-          if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
+          // Check for ANY enabled LLM provider, not just OpenAI
+          const enabledProvider = configuration.llmConfig.providers.find(p => p.isEnabled && p.apiKey);
+          if (enabledProvider) {
             const voiceAI = new EnhancedVoiceAIService(
               configuration.elevenLabsConfig.apiKey
             );
@@ -187,8 +191,9 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
       // Try to use ElevenLabs if possible
       if (config?.elevenLabsConfig?.isEnabled && config?.elevenLabsConfig?.apiKey) {
         try {
-          const openAIProvider = config.llmConfig.providers.find(p => p.name === 'openai');
-          if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
+          // Check for ANY enabled LLM provider, not just OpenAI
+          const enabledProvider = config.llmConfig.providers.find(p => p.isEnabled && p.apiKey);
+          if (enabledProvider) {
             const voiceAI = new EnhancedVoiceAIService(
               config.elevenLabsConfig.apiKey
             );
@@ -232,8 +237,11 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
     let useElevenLabs = false;
     if (configuration.elevenLabsConfig?.isEnabled && configuration.elevenLabsConfig?.apiKey) {
       try {
-        const openAIProvider = configuration.llmConfig.providers.find(p => p.name === 'openai');
-        if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
+        // Check for ANY enabled LLM provider, not just OpenAI
+        const enabledProvider = configuration.llmConfig.providers.find(p => p.isEnabled && p.apiKey);
+        if (enabledProvider) {
+          logger.info(`🔧 ElevenLabs configuration status: ${configuration.elevenLabsConfig.status || 'unknown'}, API key length: ${configuration.elevenLabsConfig.apiKey.length}, using LLM provider: ${enabledProvider.name}`);
+          
           const voiceAI = new EnhancedVoiceAIService(
             configuration.elevenLabsConfig.apiKey
           );
@@ -245,123 +253,128 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
             voiceConfig: campaign.voiceConfiguration,
             requestedVoiceId: campaign.voiceConfiguration?.voiceId,
             voiceProvider: campaign.voiceConfiguration?.provider,
-            primaryLanguage: campaign.primaryLanguage
+            primaryLanguage: campaign.primaryLanguage,
+            elevenLabsApiKey: `${configuration.elevenLabsConfig.apiKey.substring(0, 5)}...${configuration.elevenLabsConfig.apiKey.substring(configuration.elevenLabsConfig.apiKey.length - 5)}`,
+            providerName: enabledProvider.name,
+            hasApiKey: !!enabledProvider.apiKey
           });
           
-          const requestedVoiceId = campaign.voiceConfiguration?.voiceId || 'default';
+          // Get the preferred voice ID from configuration or campaign
+          const preferredVoiceId = await getPreferredVoiceId();
+          const requestedVoiceId = campaign.voiceConfiguration?.voiceId || preferredVoiceId;
           logger.info(`🎤 Resolving initial greeting voice ID for call ${callId}: "${requestedVoiceId}"`);
           
           const voiceId = await EnhancedVoiceAIService.getValidVoiceId(requestedVoiceId);
           
           logger.info(`🎯 Final greeting voice ID selected for call ${callId}: "${voiceId}"`);
           
-          const speechResponse = await voiceAI.synthesizeAdaptiveVoice({
-            text: initialPrompt,
-            personalityId: voiceId,
-            language: campaign.primaryLanguage === 'hi' ? 'hi' : 'en'
-          });
+          // Properly formatted greeting text
+          const formattedGreeting = initialPrompt.trim();
+          logger.info(`🗣️ Synthesizing greeting: "${formattedGreeting.substring(0, 50)}${formattedGreeting.length > 50 ? '...' : ''}"`);
           
-          // Check if we got audio content back
-          if (speechResponse.audioContent) {
-            // Convert buffer to base64 and create a data URL for TwiML
-            const audioBase64 = speechResponse.audioContent.toString('base64');
-            const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
+          // Try direct voice synthesis first (more reliable)
+          try {
+            // This uses a more reliable synthesis method with file output
+            const speechFilePath = await voiceAI.synthesizeVoice({
+              text: formattedGreeting,
+              personalityId: voiceId,
+              language: campaign.primaryLanguage === 'hi' ? 'Hindi' : 'English'
+            });
             
-            logger.info(`Using ElevenLabs synthesized greeting for call ${callId}`);
-            twiml.play(audioDataUrl);
-            useElevenLabs = true;
+            // Check if the file exists and is not empty
+            if (fs.existsSync(speechFilePath) && fs.statSync(speechFilePath).size > 0) {
+              // Convert file to base64 for TwiML
+              const audioBuffer = fs.readFileSync(speechFilePath);
+              const audioBase64 = audioBuffer.toString('base64');
+              const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
+              
+              logger.info(`✅ Successfully synthesized greeting using file method for call ${callId}, file size: ${audioBuffer.length} bytes`);
+              twiml.play(audioDataUrl);
+              useElevenLabs = true;
+            } else {
+              throw new Error(`Speech file empty or missing: ${speechFilePath}`);
+            }
+          } catch (fileMethodError) {
+            // Fall back to adaptive voice method if file method fails
+            logger.warn(`File synthesis method failed, trying adaptive method: ${fileMethodError}`);
+            
+            const speechResponse = await voiceAI.synthesizeAdaptiveVoice({
+              text: formattedGreeting,
+              personalityId: voiceId,
+              language: campaign.primaryLanguage === 'hi' ? 'hi' : 'en'
+            });
+            
+            // Check if we got audio content back
+            if (speechResponse && speechResponse.audioContent) {
+              // Convert buffer to base64 and create a data URL for TwiML
+              const audioBase64 = speechResponse.audioContent.toString('base64');
+              const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
+              
+              logger.info(`✅ Using ElevenLabs synthesized greeting via adaptive method for call ${callId}, size: ${speechResponse.audioContent.length} bytes`);
+              twiml.play(audioDataUrl);
+              useElevenLabs = true;
+            } else {
+              logger.error(`⚠️ No audio content in speechResponse: ${JSON.stringify(speechResponse || {})}`);
+            }
           }
+        } else {
+          logger.error(`No enabled LLM provider with API key found. ElevenLabs may not be used for the initial greeting or might use a default/fallback voice if it can operate independently for basic synthesis.`);
         }
       } catch (error) {
         logger.error(`Error using ElevenLabs for greeting: ${error}`);
       }
+    } else {
+      logger.warn(`ElevenLabs not configured properly - enabled: ${!!configuration.elevenLabsConfig?.isEnabled}, apiKey exists: ${!!configuration.elevenLabsConfig?.apiKey}`);
     }
     
     // Fallback if ElevenLabs failed
     if (!useElevenLabs) {
-      logger.info(`Using empty audio fallback greeting for call ${callId}`);
-      // Send empty audio instead of Polly voice
-      twiml.play('');
+      logger.info(`Using Twilio's TTS for greeting since ElevenLabs failed for call ${callId}`);
+      // Use Twilio's built-in TTS as a fallback instead of empty audio
+      twiml.say({ voice: 'alice' }, initialPrompt);
     }
     
-    // Set up gather for speech input
-    twiml.gather({
+    // Set up gather for speech input with timeout handling
+    const gather = twiml.gather({
       input: 'speech',
       action: `${baseUrl}/api/calls/gather?callId=${callId}&conversationId=${conversationId}`,
       method: 'POST',
       speechTimeout: 3,
       speechModel: 'phone_call',
-      timeout: 5
+      timeout: 10,  // Increased timeout to give user more time
+      numDigits: 1  // Allow for backup DTMF input
     });
     
-    // Fallback if no speech detected
-    // Get message from configuration
+    // Add a brief pause to let the greeting audio finish
+    gather.pause({ length: 1 });
+    
+    // Only add timeout fallback - this will only execute if no speech is detected
+    // Get message from configuration for timeout handling
     const config = await Configuration.findOne();
-    const speechPrompt = config?.callResponses?.speechPrompt || "I'm sorry, I didn't catch that. Please speak after the tone.";
+    const goodbyeMessage = config?.callResponses?.goodbye || "Thank you for your time. Goodbye.";
     
-    // Try to use ElevenLabs for the speech prompt
-    if (configuration.elevenLabsConfig?.isEnabled && configuration.elevenLabsConfig?.apiKey) {
-      try {
-        const openAIProvider = configuration.llmConfig.providers.find(p => p.name === 'openai');
-        if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
-          const voiceAI = new EnhancedVoiceAIService(
-            configuration.elevenLabsConfig.apiKey
-          );
-          
-          const requestedVoiceId = campaign.voiceConfiguration?.voiceId || 'default';
-          const voiceId = await EnhancedVoiceAIService.getValidVoiceId(requestedVoiceId);
-          
-          const speechResponse = await voiceAI.synthesizeAdaptiveVoice({
-            text: speechPrompt,
-            personalityId: voiceId,
-            language: campaign.primaryLanguage === 'hi' ? 'hi' : 'en'
-          });
-          
-          // Use ElevenLabs speech
-          if (speechResponse.audioContent) {
-            const audioBase64 = speechResponse.audioContent.toString('base64');
-            const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
-            twiml.play(audioDataUrl);
-          } else {
-            // Fallback to empty audio
-            twiml.play('');
-          }
-        } else {
-          // Fallback to empty audio
-          twiml.play('');
-        }
-      } catch (error) {
-        // Fallback to empty audio
-        twiml.play('');
-        logger.error(`Error synthesizing speech prompt with ElevenLabs: ${error}`);
-      }
-    } else {
-      // Fallback to empty audio
-      twiml.play('');
-    }
-    twiml.gather({
-      input: 'speech',
-      action: `${baseUrl}/api/calls/gather?callId=${callId}&conversationId=${conversationId}`,
-      method: 'POST',
-      speechTimeout: 3,
-      speechModel: 'phone_call',
-      timeout: 5
-    });
-    
-    // Final fallback - hang up if still no response
-    // Get message from configuration
-    const configForGoodbye = await Configuration.findOne();
-    const goodbyeMessage = configForGoodbye?.callResponses?.goodbye || "Thank you for your time. Goodbye.";
-    
-    // Use ElevenLabs for goodbye message
-    await synthesizeVoiceResponse(
+    // Determine the default LLM provider and pass its key
+    const defaultLlmProviderName = configuration?.llmConfig?.defaultProvider;
+    const defaultLlmProvider = configuration?.llmConfig?.providers?.find(p => p.name === defaultLlmProviderName);
+
+    // Use ElevenLabs for goodbye message - only on timeout
+    const usedElevenLabs = await synthesizeVoiceResponse(
       twiml, 
       goodbyeMessage, 
       {
         voiceId: campaign?.voiceConfiguration?.voiceId,
-        language: campaign.primaryLanguage === 'hi' ? 'hi' : 'en'
+        language: campaign.primaryLanguage === 'hi' ? 'hi' : 'en',
+        campaignId: campaign?._id?.toString(),
+        elevenLabsApiKey: configuration?.elevenLabsConfig?.apiKey,
+        llmApiKey: defaultLlmProvider?.apiKey, // Use the configured default LLM API key
+        fallbackBehavior: 'tts' // Use Twilio TTS as fallback instead of empty audio
       }
     );
+    
+    if (!usedElevenLabs) {
+      logger.info(`Used Twilio TTS for goodbye message for call ${callId}`);
+    }
+    
     twiml.hangup();
     
     // Log TwiML for debugging
@@ -519,9 +532,12 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
         const call = await Call.findById(callId);
         if (call) {
           try {
-            // Get OpenAI provider for ElevenLabs
-            const openAIProvider = config.llmConfig.providers.find(p => p.name === 'openai');
-            if (openAIProvider?.isEnabled && openAIProvider?.apiKey) {
+            // Get the configured default LLM provider
+            const defaultProviderName = config.llmConfig.defaultProvider;
+            const configuredProvider = config.llmConfig.providers.find(p => p.name === defaultProviderName);
+
+            if (configuredProvider?.isEnabled && configuredProvider?.apiKey) {
+              logger.info(`Using LLM provider '${configuredProvider.name}' for ElevenLabs in gather webhook.`);
               // Initialize ElevenLabs service
               const voiceAI = new EnhancedVoiceAIService(
                 config.elevenLabsConfig.apiKey
@@ -559,6 +575,9 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
                 twiml.play(audioDataUrl);
                 useElevenLabs = true;
               }
+            } else {
+              logger.warn(`Configured LLM provider '${defaultProviderName || 'Unknown'}' not enabled or missing API key. ElevenLabs synthesis for AI response might be skipped or use fallback.`);
+              // useElevenLabs will remain false, leading to fallback.
             }
           } catch (error) {
             logger.error(`Error using ElevenLabs in gather webhook: ${error}`);
@@ -749,10 +768,12 @@ export async function handleTwilioStreamWebhook(req: Request, res: Response): Pr
     }
     
     // Get appropriate LLM configuration
-    const openAIProvider = configuration.llmConfig.providers.find(p => p.name === 'openai');
-    if (!openAIProvider || !openAIProvider.isEnabled) {
-      logger.error('OpenAI LLM not configured for streaming');
-      res.status(500).send('LLM configuration not set up');
+    const defaultProviderNameStream = configuration.llmConfig.defaultProvider; // Renamed to avoid conflict
+    const configuredProviderStream = configuration.llmConfig.providers.find(p => p.name === defaultProviderNameStream); // Renamed
+
+    if (!configuredProviderStream || !configuredProviderStream.isEnabled || !configuredProviderStream.apiKey) {
+      logger.error(`Configured LLM provider '${defaultProviderNameStream || 'Unknown'}' not enabled or missing API key. Streaming cannot proceed.`);
+      res.status(500).send('Required LLM configuration for streaming is not properly set up.');
       return;
     }
     

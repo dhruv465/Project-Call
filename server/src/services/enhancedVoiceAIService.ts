@@ -16,6 +16,7 @@ import {
 } from './elevenlabsSDKService';
 import { LLMService } from './llm/service';
 import { LLMConfig, LLMProvider, LLMMessage } from './llm/types';
+import { getPreferredVoiceId } from '../utils/voiceUtils';
 
 export interface VoicePersonality {
   id: string;
@@ -235,13 +236,35 @@ export class EnhancedVoiceAIService {
       }
       
       if (campaignVoiceId === "default-voice-id" || !campaignVoiceId) {
+        // Use the preferred voice ID from configuration
+        const preferredVoiceId = await getPreferredVoiceId();
+        
+        // Check if the preferred voice exists in available voices
+        const preferredVoice = availableVoices.find(voice => voice.voiceId === preferredVoiceId);
+        
+        if (preferredVoice) {
+          logger.warn(`⚠️ Voice Selection Fallback: Using preferred voice - ${preferredVoice.name} (${preferredVoice.voiceId})`);
+          return preferredVoice.voiceId;
+        }
+        
+        // Fallback to first available voice if preferred voice not found
         const fallbackVoice = availableVoices[0];
-        logger.warn(`⚠️ Voice Selection Fallback: Invalid voice ID "${campaignVoiceId}", using first available voice - ${fallbackVoice.name} (${fallbackVoice.voiceId})`);
+        logger.warn(`⚠️ Voice Selection Fallback: Preferred voice not found, using first available - ${fallbackVoice.name} (${fallbackVoice.voiceId})`);
         return fallbackVoice.voiceId;
       }
       
+      // If the requested voice is not found and not a default request, try to use preferred voice
+      const preferredVoiceId = await getPreferredVoiceId();
+      const preferredVoice = availableVoices.find(voice => voice.voiceId === preferredVoiceId);
+      
+      if (preferredVoice) {
+        logger.warn(`⚠️ Voice Selection Fallback: Voice ID "${campaignVoiceId}" not found, using preferred voice - ${preferredVoice.name} (${preferredVoice.voiceId})`);
+        return preferredVoice.voiceId;
+      }
+      
+      // Last resort: use first available voice
       const fallbackVoice = availableVoices[0];
-      logger.warn(`⚠️ Voice Selection Fallback: Voice ID "${campaignVoiceId}" not found in available voices, using first available - ${fallbackVoice.name} (${fallbackVoice.voiceId})`);
+      logger.warn(`⚠️ Voice Selection Fallback: Voice ID "${campaignVoiceId}" not found, using first available - ${fallbackVoice.name} (${fallbackVoice.voiceId})`);
       return fallbackVoice.voiceId;
     } catch (error) {
       logger.error(`❌ Critical Voice Selection Error: ${getErrorMessage(error)}`);
@@ -725,7 +748,34 @@ export class EnhancedVoiceAIService {
         }
       );
 
-      // Save audio to a file and return the path
+      // Import cloudinaryService
+      const cloudinaryService = await import('../utils/cloudinaryService').then(m => m.default);
+      
+      // If Cloudinary is configured, upload directly and return URL
+      if (cloudinaryService.isCloudinaryConfigured()) {
+        try {
+          const cloudinaryUrl = await cloudinaryService.uploadAudioBuffer(audioBuffer);
+          logger.info(`Voice synthesis uploaded to Cloudinary: ${cloudinaryUrl}`);
+          
+          // Store a local copy as well for backup
+          const filename = `synthesis_${Date.now()}_${Math.floor(Math.random() * 1000)}.mp3`;
+          const outputPath = `/tmp/${filename}`;
+          require('fs').writeFileSync(outputPath, audioBuffer);
+          
+          // Return the Cloudinary URL if the service is expecting a URL
+          if (process.env.VOICE_SYNTHESIS_RETURN_URL === 'true') {
+            return cloudinaryUrl;
+          }
+          
+          // Otherwise return the local file path for compatibility with existing code
+          return outputPath;
+        } catch (cloudinaryError) {
+          logger.error(`Cloudinary upload failed, falling back to local file: ${cloudinaryError}`);
+          // Fall back to local file if Cloudinary fails
+        }
+      }
+      
+      // Save audio to a file and return the path (fallback method)
       const filename = `synthesis_${Date.now()}_${Math.floor(Math.random() * 1000)}.mp3`;
       const outputPath = `/tmp/${filename}`;
       
@@ -739,11 +789,17 @@ export class EnhancedVoiceAIService {
       // Try to generate a fallback audio if possible
       try {
         if (this.conversationalService) {
-          // Use a fallback voice ID (Rachel) and simple error message
-          const fallbackVoiceId = '21m00Tcm4TlvDq8ikWAM'; // Rachel - most reliable voice
+          // Use the preferred voice ID and simple error message
+          let fallbackVoiceId = 'pFZP5JQG7iQjIQuC4Bku'; // Default fallback voice ID
+          try {
+            fallbackVoiceId = await getPreferredVoiceId('pFZP5JQG7iQjIQuC4Bku'); // User's preferred voice
+          } catch (voiceError) {
+            logger.error(`Error getting preferred voice ID, using hardcoded fallback: ${getErrorMessage(voiceError)}`);
+          }
+          
           const fallbackText = 'I apologize, but there was a technical issue. Please try again later.';
           
-          logger.info('Attempting to generate fallback audio with voice Rachel');
+          logger.info(`Attempting to generate fallback audio with voice ID: ${fallbackVoiceId}`);
           
           const fallbackBuffer = await this.conversationalService.generateSpeech(
             fallbackText,
@@ -754,6 +810,33 @@ export class EnhancedVoiceAIService {
               style: 0.0
             }
           );
+          
+          // Import cloudinaryService
+          const cloudinaryService = await import('../utils/cloudinaryService').then(m => m.default);
+          
+          // If Cloudinary is configured, upload directly
+          if (cloudinaryService.isCloudinaryConfigured()) {
+            try {
+              const cloudinaryUrl = await cloudinaryService.uploadAudioBuffer(fallbackBuffer, 'fallbacks');
+              logger.info(`Fallback audio uploaded to Cloudinary: ${cloudinaryUrl}`);
+              
+              // Store a local copy as well for backup
+              const filename = `fallback_${Date.now()}_${Math.floor(Math.random() * 1000)}.mp3`;
+              const outputPath = `/tmp/${filename}`;
+              require('fs').writeFileSync(outputPath, fallbackBuffer);
+              
+              // Return the Cloudinary URL if the service is expecting a URL
+              if (process.env.VOICE_SYNTHESIS_RETURN_URL === 'true') {
+                return cloudinaryUrl;
+              }
+              
+              // Otherwise return the local file path for compatibility with existing code
+              return outputPath;
+            } catch (cloudinaryError) {
+              logger.error(`Cloudinary upload failed for fallback audio, using local file: ${cloudinaryError}`);
+              // Fall back to local file if Cloudinary fails
+            }
+          }
           
           const filename = `fallback_${Date.now()}_${Math.floor(Math.random() * 1000)}.mp3`;
           const outputPath = `/tmp/${filename}`;

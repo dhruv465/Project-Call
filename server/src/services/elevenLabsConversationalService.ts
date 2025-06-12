@@ -82,19 +82,19 @@ export class ElevenLabsConversationalService extends EventEmitter {
   /**
    * Create a new ElevenLabs Conversational AI Service
    */
-  constructor(apiKey: string, openAIApiKey: string) {
+  constructor(apiKey: string, openAIApiKey: string = '') {
     super();
     this.apiKey = apiKey;
-    this.openAIApiKey = openAIApiKey;
+    this.openAIApiKey = openAIApiKey; // Make OpenAI API key optional
     logger.info('ElevenLabs Conversational AI Service initialized');
   }
 
   /**
    * Update API keys for the service
    * @param apiKey ElevenLabs API key
-   * @param openAIApiKey OpenAI API key
+   * @param openAIApiKey OpenAI API key (optional)
    */
-  public updateApiKeys(apiKey: string, openAIApiKey: string): void {
+  public updateApiKeys(apiKey: string, openAIApiKey: string = ''): void {
     this.apiKey = apiKey;
     this.openAIApiKey = openAIApiKey;
     logger.info('ElevenLabs Conversational AI Service API keys updated');

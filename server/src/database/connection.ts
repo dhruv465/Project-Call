@@ -52,11 +52,9 @@ export async function connectToDatabase(options: DatabaseConnectionOptions = {})
     maxPoolSize: process.env.NODE_ENV === 'production' ? 5 : 10, // Reduce pool size in production
     minPoolSize: process.env.NODE_ENV === 'production' ? 1 : 2,  // Reduce min pool size
     bufferCommands: false, // Disable mongoose buffering to prevent race conditions
-    bufferMaxEntries: 0,   // Disable buffering entirely
     maxIdleTimeMS: 30000,  // Close connections after 30 seconds of inactivity
     // Memory optimization settings
     heartbeatFrequencyMS: 30000, // Reduce heartbeat frequency
-    serverSelectionRetryDelayMS: 1000, // Reduce retry delay
   };
   
   let lastError: Error | null = null;

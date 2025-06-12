@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import { logger } from '../index';
 import { checkDatabaseHealth, isDatabaseConnected } from '../database/connection';
 import { validateGoogleConfig, validateElevenLabsConfig } from '../config/validation';
-import { getMemoryUsage } from '../utils/memoryOptimization';
 
 export interface HealthCheck {
   service: string;
@@ -188,17 +187,25 @@ export async function performSystemHealthCheck(): Promise<SystemHealth> {
     checks.push(await checkTwilioHealth());
     
     // Memory health check
-    const memoryUsage = getMemoryUsage();
-    const memoryStatus = memoryUsage.heapUsed > 1400 ? 'critical' : 
-                        memoryUsage.heapUsed > 1200 ? 'warning' : 'healthy';
+    const memoryUsage = process.memoryUsage();
+    const heapUsedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
+    const rssMB = Math.round(memoryUsage.rss / 1024 / 1024);
+    const memoryStatus = heapUsedMB > 1400 ? 'critical' : 
+                        heapUsedMB > 1200 ? 'warning' : 'healthy';
     
     checks.push({
       service: 'memory',
       status: memoryStatus === 'critical' ? 'unhealthy' : 
               memoryStatus === 'warning' ? 'degraded' : 'healthy',
-      message: `Heap usage: ${memoryUsage.heapUsed}MB / RSS: ${memoryUsage.rss}MB`,
+      message: `Heap usage: ${heapUsedMB}MB / RSS: ${rssMB}MB`,
       timestamp: new Date(),
-      details: memoryUsage
+      details: {
+        heapUsed: heapUsedMB,
+        heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
+        rss: rssMB,
+        external: Math.round(memoryUsage.external / 1024 / 1024),
+        arrayBuffers: Math.round(memoryUsage.arrayBuffers / 1024 / 1024)
+      }
     });
     
     // Determine overall system status

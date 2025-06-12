@@ -5,6 +5,8 @@ import logger from './logger';
 import { getErrorMessage } from './logger';
 import fs from 'fs';
 import path from 'path';
+import { getPreferredVoiceId } from './voiceUtils';
+import cloudinaryService from './cloudinaryService';
 
 /**
  * Utility to synthesize voice using ElevenLabs with proper fallback handling
@@ -20,7 +22,7 @@ export async function synthesizeVoiceResponse(
     voiceId?: string;
     language?: string;
     elevenLabsApiKey?: string;
-    openAIApiKey?: string;
+    llmApiKey?: string; // Changed from openAIApiKey to be more generic
     campaignId?: string;
     fallbackBehavior?: 'silent' | 'empty-audio' | 'tts';
   }
@@ -29,7 +31,7 @@ export async function synthesizeVoiceResponse(
     voiceId: requestedVoiceId,
     language = 'en',
     elevenLabsApiKey,
-    openAIApiKey,
+    llmApiKey, // Use the more generic llmApiKey
     campaignId,
     fallbackBehavior = 'empty-audio'
   } = options;
@@ -54,7 +56,7 @@ export async function synthesizeVoiceResponse(
     }
 
     // Get configuration for ElevenLabs if not provided
-    if (!elevenLabsApiKey || !openAIApiKey) {
+    if (!elevenLabsApiKey || !llmApiKey) {
       const config = await Configuration.findOne();
       
       // Exit early if ElevenLabs is not configured
@@ -64,10 +66,12 @@ export async function synthesizeVoiceResponse(
         return false;
       }
       
-      // Find OpenAI provider
-      const openAIProvider = config.llmConfig.providers.find(p => p.name === 'openai');
-      if (!openAIProvider?.isEnabled || !openAIProvider?.apiKey) {
-        logger.debug('OpenAI provider not configured, using empty audio fallback');
+      // Find the default LLM provider
+      const defaultProviderName = config.llmConfig.defaultProvider;
+      const defaultProvider = config.llmConfig.providers.find(p => p.name === defaultProviderName);
+      
+      if (!defaultProvider?.isEnabled || !defaultProvider?.apiKey) {
+        logger.debug(`Default LLM provider ${defaultProviderName} not configured, using empty audio fallback`);
         twiml.play('');
         return false;
       }
@@ -92,7 +96,8 @@ export async function synthesizeVoiceResponse(
       
       try {
         // Resolve voice ID - try campaign-specific voice first if campaignId is provided
-        let finalVoiceId = config.voiceAIConfig?.conversationalAI?.defaultVoiceId || '21m00Tcm4TlvDq8ikWAM';
+        // Use the preferred voice ID from configuration instead of hardcoded value
+        let finalVoiceId = await getPreferredVoiceId();
         
         if (campaignId) {
           try {
@@ -122,13 +127,36 @@ export async function synthesizeVoiceResponse(
         if (fs.existsSync(speechResponse) && fs.statSync(speechResponse).size > 0) {
           logger.debug(`Successfully synthesized speech: ${speechResponse}`);
           
-          // Convert file to base64 for TwiML
-          const audioBuffer = fs.readFileSync(speechResponse);
-          const audioBase64 = audioBuffer.toString('base64');
-          const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
-          
-          twiml.play(audioDataUrl);
-          return true;
+          // Instead of embedding as base64, upload to Cloudinary
+          if (cloudinaryService.isCloudinaryConfigured()) {
+            try {
+              // Upload the file to Cloudinary
+              const cloudinaryUrl = await cloudinaryService.uploadAudioFile(speechResponse);
+              
+              // Use the Cloudinary URL in TwiML
+              twiml.play(cloudinaryUrl);
+              logger.info(`Using Cloudinary URL for audio: ${cloudinaryUrl}`);
+              return true;
+            } catch (cloudinaryError) {
+              logger.error(`Cloudinary upload failed, falling back to base64: ${getErrorMessage(cloudinaryError)}`);
+              // Fall back to base64 if Cloudinary fails
+              const audioBuffer = fs.readFileSync(speechResponse);
+              const audioBase64 = audioBuffer.toString('base64');
+              const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
+              
+              twiml.play(audioDataUrl);
+              return true;
+            }
+          } else {
+            // If Cloudinary is not configured, use base64 encoding
+            logger.warn('Cloudinary not configured, using base64 audio encoding (may exceed TwiML size limits)');
+            const audioBuffer = fs.readFileSync(speechResponse);
+            const audioBase64 = audioBuffer.toString('base64');
+            const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
+            
+            twiml.play(audioDataUrl);
+            return true;
+          }
         } else {
           throw new Error('Synthesized file is empty or does not exist');
         }
@@ -155,7 +183,7 @@ export async function synthesizeVoiceResponse(
       // Resolve voice ID
       const finalVoiceId = requestedVoiceId ? 
         await EnhancedVoiceAIService.getValidVoiceId(requestedVoiceId) : 
-        '21m00Tcm4TlvDq8ikWAM'; // Default to Rachel
+        await getPreferredVoiceId('pFZP5JQG7iQjIQuC4Bku'); // Use preferred voice from config
       
       // Synthesize speech
       const filePath = await voiceAI.synthesizeVoice({
@@ -166,28 +194,62 @@ export async function synthesizeVoiceResponse(
       
       // Check if the file exists and is not empty
       if (fs.existsSync(filePath) && fs.statSync(filePath).size > 0) {
-        // Convert file to base64 for TwiML
-        const audioBuffer = fs.readFileSync(filePath);
-        const audioBase64 = audioBuffer.toString('base64');
-        const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
-        
-        twiml.play(audioDataUrl);
-        return true;
+        // Instead of embedding as base64, upload to Cloudinary
+        if (cloudinaryService.isCloudinaryConfigured()) {
+          try {
+            // Upload the file to Cloudinary
+            const cloudinaryUrl = await cloudinaryService.uploadAudioFile(filePath);
+            
+            // Use the Cloudinary URL in TwiML
+            twiml.play(cloudinaryUrl);
+            logger.info(`Using Cloudinary URL for audio: ${cloudinaryUrl}`);
+            return true;
+          } catch (cloudinaryError) {
+            logger.error(`Cloudinary upload failed, falling back to base64: ${getErrorMessage(cloudinaryError)}`);
+            // Fall back to base64 if Cloudinary fails
+            const audioBuffer = fs.readFileSync(filePath);
+            const audioBase64 = audioBuffer.toString('base64');
+            const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
+            
+            twiml.play(audioDataUrl);
+            return true;
+          }
+        } else {
+          // If Cloudinary is not configured, use base64 encoding
+          logger.warn('Cloudinary not configured, using base64 audio encoding (may exceed TwiML size limits)');
+          const audioBuffer = fs.readFileSync(filePath);
+          const audioBase64 = audioBuffer.toString('base64');
+          const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
+          
+          twiml.play(audioDataUrl);
+          return true;
+        }
       } else {
         throw new Error('Synthesized file is empty or does not exist');
       }
     }
   } catch (error) {
-    logger.error(`Error in voice synthesis: ${getErrorMessage(error)}`);
+    logger.error(`Error in voice synthesis: ${getErrorMessage(error)}`, {
+      errorDetails: error instanceof Error ? error.stack : 'Unknown error',
+      params: {
+        textLength: text?.length || 0,
+        requestedVoiceId,
+        language,
+        campaignId: campaignId || 'none'
+      }
+    });
     
     // Use fallback behavior
     if (fallbackBehavior === 'silent') {
       // Don't add anything to the TwiML
+      logger.info('Using silent fallback for voice synthesis');
     } else if (fallbackBehavior === 'tts') {
       // Use Twilio's built-in TTS as a last resort
-      twiml.say({ voice: 'alice' }, text);
+      logger.info(`Using Twilio TTS fallback for voice synthesis: "${text.substring(0, 30)}${text.length > 30 ? '...' : ''}"`);
+      twiml.say({ voice: 'alice', language: language === 'hi' ? 'hi-IN' : 'en-US' }, text);
     } else {
       // Default to empty audio
+      logger.info('Using empty audio fallback for voice synthesis');
       twiml.play('');
     }
     

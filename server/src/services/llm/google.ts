@@ -107,10 +107,15 @@ export class GoogleClient implements ILLMProviderClient {
         throw new Error('Google/Gemini client not initialized - API key may be missing');
       }
       
-      const { model = this.defaultModel, prompt, options } = request;
+      const { model: requestModel, prompt, options } = request;
+      const resolvedModel = (requestModel && requestModel.trim() !== '') ? requestModel : this.defaultModel;
+
+      if (!resolvedModel || resolvedModel.trim() === '') {
+        throw new Error('Google/Gemini model name is missing or empty after attempting to resolve.');
+      }
       
       const googleModel = this.client.getGenerativeModel({
-        model,
+        model: resolvedModel,
         generationConfig: {
           temperature: options?.temperature,
           maxOutputTokens: options?.maxTokens,
@@ -136,7 +141,7 @@ export class GoogleClient implements ILLMProviderClient {
       
       return {
         content: responseText,
-        model: model,
+        model: resolvedModel, // Ensure resolvedModel is used here
         provider: this.provider,
         usage,
         rawResponse: response
@@ -152,10 +157,15 @@ export class GoogleClient implements ILLMProviderClient {
         throw new Error('Google/Gemini client not initialized - API key may be missing');
       }
       
-      const { model = this.defaultModel, messages, options } = request;
+      const { model: requestModel, messages, options } = request;
+      const resolvedModel = (requestModel && requestModel.trim() !== '') ? requestModel : this.defaultModel;
+
+      if (!resolvedModel || resolvedModel.trim() === '') {
+        throw new Error('Google/Gemini model name is missing or empty after attempting to resolve.');
+      }
       
       const googleModel = this.client.getGenerativeModel({
-        model,
+        model: resolvedModel,
         generationConfig: {
           temperature: options?.temperature,
           maxOutputTokens: options?.maxTokens,
@@ -192,7 +202,7 @@ export class GoogleClient implements ILLMProviderClient {
       
       return {
         content: responseText,
-        model: model,
+        model: resolvedModel, // Ensure resolvedModel is used here
         provider: this.provider,
         usage,
         rawResponse: response
@@ -211,10 +221,15 @@ export class GoogleClient implements ILLMProviderClient {
         throw new Error('Google/Gemini client not initialized - API key may be missing');
       }
       
-      const { model = this.defaultModel, messages, options } = request;
+      const { model: requestModel, messages, options } = request;
+      const resolvedModel = (requestModel && requestModel.trim() !== '') ? requestModel : this.defaultModel;
+
+      if (!resolvedModel || resolvedModel.trim() === '') {
+        throw new Error('Google/Gemini model name is missing or empty after attempting to resolve.');
+      }
       
       const googleModel = this.client.getGenerativeModel({
-        model,
+        model: resolvedModel,
         generationConfig: {
           temperature: options?.temperature,
           maxOutputTokens: options?.maxTokens,

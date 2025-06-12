@@ -37,6 +37,7 @@ import { initializeSpeechService } from './services/realSpeechService';
 import { validateStartupConfig } from './config/database-validation';
 import { connectToDatabase } from './database/connection';
 import { healthCheckHandler, readinessCheckHandler } from './health/service';
+import { initCloudinary } from './utils/cloudinaryService';
 
 // Load environment variables
 dotenv.config();
@@ -173,6 +174,10 @@ app.use(compression({
   level: 6,
   threshold: 1024
 }));
+
+// Serve static files for audio
+app.use('/audio', express.static(path.join(__dirname, '../public/audio')));
+app.use('/fallbacks', express.static(path.join(__dirname, '../public/fallbacks')));
 
 // Body parsing middleware with limits
 app.use(express.json({ 
@@ -508,7 +513,12 @@ const startServer = async () => {
     // Step 2: Connect to database
     logger.info('Establishing database connection...');
     await connectToDatabase();
-    logger.info('Database connection established');
+    
+    // Step 2.1: Wait for database to be ready
+    logger.info('Waiting for database to be ready...');
+    const { waitForDatabaseConnection } = await import('./database/connection');
+    await waitForDatabaseConnection();
+    logger.info('Database connection confirmed ready');
     
     // Step 2.5: Validate database-loaded configuration (optional)
     logger.info('Validating database configuration...');
@@ -531,6 +541,14 @@ const startServer = async () => {
     
     // Step 3: Initialize services with database-driven configuration
     logger.info('Initializing application services...');
+    
+    // Initialize Cloudinary service
+    initCloudinary();
+    
+    // Test Cloudinary connection
+    const cloudinaryService = await import('./utils/cloudinaryService').then(m => m.default);
+    const cloudinaryWorks = await cloudinaryService.testCloudinaryConnection();
+    logger.info(`Cloudinary connection test result: ${cloudinaryWorks ? 'SUCCESS' : 'FAILED'}`);
     
     // Initialize services that load configuration from database
     await initializeServices();
