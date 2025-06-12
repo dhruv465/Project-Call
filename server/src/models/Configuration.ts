@@ -23,6 +23,16 @@ export interface IConfiguration extends mongoose.Document {
     voiceClarity: number;
     lastVerified?: Date | null;
     status?: 'unverified' | 'verified' | 'failed';
+    lastError?: string;
+    unusualActivityDetected?: boolean;
+    quotaInfo?: {
+      tier: string;
+      charactersUsed: number;
+      characterLimit: number;
+      percentUsed: number;
+      resetDate?: Date;
+      status: string;
+    };
   };
   voiceAIConfig: {
     personalities: {
@@ -236,6 +246,33 @@ const ConfigurationSchema = new mongoose.Schema(
         type: String,
         enum: ['unverified', 'verified', 'failed'],
         default: 'unverified',
+      },
+      lastError: {
+        type: String,
+      },
+      unusualActivityDetected: {
+        type: Boolean,
+        default: false,
+      },
+      quotaInfo: {
+        tier: {
+          type: String,
+        },
+        charactersUsed: {
+          type: Number,
+        },
+        characterLimit: {
+          type: Number,
+        },
+        percentUsed: {
+          type: Number,
+        },
+        resetDate: {
+          type: Date,
+        },
+        status: {
+          type: String,
+        },
       },
     },
     voiceAIConfig: {

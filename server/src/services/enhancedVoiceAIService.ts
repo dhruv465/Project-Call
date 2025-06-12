@@ -619,22 +619,44 @@ export class EnhancedVoiceAIService {
     intent: string;
   }> {
     try {
-      const { userInput, conversationLog, callContext } = params;
+      const { userInput, conversationLog, leadId, campaignId, callContext } = params;
       
-      const conversationContext = conversationLog.map(log => log.message || log.text).join('\n');
+      // Convert conversation log to a clear format with roles and content
+      let formattedConversationLog = '';
+      if (conversationLog && conversationLog.length > 0) {
+        formattedConversationLog = conversationLog.map(log => {
+          const role = log.role || (log.isUser ? 'User' : 'Assistant');
+          const content = log.message || log.text || '';
+          return `${role}: ${content}`;
+        }).join('\n');
+      } else {
+        formattedConversationLog = "No prior conversation";
+      }
       
-      const prompt = `You are a professional AI assistant. 
+      const prompt = `You are a professional AI assistant handling a phone call.
       
-      User input: ${userInput}
-      Conversation context: ${conversationContext}
-      Current phase: ${callContext.currentPhase}
-      Language: ${callContext.language}
+      IMPORTANT: You MUST respond with a valid JSON object containing 'text' and 'intent' fields ONLY.
+      Example valid response: {"text": "I understand your concern. How can I help?", "intent": "acknowledge_concern"}
+
+      Current call details:
+      - Lead ID: ${leadId || 'Not provided'}
+      - Campaign ID: ${campaignId || 'Not provided'}
+      - Current phase: ${callContext.currentPhase || 'Unknown'}
+      - Language: ${callContext.language || 'English'}
+      - Compliance complete: ${callContext.complianceComplete ? 'Yes' : 'No'}
+      - Disclosure complete: ${callContext.disclosureComplete ? 'Yes' : 'No'}
+      
+      Recent conversation history:
+      ${formattedConversationLog}
+      
+      User's latest input: "${userInput}"
       
       Generate a helpful and appropriate response. Keep it concise and professional.
       
-      Return JSON with:
-      - text: response text
-      - intent: detected intent (greeting, question, concern, interest, etc.)`;
+      YOU MUST RETURN YOUR RESPONSE AS A VALID JSON OBJECT IN THIS EXACT FORMAT:
+      {"text": "your response text here", "intent": "intent_type_here"}
+      
+      Do not include any explanation, just the JSON object.`;
 
       // Check if LLM service is available
       if (!this.llmService) {
@@ -669,8 +691,32 @@ export class EnhancedVoiceAIService {
         }
       });
 
+      // Log the raw LLM response
+      logger.info(`Raw LLM response content: ${llmResponse.content}`);
+
       // Parse the JSON response
-      const result = JSON.parse(llmResponse.content);
+      let result;
+      try {
+        result = JSON.parse(llmResponse.content);
+      } catch (parseError) {
+        logger.error(`Error parsing LLM JSON response: ${getErrorMessage(parseError)}`);
+        logger.error(`Raw LLM response that failed to parse: ${llmResponse.content}`);
+        // It seems the LLM is sometimes returning a plain string.
+        // If the content looks like a direct answer rather than an error/malformed JSON,
+        // we can try to use it directly as the 'text' and set a generic 'intent'.
+        if (typeof llmResponse.content === 'string' && llmResponse.content.length > 0 && !llmResponse.content.startsWith('{')) {
+          logger.warn('LLM response was a plain string, using it as text and setting intent to "direct_response"');
+          return {
+            text: llmResponse.content,
+            intent: "direct_response"
+          };
+        }
+        // Otherwise, fall back to a generic error message.
+        return {
+          text: "I'm sorry, I encountered an issue processing the response. Could you please try again?",
+          intent: "error_processing_llm"
+        };
+      }
       
       return {
         text: result.text,
@@ -875,6 +921,95 @@ export class EnhancedVoiceAIService {
     } catch (error) {
       logger.error('Health check failed:', error);
       return false;
+    }
+  }
+
+  /**
+   * Synthesize adaptive voice with automatic Cloudinary upload for TwiML
+   * This is a higher-level wrapper around synthesizeAdaptiveVoice that handles
+   * the audio output for TwiML responses properly, ensuring large files are uploaded to Cloudinary
+   */
+  async synthesizeAdaptiveVoiceForTwiML(params: {
+    text: string;
+    personalityId: string;
+    language?: string;
+    twiml?: any;
+    fallbackText?: string;
+  }): Promise<{
+    success: boolean;
+    method?: 'cloudinary' | 'base64' | 'tts';
+    size?: number;
+  }> {
+    try {
+      const { text, personalityId, language = 'en', twiml, fallbackText = text } = params;
+      
+      // Synthesize the voice
+      const speechResponse = await this.synthesizeAdaptiveVoice({
+        text, 
+        personalityId,
+        language
+      });
+      
+      // If no audio content, return failure
+      if (!speechResponse || !speechResponse.audioContent) {
+        logger.warn('No audio content returned from synthesizeAdaptiveVoice');
+        
+        // If twiml is provided, add fallback
+        if (twiml) {
+          twiml.say({ 
+            voice: 'alice', 
+            language: language === 'hi' ? 'hi-IN' : 'en-US' 
+          }, fallbackText);
+        }
+        
+        return { success: false };
+      }
+      
+      // Get utility functions
+      const fs = require('fs');
+      const path = require('path');
+      const os = require('os');
+      const cloudinaryService = require('../utils/cloudinaryService').default;
+      const { processAudioForTwiML } = require('../utils/voiceSynthesis');
+      
+      // Process the audio for TwiML
+      const audioResult = await processAudioForTwiML(
+        speechResponse.audioContent,
+        fallbackText,
+        language
+      );
+      
+      // If twiml is provided, add the audio
+      if (twiml) {
+        if (audioResult.method === 'tts') {
+          // Use TTS fallback
+          twiml.say({ 
+            voice: 'alice', 
+            language: language === 'hi' ? 'hi-IN' : 'en-US' 
+          }, fallbackText);
+        } else {
+          // Use Cloudinary URL or small base64 data
+          twiml.play(audioResult.url);
+        }
+      }
+      
+      return { 
+        success: true,
+        method: audioResult.method,
+        size: audioResult.size
+      };
+    } catch (error) {
+      logger.error(`Error in synthesizeAdaptiveVoiceForTwiML: ${getErrorMessage(error)}`);
+      
+      // If twiml is provided, add fallback
+      if (params.twiml) {
+        params.twiml.say({ 
+          voice: 'alice', 
+          language: params.language === 'hi' ? 'hi-IN' : 'en-US' 
+        }, params.fallbackText || params.text);
+      }
+      
+      return { success: false };
     }
   }
 }

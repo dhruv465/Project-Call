@@ -8,7 +8,8 @@ import {
   testTwilioConnection,
   testElevenLabsConnection,
   testVoiceSynthesis,
-  deleteApiKey
+  deleteApiKey,
+  verifyElevenLabsApiKey
 } from '../controllers/configurationController';
 import { makeTestCall } from '../controllers/testCallController';
 import { testLLMChat, testLLMConnection, getAllLLMModels, getProviderLLMModels, getDynamicProviderModels } from '../controllers/llmControllers';
@@ -46,5 +47,6 @@ router.post('/test-twilio', testTwilioConnection);
 router.post('/test-elevenlabs', testElevenLabsConnection);
 router.post('/test-voice', testVoiceSynthesis);
 router.post('/test-call', makeTestCall);
+router.post('/verify/elevenlabs', verifyElevenLabsApiKey);
 
 export default router;

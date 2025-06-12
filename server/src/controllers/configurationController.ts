@@ -11,6 +11,9 @@ import {
   logValidationError
 } from '../utils/configValidation';
 import {
+  verifyAndUpdateElevenLabsApiStatus
+} from '../utils/elevenLabsVerification';
+import {
   handleApiKeyUpdate,
   isMaskedApiKey,
   createMaskedApiKey,
@@ -467,6 +470,26 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
         if (apiKeyUpdate.updated) {
           logger.info('ElevenLabs API key changed, resetting status to unverified');
           updatedConfig.elevenLabsConfig.status = 'unverified';
+          
+          // Verify the new API key immediately to catch potential issues
+          try {
+            const verificationResult = await verifyAndUpdateElevenLabsApiStatus(apiKeyUpdate.key);
+            
+            // Only update if verification completed (don't override status set above)
+            if (verificationResult.success) {
+              logger.info(`ElevenLabs API key verified successfully: ${verificationResult.message}`);
+            } else {
+              logger.warn(`ElevenLabs API key verification failed: ${verificationResult.error}`);
+              
+              // Only show warning in response if there's an unusual activity error
+              if (verificationResult.isUnusualActivity) {
+                // req.flash is not available, use a different method to display warnings
+                logger.warn(`ElevenLabs Account Warning: ${verificationResult.message}`);
+              }
+            }
+          } catch (verifyError) {
+            logger.error(`Error verifying ElevenLabs API key: ${getErrorMessage(verifyError)}`);
+          }
         }
       }
       
@@ -1688,6 +1711,52 @@ export const deleteApiKey = async (req: Request, res: Response) => {
     return res.status(500).json({
       message: 'Server error',
       error: handleError(error)
+    });
+  }
+};
+
+// @desc    Verify ElevenLabs API Key
+// @route   POST /api/configuration/verify/elevenlabs
+// @access  Private
+export const verifyElevenLabsApiKey = async (req: Request, res: Response) => {
+  try {
+    // Get the configuration
+    const config = await Configuration.findOne();
+    if (!config) {
+      return res.status(404).json({ message: 'Configuration not found' });
+    }
+
+    // Check if API key exists
+    if (!config.elevenLabsConfig?.apiKey) {
+      return res.status(400).json({ 
+        message: 'ElevenLabs API key is not set',
+        status: 'failed'
+      });
+    }
+
+    // Verify the API key
+    logger.info('Verifying ElevenLabs API key...');
+    const verificationResult = await verifyAndUpdateElevenLabsApiStatus(config.elevenLabsConfig.apiKey);
+
+    // Get the updated configuration after verification
+    const updatedConfig = await Configuration.findOne();
+    
+    // Return the verification result with the latest configuration status
+    return res.status(200).json({
+      success: verificationResult.success,
+      status: verificationResult.status,
+      message: verificationResult.message,
+      subscription: verificationResult.subscription,
+      isUnusualActivity: verificationResult.isUnusualActivity || updatedConfig?.elevenLabsConfig?.unusualActivityDetected || false,
+      quotaInfo: updatedConfig?.elevenLabsConfig?.quotaInfo || null,
+      lastVerified: updatedConfig?.elevenLabsConfig?.lastVerified || new Date(),
+      currentStatus: updatedConfig?.elevenLabsConfig?.status || 'unknown'
+    });
+  } catch (error) {
+    logger.error(`Error verifying ElevenLabs API key: ${getErrorMessage(error)}`);
+    return res.status(500).json({
+      message: 'Error verifying ElevenLabs API key',
+      error: getErrorMessage(error)
     });
   }
 };

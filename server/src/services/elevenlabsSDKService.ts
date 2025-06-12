@@ -478,7 +478,8 @@ export class ElevenLabsSDKService extends EventEmitter {
           voiceId: personalityId,
           language,
           duration: Math.ceil(text.length / 15), // Rough estimate
-          synthesisService: 'elevenlabs-sdk'
+          synthesisService: 'elevenlabs-sdk',
+          size: audioBuffer.length // Include size for TwiML decisions
         }
       };
     } catch (error) {
@@ -490,6 +491,58 @@ export class ElevenLabsSDKService extends EventEmitter {
           language: params.language
         }
       });
+      
+      // Check if this is the "unusual activity" error from ElevenLabs
+      // This can be in the error message, or in the error.response.data.detail.status field
+      const errorMsg = error.message || '';
+      const responseData = error.response?.data || {};
+      const detailStatus = responseData.detail?.status || '';
+      
+      const isUnusualActivity = 
+        errorMsg.includes('detected_unusual_activity') || 
+        errorMsg.includes('unusual activity') ||
+        detailStatus === 'detected_unusual_activity';
+      
+      if (isUnusualActivity) {
+        logger.error('ElevenLabs API unusual activity detected. This is likely due to quota or free tier limitations.', {
+          errorMessage: errorMsg,
+          statusCode: error.response?.status,
+          detailStatus: detailStatus
+        });
+        
+        // Try to update configuration status in database
+        try {
+          const Configuration = require('../models/Configuration').default;
+          await Configuration.findOneAndUpdate(
+            {}, 
+            { 
+              'elevenLabsConfig.status': 'failed',
+              'elevenLabsConfig.lastVerified': new Date(),
+              'elevenLabsConfig.lastError': 'Unusual activity detected. Free tier usage disabled.',
+              'elevenLabsConfig.unusualActivityDetected': true,
+              'elevenLabsConfig.quotaInfo': {
+                tier: 'free',
+                status: 'restricted'
+              }
+            }
+          );
+          
+          // Import the verification utility
+          const { verifyAndUpdateElevenLabsApiStatus } = require('../utils/elevenLabsVerification');
+          
+          // Trigger a verification to update quota info
+          await verifyAndUpdateElevenLabsApiStatus(this.apiKey).catch(e => {
+            logger.error(`Failed to verify ElevenLabs API after unusual activity: ${getErrorMessage(e)}`);
+          });
+          
+          logger.info('Updated configuration with ElevenLabs unusual activity status');
+        } catch (dbError) {
+          logger.error(`Failed to update ElevenLabs status in database: ${getErrorMessage(dbError)}`);
+        }
+        
+        throw new Error('ElevenLabs API reported unusual activity detected. Please check your account status and limits or upgrade to a paid plan.');
+      }
+      
       throw new Error(`Voice synthesis failed: ${getErrorMessage(error)}`);
     }
   }

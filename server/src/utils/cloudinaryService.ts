@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import logger from './logger';
+import { getErrorMessage } from './logger';
 
 // DON'T initialize here - will be initialized in initCloudinary()
 // This prevents issues with environment variables not being loaded yet
@@ -99,11 +100,13 @@ export async function uploadAudioBuffer(
  * Upload audio file to Cloudinary
  * @param filePath Path to audio file
  * @param folder Optional folder name in Cloudinary
+ * @param cleanupFile Whether to delete the source file after upload (default: false)
  * @returns Promise resolving to the Cloudinary URL
  */
 export async function uploadAudioFile(
   filePath: string, 
-  folder: string = 'voice-recordings'
+  folder: string = 'voice-recordings',
+  cleanupFile: boolean = false
 ): Promise<string> {
   try {
     // Check if file exists
@@ -115,7 +118,19 @@ export async function uploadAudioFile(
     const audioBuffer = fs.readFileSync(filePath);
     
     // Use the buffer upload method
-    return await uploadAudioBuffer(audioBuffer, folder);
+    const cloudinaryUrl = await uploadAudioBuffer(audioBuffer, folder);
+    
+    // Clean up source file if requested
+    if (cleanupFile) {
+      try {
+        fs.unlinkSync(filePath);
+        logger.debug(`Cleaned up temporary file ${filePath} after Cloudinary upload`);
+      } catch (cleanupError) {
+        logger.warn(`Failed to clean up temp file ${filePath}: ${getErrorMessage(cleanupError)}`);
+      }
+    }
+    
+    return cloudinaryUrl;
   } catch (error) {
     logger.error(`Error uploading audio file to Cloudinary: ${error}`);
     throw error;

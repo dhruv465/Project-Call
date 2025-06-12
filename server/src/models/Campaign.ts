@@ -17,6 +17,7 @@ export interface ICampaign extends mongoose.Document {
       };
     }[];
   };
+  initialPrompt?: string; // Added initial prompt property
   scriptClosing?: string;
   leadSources: string[];
   status: string;
@@ -96,6 +97,11 @@ const CampaignSchema = new mongoose.Schema(
           },
         },
       ],
+    },
+    initialPrompt: {
+      type: String,
+      required: false,
+      default: '',
     },
     scriptClosing: {
       type: String,
