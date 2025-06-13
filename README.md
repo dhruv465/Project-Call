@@ -2,6 +2,48 @@
 
 A comprehensive intelligent communication platform with AI-powered outreach capabilities, integrated with a custom CRM dashboard that manages leads, executes outbound calls, handles conversations intelligently, and provides detailed performance analytics.
 
+## Getting Started
+
+### Setup
+
+1. Clone the repository
+   ```bash
+   git clone https://github.com/dhruv465/Project-Call.git
+   cd Project-Call
+   ```
+
+2. Run the setup script to initialize your environment
+   ```bash
+   ./setup-env.sh
+   ```
+   This script will:
+   - Create a `.env` file from the template
+   - Install git hooks to prevent accidental commits of sensitive data
+   - Run npm install if needed
+
+3. Update your `.env` file with actual credentials
+   ```bash
+   # Open the .env file and replace placeholder values
+   nano server/.env
+   ```
+
+4. Start the server and client
+   ```bash
+   # Start the server
+   cd server
+   npm run dev
+   
+   # In a new terminal, start the client
+   cd client
+   npm run dev
+   ```
+
+### Environment Variables
+
+The project requires several environment variables to be set in the `server/.env` file. The `setup-env.sh` script creates this file from the `.env.example` template, but you need to update it with your actual credentials.
+
+Important security note: **Never commit your `.env` file to the repository.** It contains sensitive information like API keys and database credentials.
+
 ## Features
 
 ### Lead Management
