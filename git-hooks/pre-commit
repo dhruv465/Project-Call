@@ -1,0 +1,26 @@
+#!/bin/sh
+
+# Pre-commit hook to check for sensitive files like .env
+# This prevents accidental commits of files that might contain credentials
+
+echo "Running pre-commit hook..."
+
+# Check for .env files
+if git diff --cached --name-only | grep -E '\.env$|\.env\.|config\.js$|secrets\.'; then
+  echo "ERROR: Attempt to commit a file that might contain sensitive information."
+  echo "The following files were detected:"
+  git diff --cached --name-only | grep -E '\.env$|\.env\.|config\.js$|secrets\.'
+  echo "If you're sure you want to commit these files, use git commit --no-verify"
+  exit 1
+fi
+
+# Additional checks for specific patterns in files
+if git diff --cached -U0 | grep -i "key\|password\|secret\|token\|credential" | grep -v "REDACTED"; then
+  echo "WARNING: Potential sensitive information detected in the changes:"
+  git diff --cached -U0 | grep -i "key\|password\|secret\|token\|credential" | grep -v "REDACTED"
+  echo "Please review these changes to ensure no secrets are being committed."
+  echo "If everything is okay, use git commit --no-verify to bypass this check."
+  exit 1
+fi
+
+exit 0
