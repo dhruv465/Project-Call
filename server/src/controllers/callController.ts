@@ -256,7 +256,36 @@ export const getCallRecording = async (req: Request, res: Response): Promise<Res
       try {
         // Use axios to proxy the request to Twilio
         const axios = require('axios');
-        const twilioRecordingUrl = (call as any).recordingUrl;
+        
+        // Get the original Twilio URL from metrics or construct it
+        let twilioRecordingUrl = (call as any).metrics?.twilioRecordingUrl;
+        
+        // If we don't have the Twilio URL in metrics, try to get it from recordingUrl if it's a Twilio URL
+        if (!twilioRecordingUrl && (call as any).recordingUrl?.includes('api.twilio.com')) {
+          twilioRecordingUrl = (call as any).recordingUrl;
+        }
+        
+        // If we still don't have a Twilio URL, we need to fetch recordings from Twilio
+        if (!twilioRecordingUrl) {
+          const client = twilio(
+            configuration.twilioConfig.accountSid,
+            configuration.twilioConfig.authToken
+          );
+          
+          const recordings = await client.recordings.list({ callSid: call.twilioSid });
+          if (recordings.length > 0) {
+            twilioRecordingUrl = recordings[0].uri.startsWith('http') 
+              ? recordings[0].uri 
+              : `https://api.twilio.com${recordings[0].uri.replace('.json', '')}`;
+            
+            // Update the call with the Twilio URL for future use
+            await Call.findByIdAndUpdate(call._id, {
+              'metrics.twilioRecordingUrl': twilioRecordingUrl
+            });
+          } else {
+            return res.status(404).json({ message: 'Recording not found in Twilio' });
+          }
+        }
         
         // Create authentication header for Twilio
         const auth = {
@@ -491,6 +520,112 @@ export const exportCalls = async (req: Request & { user?: any }, res: Response):
     }
   } catch (error) {
     logger.error('Error in exportCalls:', error);
+    return res.status(500).json({
+      message: 'Server error',
+      error: (error as Error).message
+    });
+  }
+};
+
+// @desc    Sync all Twilio recordings
+// @route   POST /api/calls/sync-recordings
+// @access  Private (Admin only)
+export const syncTwilioRecordings = async (req: Request & { user?: any }, res: Response): Promise<Response> => {
+  try {
+    // Temporarily allow all authenticated users (remove this check later for production)
+    if (!req.user) {
+      return res.status(403).json({ message: 'Authentication required' });
+    }
+
+    // Get days parameter from request (default to 30)
+    const days = req.body.days ? parseInt(req.body.days, 10) : 30;
+    
+    // Import the service
+    const { twilioRecordingsService } = await import('../services/twilioRecordingsService');
+    
+    // Sync recordings
+    const result = await twilioRecordingsService.syncAllRecordings(days);
+    
+    return res.status(200).json({
+      success: true,
+      message: `Successfully synced ${result.matchedRecordings} recordings out of ${result.totalRecordings} total recordings`,
+      data: result
+    });
+  } catch (error) {
+    logger.error('Error in syncTwilioRecordings:', error);
+    return res.status(500).json({
+      message: 'Server error',
+      error: (error as Error).message
+    });
+  }
+};
+
+// @desc    Get call recording details from Twilio
+// @route   GET /api/calls/:id/recording-details
+// @access  Private
+export const getCallRecordingDetails = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const call = await Call.findById(req.params.id);
+
+    if (!call) {
+      return res.status(404).json({ message: 'Call not found' });
+    }
+
+    if (!call.twilioSid) {
+      return res.status(404).json({ message: 'No Twilio SID found for this call' });
+    }
+
+    // Get Twilio configuration
+    const configuration = await Configuration.findOne();
+    if (!configuration || !configuration.twilioConfig || !configuration.twilioConfig.accountSid || !configuration.twilioConfig.authToken) {
+      return res.status(500).json({ message: 'Twilio configuration not found' });
+    }
+
+    // Initialize Twilio client
+    const client = twilio(
+      configuration.twilioConfig.accountSid,
+      configuration.twilioConfig.authToken
+    );
+
+    // Get recordings for this call
+    const recordings = await client.recordings.list({ callSid: call.twilioSid });
+
+    if (recordings.length === 0) {
+      return res.status(404).json({ message: 'No recordings found for this call' });
+    }
+
+    // Get the most recent recording
+    const latestRecording = recordings[0];
+    
+    // Check if we need to update the recording URL in our database
+    if (!call.recordingUrl) {
+      const proxyUrl = `/api/calls/${call._id}/recording?stream=true`;
+      const twilioUrl = latestRecording.uri.startsWith('http') 
+        ? latestRecording.uri 
+        : `https://api.twilio.com${latestRecording.uri.replace('.json', '')}`;
+      
+      await Call.findByIdAndUpdate(call._id, {
+        recordingUrl: proxyUrl,
+        'metrics.callRecordingUrl': proxyUrl,
+        'metrics.twilioRecordingUrl': twilioUrl
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      recording: {
+        sid: latestRecording.sid,
+        duration: latestRecording.duration,
+        channels: latestRecording.channels,
+        status: latestRecording.status,
+        source: latestRecording.source,
+        dateCreated: latestRecording.dateCreated,
+        uri: latestRecording.uri,
+        url: `/api/calls/${call._id}/recording?stream=true`
+      }
+    });
+  } catch (error) {
+    logger.error('Error in getCallRecordingDetails:', error);
     return res.status(500).json({
       message: 'Server error',
       error: (error as Error).message

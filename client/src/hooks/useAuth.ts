@@ -67,10 +67,10 @@ export const useAuth = () => {
     }
   };
 
-  const register = async (name: string, email: string, password: string) => {
+  const register = async (name: string, email: string, password: string, role?: string) => {
     setIsLoading(true);
     try {
-      const response = await api.post('/users/register', { name, email, password });
+      const response = await api.post('/users/register', { name, email, password, role });
       const userData = response.data;
 
       // Store user in local storage

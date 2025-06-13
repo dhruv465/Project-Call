@@ -22,6 +22,7 @@ import {
   AlertCircle,
   ChevronDown,
   Info,
+  RotateCcw
 } from 'lucide-react';
 import { callsApi } from '@/services/callsApi';
 import { useToast } from '@/hooks/useToast';
@@ -36,6 +37,7 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from '@/components/ui/resizable';
+import AudioPlayer from '@/components/common/AudioPlayer';
 
 interface Call {
   _id: string;
@@ -57,6 +59,7 @@ interface Call {
   outcome?: string;
   notes?: string;
   recordingUrl?: string;
+  expandedRecording?: boolean;
 }
 
 const Calls = () => {
@@ -66,8 +69,9 @@ const Calls = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [currentPlayingId, setCurrentPlayingId] = useState<string | null>(null);
-  const [audioPlayer, setAudioPlayer] = useState<HTMLAudioElement | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isSyncingRecordings, setIsSyncingRecordings] = useState(false);
+  const [isRefreshingRecording, setIsRefreshingRecording] = useState<string | null>(null);
 
   useEffect(() => {
     // Fetch calls from API
@@ -186,18 +190,6 @@ const Calls = () => {
   // Function to play or pause a call recording
   const handlePlayRecording = async (callId: string, recordingUrl?: string) => {
     try {
-      // If already playing this recording, pause it
-      if (currentPlayingId === callId && audioPlayer) {
-        audioPlayer.pause();
-        setCurrentPlayingId(null);
-        return;
-      }
-      
-      // If another recording is playing, stop it
-      if (audioPlayer) {
-        audioPlayer.pause();
-      }
-
       // If no recording URL is provided, fetch it from the API
       let audioUrl = recordingUrl;
       if (!audioUrl) {
@@ -207,25 +199,39 @@ const Calls = () => {
 
       if (!audioUrl) {
         console.error('No recording URL available');
+        toast({
+          title: "Playback Error",
+          description: "No recording available for this call.",
+          variant: "destructive"
+        });
         return;
       }
 
       // If the URL doesn't start with http, it's a relative URL to our proxy endpoint
-      // This ensures we use the authenticated proxy for Twilio URLs
       if (!audioUrl.startsWith('http')) {
         // Add the base URL for our API
         audioUrl = `${import.meta.env.VITE_API_BASE_URL || ''}${audioUrl}`;
       }
 
-      // Create and play the audio
-      const audio = new Audio(audioUrl);
-      audio.addEventListener('ended', () => {
-        setCurrentPlayingId(null);
-      });
+      // Toggle expanded state for the call
+      setCalls(prevCalls => 
+        prevCalls.map(call => 
+          call._id === callId 
+            ? { 
+                ...call, 
+                expandedRecording: !call.expandedRecording,
+              } 
+            : call
+        )
+      );
       
-      audio.play();
-      setAudioPlayer(audio);
-      setCurrentPlayingId(callId);
+      // Toggle play/pause if already expanded
+      if (currentPlayingId === callId) {
+        setCurrentPlayingId(null);
+      } else {
+        // Stop any other playing audio by setting the current ID
+        setCurrentPlayingId(callId);
+      }
     } catch (error) {
       console.error('Error playing recording:', error);
       toast({
@@ -235,7 +241,84 @@ const Calls = () => {
       });
     }
   };
+  
+  // Function for admins to sync all Twilio recordings
+  const handleSyncRecordings = async () => {
+    try {
+      setIsSyncingRecordings(true);
+      const response = await callsApi.syncTwilioRecordings(30); // Sync last 30 days
+      
+      if (response.success) {
+        toast({
+          title: "Recordings Synced",
+          description: `Successfully synced ${response.data.matchedRecordings} recordings out of ${response.data.totalRecordings} total recordings.`,
+        });
+        
+        // Refresh the call list
+        const callsResponse = await callsApi.getCallHistory({
+          status: statusFilter !== 'all' ? statusFilter : undefined
+        });
+        setCalls(callsResponse.calls || []);
+      } else {
+        toast({
+          title: "Sync Failed",
+          description: "Failed to sync recordings from Twilio.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error syncing recordings:', error);
+      toast({
+        title: "Sync Error",
+        description: "There was a problem syncing recordings from Twilio.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSyncingRecordings(false);
+    }
+  };
 
+  // Function to refresh recording details for a specific call
+  const handleRefreshRecording = async (callId: string) => {
+    try {
+      setIsRefreshingRecording(callId);
+      const response = await callsApi.getCallRecordingDetails(callId);
+      
+      if (response.success && response.recording) {
+        // Update the call with the new recording URL
+        setCalls(calls.map(call => {
+          if (call._id === callId) {
+            return { 
+              ...call, 
+              recordingUrl: response.recording.url,
+            };
+          }
+          return call;
+        }));
+        
+        toast({
+          title: "Recording Updated",
+          description: "Call recording details have been refreshed.",
+        });
+      } else {
+        toast({
+          title: "No Recording Found",
+          description: "No recording was found for this call.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error refreshing recording:', error);
+      toast({
+        title: "Refresh Error",
+        description: "There was a problem refreshing the recording details.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsRefreshingRecording(null);
+    }
+  };
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -258,6 +341,15 @@ const Calls = () => {
           </p>
         </div>
         <div className="flex flex-row gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSyncRecordings}
+            disabled={isSyncingRecordings}
+          >
+            <Volume2 className="h-4 w-4 mr-2" />
+            {isSyncingRecordings ? 'Syncing...' : 'Sync Recordings'}
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -467,103 +559,160 @@ const Calls = () => {
         <CardContent className="p-3 sm:p-6">
           <div className="space-y-4">
             {filteredCalls.map((call: Call) => (
-              <div key={call._id}>
-                {/* Desktop Layout - Hidden on mobile */}
-                <div className="hidden lg:block">
-                  <ResizablePanelGroup
-                    direction="horizontal"
-                    className="border rounded-xl hover:bg-muted/50 transition-colors"
-                  >
-                    <ResizablePanel defaultSize={70}>
-                      <div className="flex items-center space-x-4 p-4 h-full">
-                        <div className="flex items-center space-x-2">
-                          {getStatusIcon(call.status)}
-                          <div>
-                            <p className="font-medium">{call.leadId?.name || 'Unknown Lead'}</p>
-                            <p className="text-sm text-muted-foreground">{call.phoneNumber}</p>
-                          </div>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">{call.campaignId?.name || 'Unknown Campaign'}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {call.startTime ? new Date(call.startTime).toLocaleDateString() : 'Unknown'} at {call.startTime ? new Date(call.startTime).toLocaleTimeString() : 'Unknown'}
-                          </p>
-                        </div>
-                      </div>
-                    </ResizablePanel>
-                    
-                    <ResizableHandle withHandle />
-                    
-                    <ResizablePanel defaultSize={30}>
-                      <div className="flex items-center justify-end space-x-4 p-4 h-full">
-                        <div className="text-right">
-                          <p className="text-sm font-medium">{formatDuration(call.duration)}</p>
-                          {getOutcomeBadge(call.outcome)}
-                        </div>
-                        {call.recordingUrl && (
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handlePlayRecording(call._id, call.recordingUrl)}
-                          >
-                            <Volume2 className="h-4 w-4 mr-1" />
-                            {currentPlayingId === call._id ? 'Pause' : 'Play'}
-                          </Button>
-                        )}
-                      </div>
-                    </ResizablePanel>
-                  </ResizablePanelGroup>
-                </div>
-
-                {/* Mobile Layout - Hidden on desktop */}
-                <div className="lg:hidden">
-                  <Card className="hover:bg-muted/50 transition-colors">
-                    <CardContent className="p-4">
-                      <div className="space-y-3">
-                        {/* Header row */}
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center space-x-2 min-w-0 flex-1">
-                            {getStatusIcon(call.status)}
-                            <div className="min-w-0 flex-1">
-                              <p className="font-medium truncate">{call.leadId?.name || 'Unknown Lead'}</p>
-                              <p className="text-sm text-muted-foreground truncate">{call.phoneNumber}</p>
+                <div key={call._id}>
+                  {/* Desktop Layout - Hidden on mobile */}
+                  <div className="hidden lg:block">
+                    <div className="flex flex-col">
+                      <ResizablePanelGroup
+                        direction="horizontal"
+                        className="border rounded-xl hover:bg-muted/50 transition-colors"
+                      >
+                        <ResizablePanel defaultSize={70}>
+                          <div className="flex items-center space-x-4 p-4 h-full">
+                            <div className="flex items-center space-x-2">
+                              {getStatusIcon(call.status)}
+                              <div>
+                                <p className="font-medium">{call.leadId?.name || 'Unknown Lead'}</p>
+                                <p className="text-sm text-muted-foreground">{call.phoneNumber}</p>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">{call.campaignId?.name || 'Unknown Campaign'}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {call.startTime ? new Date(call.startTime).toLocaleDateString() : 'Unknown'} at {call.startTime ? new Date(call.startTime).toLocaleTimeString() : 'Unknown'}
+                              </p>
                             </div>
                           </div>
-                          <div className="flex-shrink-0 ml-2">
-                            {getOutcomeBadge(call.outcome)}
-                          </div>
-                        </div>
-
-                        {/* Campaign and date row */}
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium truncate">{call.campaignId?.name || 'Unknown Campaign'}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {call.startTime ? new Date(call.startTime).toLocaleDateString() : 'Unknown'} at {call.startTime ? new Date(call.startTime).toLocaleTimeString() : 'Unknown'}
-                          </p>
-                        </div>
-
-                        {/* Duration and actions row */}
-                        <div className="flex items-center justify-between pt-2 border-t">
-                          <div className="text-sm font-medium">
-                            Duration: {formatDuration(call.duration)}
-                          </div>
-                          {call.recordingUrl && (
+                        </ResizablePanel>
+                        
+                        <ResizableHandle withHandle />
+                        
+                        <ResizablePanel defaultSize={30}>
+                          <div className="flex items-center justify-end space-x-4 p-4 h-full">
+                            <div className="text-right">
+                              <p className="text-sm font-medium">{formatDuration(call.duration)}</p>
+                              {getOutcomeBadge(call.outcome)}
+                            </div>
+                            {call.recordingUrl && (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handlePlayRecording(call._id, call.recordingUrl)}
+                                className="mr-1"
+                              >
+                                <Volume2 className="h-4 w-4 mr-1" />
+                                {currentPlayingId === call._id ? 'Pause' : 'Play'}
+                              </Button>
+                            )}
                             <Button 
-                              variant="outline" 
+                              variant="ghost" 
                               size="sm"
-                              onClick={() => handlePlayRecording(call._id, call.recordingUrl)}
-                              className="flex-shrink-0"
+                              onClick={() => handleRefreshRecording(call._id)}
+                              disabled={isRefreshingRecording === call._id}
+                              title="Refresh recording"
                             >
-                              <Volume2 className="h-4 w-4 mr-1" />
-                              {currentPlayingId === call._id ? 'Pause' : 'Play'}
+                              <RotateCcw className="h-4 w-4" />
+                              {isRefreshingRecording === call._id && <span className="ml-1">Refreshing...</span>}
                             </Button>
+                          </div>
+                        </ResizablePanel>
+                      </ResizablePanelGroup>
+                      
+                      {/* Audio Player with Waveform - Desktop */}
+                      {call.expandedRecording && call.recordingUrl && (
+                        <AudioPlayer
+                          audioUrl={call.recordingUrl.startsWith('http') 
+                            ? call.recordingUrl 
+                            : `${import.meta.env.VITE_API_BASE_URL || ''}${call.recordingUrl}`}
+                          isPlaying={currentPlayingId === call._id}
+                          onPlayPause={(playing) => {
+                            setCurrentPlayingId(playing ? call._id : null);
+                          }}
+                          callId={call._id}
+                          leadName={call.leadId?.name}
+                          campaignName={call.campaignId?.name}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Mobile Layout - Hidden on desktop */}
+                  <div className="lg:hidden">
+                    <Card className="hover:bg-muted/50 transition-colors">
+                      <CardContent className="p-4">
+                        <div className="space-y-3">
+                          {/* Header row */}
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center space-x-2 min-w-0 flex-1">
+                              {getStatusIcon(call.status)}
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium truncate">{call.leadId?.name || 'Unknown Lead'}</p>
+                                <p className="text-sm text-muted-foreground truncate">{call.phoneNumber}</p>
+                              </div>
+                            </div>
+                            <div className="flex-shrink-0 ml-2">
+                              {getOutcomeBadge(call.outcome)}
+                            </div>
+                          </div>
+
+                          {/* Campaign and date row */}
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium truncate">{call.campaignId?.name || 'Unknown Campaign'}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {call.startTime ? new Date(call.startTime).toLocaleDateString() : 'Unknown'} at {call.startTime ? new Date(call.startTime).toLocaleTimeString() : 'Unknown'}
+                            </p>
+                          </div>
+
+                          {/* Duration and actions row */}
+                          <div className="flex items-center justify-between pt-2 border-t">
+                            <div className="text-sm font-medium">
+                              Duration: {formatDuration(call.duration)}
+                            </div>
+                            <div className="flex space-x-1">
+                              {call.recordingUrl && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => handlePlayRecording(call._id, call.recordingUrl)}
+                                  className="flex-shrink-0"
+                                >
+                                  <Volume2 className="h-4 w-4 mr-1" />
+                                  {currentPlayingId === call._id ? 'Pause' : 'Play'}
+                                </Button>
+                              )}
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => handleRefreshRecording(call._id)}
+                                disabled={isRefreshingRecording === call._id}
+                                title="Refresh recording"
+                              >
+                                <RotateCcw className="h-4 w-4" />
+                                {isRefreshingRecording === call._id && <span className="ml-1">Refreshing...</span>}
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          {/* Audio Player with Waveform - Mobile */}
+                          {call.expandedRecording && call.recordingUrl && (
+                            <AudioPlayer
+                              audioUrl={call.recordingUrl.startsWith('http') 
+                                ? call.recordingUrl 
+                                : `${import.meta.env.VITE_API_BASE_URL || ''}${call.recordingUrl}`}
+                              isPlaying={currentPlayingId === call._id}
+                              onPlayPause={(playing) => {
+                                setCurrentPlayingId(playing ? call._id : null);
+                              }}
+                              callId={call._id}
+                              leadName={call.leadId?.name}
+                              campaignName={call.campaignId?.name}
+                            />
                           )}
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      </CardContent>
+                    </Card>
+                  </div>
                 </div>
-              </div>
             ))}
             {filteredCalls.length === 0 && (
               <div className="text-center py-8">

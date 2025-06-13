@@ -5,20 +5,21 @@ const AuthLayout = () => {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20 flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent"></div>
+          <span className="text-muted-foreground">Loading...</span>
+        </div>
+      </div>
+    );
   }
 
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-background">
-      <div className="w-full max-w-md p-6 space-y-6 bg-card rounded-xl shadow-lg">
-        <Outlet />
-      </div>
-    </div>
-  );
+  return <Outlet />;
 };
 
 export default AuthLayout;

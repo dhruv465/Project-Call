@@ -8,7 +8,9 @@ import {
   getCallTranscript,
   scheduleCallback,
   getCallAnalytics,
-  exportCalls
+  exportCalls,
+  syncTwilioRecordings,
+  getCallRecordingDetails
 } from '../controllers/callController';
 import { updateCallStatus } from '../controllers/updateCallStatusController';
 import {
@@ -35,8 +37,10 @@ router.get('/analytics', authenticate, getCallAnalytics);
 router.get('/export', authenticate, exportCalls);
 router.get('/:id', authenticate, getCallById);
 router.get('/:id/recording', authenticate, getCallRecording);
+router.get('/:id/recording-details', authenticate, getCallRecordingDetails);
 router.get('/:id/transcript', authenticate, getCallTranscript);
 router.put('/:id/status', authenticate, updateCallStatus);
 router.post('/:id/schedule-callback', authenticate, scheduleCallback);
+router.post('/sync-recordings', authenticate, syncTwilioRecordings);
 
 export default router;

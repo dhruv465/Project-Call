@@ -66,6 +66,18 @@ export const callsApi = {
     return response.data;
   },
 
+  // Get call recording details
+  getCallRecordingDetails: async (id: string) => {
+    const response = await api.get(`/calls/${id}/recording-details`);
+    return response.data;
+  },
+
+  // Sync all Twilio recordings (admin only)
+  syncTwilioRecordings: async (days: number = 30) => {
+    const response = await api.post('/calls/sync-recordings', { days });
+    return response.data;
+  },
+
   // Get call transcript
   getCallTranscript: async (id: string) => {
     const response = await api.get(`/calls/${id}/transcript`);
