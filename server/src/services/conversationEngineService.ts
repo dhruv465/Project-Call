@@ -288,13 +288,37 @@ export class ConversationEngineService {
         throw new Error(`Session not found: ${sessionId}`);
       }
 
-      const { currentPersonality, language } = session;
+      const { currentPersonality, language, campaignId } = session;
       
-      // Generate opening message using LLM
+      // Load campaign data to get the actual script
+      const Campaign = require('../models/Campaign').default;
+      const campaign = await Campaign.findById(campaignId);
+      
+      if (!campaign) {
+        throw new Error(`Campaign not found: ${campaignId}`);
+      }
+
+      if (!campaign.script || !campaign.script.versions || campaign.script.versions.length === 0) {
+        throw new Error(`Campaign ${campaignId} has no script configured. Please configure a script in the campaign settings.`);
+      }
+
+      // Find the active script version or use the first one
+      const activeScript = campaign.script.versions.find(v => v.isActive) || campaign.script.versions[0];
+      if (!activeScript.content || activeScript.content.trim() === '') {
+        throw new Error(`Campaign ${campaignId} has empty script content. Please add script content in the campaign settings.`);
+      }
+
+      const campaignScript = activeScript.content;
+      
+      // Generate opening message using the campaign script and LLM
       const messages: LLMMessage[] = [
         {
           role: 'system',
-          content: `You are a ${currentPersonality.name.toLowerCase()} AI sales agent speaking in ${language}. Generate a warm, professional opening message for a call.`
+          content: `You are a ${currentPersonality.name.toLowerCase()} AI sales agent speaking in ${language}. 
+          Use the provided campaign script to generate a natural, personalized opening message.
+          Extract or adapt the introduction/opening part of the script for this specific lead.
+          Make it sound natural and conversational, not robotic.
+          You MUST use the campaign script as your source - do not create any generic messages.`
         },
         {
           role: 'user',
@@ -304,7 +328,16 @@ export class ConversationEngineService {
 - Language: ${language}
 - Personality: ${currentPersonality.name}
 
-Keep it brief, friendly, and professional.`
+Campaign Script:
+${campaignScript}
+
+Instructions:
+- Use ONLY the provided script as your source
+- Extract and personalize the opening/introduction part for ${leadName}
+- Replace any placeholders like [Agent Name], [Company], [Lead Name] with appropriate values
+- Make it sound natural and conversational
+- Keep it brief (30-45 seconds when spoken)
+- If the script doesn't have a clear opening, use the first meaningful paragraph`
         }
       ];
 
@@ -314,11 +347,15 @@ Keep it brief, friendly, and professional.`
         messages: messages,
         options: {
           temperature: 0.7,
-          maxTokens: 150
+          maxTokens: 200
         }
       });
 
       const openingMessage = response.content.trim();
+      
+      if (!openingMessage || openingMessage.length < 10) {
+        throw new Error(`LLM failed to generate proper opening message from campaign script. Please check campaign script content.`);
+      }
       
       // Add to conversation history
       const turn: ConversationTurn = {
@@ -338,8 +375,8 @@ Keep it brief, friendly, and professional.`
     } catch (error) {
       logger.error(`Error generating opening message: ${getErrorMessage(error)}`);
       
-      // Fallback opening message
-      return `Hello ${leadName}, this is an AI assistant calling about ${campaignName}. How are you today?`;
+      // NO FALLBACKS - throw error to force proper campaign configuration
+      throw new Error(`Failed to generate opening message: ${getErrorMessage(error)}. Please ensure your campaign has a properly configured script with content.`);
     }
   }
 
@@ -370,10 +407,9 @@ Keep it brief, friendly, and professional.`
       };
     } catch (error) {
       logger.error(`Error processing user input for conversation ${conversationId}:`, error);
-      return {
-        text: "I'm sorry, I didn't catch that. Could you please repeat?",
-        intent: "clarification"
-      };
+      
+      // NO FALLBACKS - throw error to force proper configuration
+      throw new Error(`Failed to process user input: ${getErrorMessage(error)}. Please ensure your system and campaign are properly configured.`);
     }
   }
 
@@ -415,7 +451,7 @@ Keep it brief, friendly, and professional.`
       const testMessages: LLMMessage[] = [
         {
           role: 'user',
-          content: 'Hello, this is a connection test.'
+          content: 'test connection'
         }
       ];
 

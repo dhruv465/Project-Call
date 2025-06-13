@@ -108,7 +108,7 @@ const Register = () => {
                   <Logo width={48} height={48} />
                   <div>
                     <h1 className="text-3xl font-bold tracking-tight">
-                      Join Project Call
+                      Join Lumina Outreach
                     </h1>
                     <p className="text-muted-foreground">
                       Choose your role to get started
@@ -197,7 +197,7 @@ const Register = () => {
                             placeholder="Enter your full name"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            className="pl-10 h-10 rounded-lg"
+                            className="pl-10 h-10"
                             required
                           />
                         </div>
@@ -216,7 +216,7 @@ const Register = () => {
                             placeholder="Enter your email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="pl-10 h-10 rounded-lg"
+                            className="pl-10 h-10"
                             required
                           />
                         </div>
@@ -228,7 +228,7 @@ const Register = () => {
                           Role
                         </label>
                         <Select value={role} onValueChange={setRole}>
-                          <SelectTrigger className="h-10 rounded-lg">
+                          <SelectTrigger className="h-10">
                             <div className="flex items-center space-x-2">
                               {selectedRole && (
                                 <>
@@ -277,7 +277,7 @@ const Register = () => {
                               placeholder="Password"
                               value={password}
                               onChange={(e) => setPassword(e.target.value)}
-                              className="pl-10 pr-10 h-10 rounded-lg"
+                              className="pl-10 pr-10 h-10"
                               required
                             />
                             <Button
@@ -313,7 +313,7 @@ const Register = () => {
                               onChange={(e) =>
                                 setConfirmPassword(e.target.value)
                               }
-                              className="pl-10 pr-10 h-10 rounded-lg"
+                              className="pl-10 pr-10 h-10"
                               required
                             />
                             <Button
@@ -343,7 +343,7 @@ const Register = () => {
 
                       <Button
                         type="submit"
-                        className="w-full h-10 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all"
+                        className="w-full h-10 font-medium shadow-lg hover:shadow-xl transition-all"
                         disabled={isSubmitting}
                       >
                         {isSubmitting ? (
@@ -370,7 +370,7 @@ const Register = () => {
 
                     <Link
                       to="/login"
-                      className="inline-flex items-center justify-center w-full h-10 px-4 rounded-lg border border-border/50 bg-background/50 hover:bg-accent hover:text-accent-foreground transition-colors font-medium"
+                      className="inline-flex items-center justify-center w-full h-10 px-4 border border-border/50 bg-background/50 hover:bg-accent hover:text-accent-foreground transition-colors font-medium"
                     >
                       Sign In
                     </Link>

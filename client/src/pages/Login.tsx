@@ -40,7 +40,7 @@ const Login = () => {
                 <div className="flex items-center space-x-3">
                   <Logo width={48} height={48} />
                   <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Project Call</h1>
+                    <h1 className="text-3xl font-bold tracking-tight">Lumina Outreach</h1>
                     <p className="text-muted-foreground">Professional AI-Powered Calling Platform</p>
                   </div>
                 </div>
@@ -104,7 +104,7 @@ const Login = () => {
                             placeholder="Enter your email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="pl-10 h-10 rounded-lg"
+                            className="pl-10 h-10"
                             required
                           />
                         </div>
@@ -128,7 +128,7 @@ const Login = () => {
                             placeholder="Enter your password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="pl-10 pr-10 h-10 rounded-lg"
+                            className="pl-10 pr-10 h-10"
                             required
                           />
                           <Button
@@ -145,7 +145,7 @@ const Login = () => {
                       
                       <Button
                         type="submit"
-                        className="w-full h-10 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all"
+                        className="w-full h-10 font-medium shadow-lg hover:shadow-xl transition-all"
                         disabled={isSubmitting}
                       >
                         {isSubmitting ? (
@@ -164,13 +164,13 @@ const Login = () => {
                         <span className="w-full border-t border-border/50" />
                       </div>
                       <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-card px-2 text-muted-foreground">New to Project Call?</span>
+                        <span className="bg-card px-2 text-muted-foreground">New to Lumina Outreach?</span>
                       </div>
                     </div>
 
                     <Link 
                       to="/register" 
-                      className="inline-flex items-center justify-center w-full h-10 px-4 rounded-lg border border-border/50 bg-background/50 hover:bg-accent hover:text-accent-foreground transition-colors font-medium"
+                      className="inline-flex items-center justify-center w-full h-10 px-4 border border-border/50 bg-background/50 hover:bg-accent hover:text-accent-foreground transition-colors font-medium"
                     >
                       Create Account
                     </Link>

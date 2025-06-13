@@ -129,9 +129,27 @@ export const testVoiceAI = async (req: Request, res: Response) => {
       testScenarios 
     } = req.body;
 
-    // Simplified testing without comprehensive testing methods
-    // Test basic voice synthesis capability
-    const testText = "Hello, this is a test of the voice AI system.";
+    // Get dynamic test text from configuration or request
+    let testText = req.body.testText;
+    
+    if (!testText) {
+      // Get from system configuration
+      try {
+        const Configuration = require('../models/Configuration').default;
+        const config = await Configuration.findOne();
+        testText = config?.generalSettings?.voiceTestText;
+      } catch (error) {
+        logger.error('Failed to get test text from configuration:', error);
+      }
+    }
+    
+    // If still no test text, require it from user
+    if (!testText) {
+      return res.status(400).json({
+        message: 'Test text is required. Please provide testText in request body or configure it in system settings.',
+        required: 'testText'
+      });
+    }
     
     try {
       const testResult = await voiceAIService.synthesizeAdaptiveVoice({

@@ -561,63 +561,63 @@ const ConfigurationSchema = new mongoose.Schema(
     errorMessages: {
       generalError: {
         type: String,
-        default: "I'm sorry, I'm having trouble understanding. Could you please repeat that?",
+        required: true, // Must be configured by user - no fallback messages
       },
       aiResponseError: {
         type: String,
-        default: "I'm sorry, I'm having difficulty with my response. Could we continue in a moment?",
+        required: true, // Must be configured by user - no fallback messages
       },
       speechRecognitionError: {
         type: String,
-        default: "I didn't catch that. Could you please speak more clearly?",
+        required: true, // Must be configured by user - no fallback messages
       },
       noCallFound: {
         type: String,
-        default: "I'm sorry, but I couldn't find any call associated with this request.",
+        required: true, // Must be configured by user - no fallback messages
       },
       configurationError: {
         type: String,
-        default: "There seems to be an issue with the configuration. Please contact support.",
+        required: true, // Must be configured by user - no fallback messages
       },
       serverError: {
         type: String,
-        default: "I'm sorry, but we're experiencing technical difficulties. Please try again later.",
+        required: true, // Must be configured by user - no fallback messages
       },
       technicalIssue: {
         type: String,
-        default: "There was a technical issue processing your request. Please try again.",
+        required: true, // Must be configured by user - no fallback messages
       },
       noSpeechDetected: {
         type: String,
-        default: "No speech was detected. Please make sure your microphone is working and try again.",
+        required: true, // Must be configured by user - no fallback messages
       },
       callDisconnected: {
         type: String,
-        default: "The call has been disconnected. Please check your connection and try again.",
+        required: true, // Must be configured by user - no fallback messages
       },
     },
     closingScripts: {
       default: {
         type: String,
-        default: "Thank you for your time. If you have any questions, please feel free to reach out.",
+        required: true, // Must be configured by user - no fallback scripts
       },
       consentReceived: {
         type: String,
-        default: "Thank you for your interest! We'll follow up as discussed. Have a great day!",
+        required: true, // Must be configured by user - no fallback scripts
       },
       withObjections: {
         type: String,
-        default: "I understand your concerns. Thank you for sharing your thoughts. Have a nice day!",
+        required: true, // Must be configured by user - no fallback scripts
       },
     },
     intentDetection: {
       closingPhrases: {
         type: [String],
-        default: ['goodbye', 'bye', 'end call', 'hang up', 'that\'s all'],
+        required: true, // Must be configured by user - no fallback phrases
       },
       objectionPhrases: {
         type: [String],
-        default: ['not interested', 'don\'t call', 'too expensive', 'can\'t afford'],
+        required: true, // Must be configured by user - no fallback phrases
       },
     },
     updatedBy: {

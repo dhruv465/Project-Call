@@ -191,21 +191,44 @@ export const generateScript = async (req: Request & { user?: any }, res: Respons
     const { goal } = req.body;
     
     try {
-      // For production, we would use a proper LLM service directly
-      // Create a simple script based on the goal
+      // Get script template from system configuration only
+      const Configuration = require('../models/Configuration').default;
+      const config = await Configuration.findOne();
+      
+      if (!config) {
+        return res.status(500).json({
+          message: 'System configuration not found',
+          error: 'Please configure system settings before generating scripts'
+        });
+      }
+
+      // Check if required configuration fields exist
+      if (!config.generalSettings) {
+        return res.status(500).json({
+          message: 'General settings not configured',
+          error: 'Please configure general settings including default script templates'
+        });
+      }
+
+      // Use ONLY dynamic script generation based on goal and configuration
       const scriptResponse = {
-        introduction: `Hello, this is an AI assistant from [Company Name]. I'm calling about our solutions for ${goal}.`,
-        value: `We've helped many companies improve their ${goal} outcomes with our specialized approach.`,
-        questions: [
-          `What challenges is your team currently facing with ${goal}?`,
-          `How are you currently addressing these challenges?`
-        ],
-        objectionHandling: {
-          "notInterested": "I understand. Would you mind sharing what solutions you're currently using?",
-          "noTime": "I appreciate you're busy. When would be a better time to discuss how we can help with your goals?"
-        },
-        closing: `Thank you for your time. I'd like to follow up with more information about how we can help with ${goal}.`
+        introduction: config.generalSettings.defaultScriptIntroduction?.replace('{goal}', goal) || 
+                     config.generalSettings.companyIntroduction?.replace('{goal}', goal),
+        value: config.generalSettings.defaultValueProposition?.replace('{goal}', goal) || 
+               config.generalSettings.companyValueProposition?.replace('{goal}', goal),
+        questions: config.generalSettings.defaultQuestions || [],
+        objectionHandling: config.generalSettings.defaultObjectionHandling || {},
+        closing: config.generalSettings.defaultClosing?.replace('{goal}', goal) || 
+                config.generalSettings.companyClosing?.replace('{goal}', goal)
       };
+
+      // Validate that we have all required fields
+      if (!scriptResponse.introduction || !scriptResponse.value) {
+        return res.status(500).json({
+          message: 'Incomplete script configuration',
+          error: 'Please configure all required script templates in system settings (introduction, value proposition, etc.)'
+        });
+      }
       
       res.status(200).json({
         script: scriptResponse
@@ -213,30 +236,11 @@ export const generateScript = async (req: Request & { user?: any }, res: Respons
     } catch (error) {
       logger.error('Error generating script:', error);
       
-      // Fallback to a basic template if LLM service fails
-      const fallbackScript = {
-        introduction: "Hello, this is [AI Agent] calling from [Company]. How are you today?",
-        value: `I'm calling because we have a solution that might help with ${goal || 'your business goals'}. Is this a good time to talk?`,
-        questions: [
-          "What challenges are you currently facing in this area?",
-          "How are you currently addressing this issue?"
-        ],
-        objectionHandling: {
-          "notInterested": "I understand. May I ask what specific aspect doesn't interest you?",
-          "noTime": "I respect your time. When would be a better time to reach out?"
-        },
-        closing: `Thank you for your time. I'd like to follow up with more information about how we can help with ${goal || 'your business goals'}.`
-      };
-      
-      // In a real implementation, we would save this to the campaign
-      const campaign = await Campaign.findById(req.params.id);
-      if (!campaign) {
-        return res.status(404).json({ message: 'Campaign not found' });
-      }
-      
-      return res.status(200).json({
-        message: 'Script generated successfully',
-        script: fallbackScript
+      // NO FALLBACKS - force proper configuration
+      return res.status(500).json({
+        message: 'Script generation failed',
+        error: 'Unable to generate script. Please ensure system configuration is complete.',
+        details: error.message
       });
     }
   } catch (error) {

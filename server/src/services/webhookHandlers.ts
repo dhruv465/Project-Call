@@ -334,10 +334,12 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
     
     // Fallback if ElevenLabs failed
     if (!useElevenLabs) {
-      logger.info(`Using Twilio's TTS for greeting since ElevenLabs failed for call ${callId}`);
-      // Use Twilio's built-in TTS as a fallback instead of empty audio
-      const fallbackGreeting = campaign.initialPrompt?.trim() || 'Hello, thank you for answering. This is an automated call.';
-      twiml.say({ voice: 'alice' }, fallbackGreeting);
+      logger.info(`ElevenLabs failed for call ${callId}, using system configuration instead`);
+      // NO HARDCODED FALLBACK - must get from campaign configuration
+      if (!campaign.initialPrompt?.trim()) {
+        throw new Error(`Campaign ${call.campaignId} has no initial prompt configured. Please configure the campaign with proper greeting content.`);
+      }
+      twiml.say({ voice: 'alice' }, campaign.initialPrompt.trim());
     }
     
     // Set up gather for speech input with timeout handling
@@ -1303,13 +1305,8 @@ function handleChunkedAudioForTwiML(twiml: any, audioText: string, language: str
     // Super-robust error handling - never fail, just use basic TTS
     logger.error(`Error in handleChunkedAudioForTwiML: ${error.message}`);
     
-    // Provide a simple fallback message
-    twiml.say({ 
-      voice: 'alice', 
-      language: language === 'hi' ? 'hi-IN' : 'en-US' 
-    }, "I'm sorry, there was an issue with my response. Let's continue our conversation.");
-    
-    return true; // We handled it with a fallback
+    // NO HARDCODED FALLBACK MESSAGES - throw error to force proper configuration
+    throw new Error(`Chunked audio processing failed: ${error.message}. Please ensure your system configuration handles large audio content properly.`);
   }
 }
 

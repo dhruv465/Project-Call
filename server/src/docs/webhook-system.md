@@ -2,7 +2,7 @@
 
 ## Overview
 
-The webhook system in Project Call allows integration with external services like Twilio. This document explains how webhooks are configured and how to use the webhook URL utility to ensure consistent URL generation.
+The webhook system in Lumina Outreach allows integration with external services like Twilio. This document explains how webhooks are configured and how to use the webhook URL utility to ensure consistent URL generation.
 
 ## Webhook Route Architecture
 

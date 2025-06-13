@@ -62,9 +62,9 @@ export const handleVoiceWebhook = async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Error in handleVoiceWebhook:', error);
     res.type('text/xml');
+    // NO HARDCODED ERROR MESSAGES - use minimal XML response
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Say voice="alice">I apologize, but I'm experiencing technical difficulties.</Say>
         <Hangup/>
       </Response>`);
   }

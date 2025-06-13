@@ -2,6 +2,7 @@
 import axios from 'axios';
 import mongoose from 'mongoose';
 import { logger } from '../index';
+import { getErrorMessage } from '../utils/logger';
 
 export interface VoicePersonality {
   id: string;
@@ -173,15 +174,16 @@ export class VoiceAIService {
       const result = JSON.parse(response.data.choices[0].message.content);
       
       return {
-        text: result.text || "I understand. How can I help you with that?",
+        text: result.text || (() => {
+          // NO FALLBACKS - throw error to force proper configuration
+          throw new Error('LLM returned empty response text. Please check your system configuration and LLM provider settings.');
+        })(),
         intent: result.intent || "general"
       };
     } catch (error) {
       logger.error('Error generating response:', error);
-      return {
-        text: "I apologize, but I'm having trouble processing your request right now. Could you please try again?",
-        intent: "error"
-      };
+      // NO FALLBACKS - throw error to force proper configuration
+      throw new Error(`Failed to generate response: ${getErrorMessage(error)}. Please ensure your LLM providers and system configuration are properly set up.`);
     }
   }
 

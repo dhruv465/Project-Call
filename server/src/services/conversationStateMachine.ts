@@ -473,11 +473,8 @@ export class ConversationStateMachine {
     } catch (error) {
       logger.error(`Error generating AI response for ${conversationId}:`, error);
       
-      // Get error response from configuration
-      const config = await Configuration.findOne();
-      return {
-        text: config?.errorMessages?.aiResponseError || ""
-      };
+      // NO FALLBACKS - throw error to force proper configuration
+      throw new Error(`Failed to generate AI response for conversation ${conversationId}: ${error.message}. Please ensure your system configuration includes proper error messages.`);
     }
   }
   

@@ -39,10 +39,9 @@ export async function synthesizeVoiceResponse(
   try {
     // Skip if text is empty
     if (!text || text.trim() === '') {
-      logger.warn('Empty text provided to synthesizeVoiceResponse');
-      // Use TTS fallback instead of empty audio
-      twiml.say({ voice: 'alice', language: language === 'hi' ? 'hi-IN' : 'en-US' }, 'I apologize, but there was an issue with my response.');
-      return false;
+      logger.error('Empty text provided to synthesizeVoiceResponse');
+      // NO HARDCODED MESSAGES - throw error to force proper configuration
+      throw new Error('Empty text provided for voice synthesis. Please ensure your campaign script has content.');
     }
 
     // Log the request for debugging
@@ -255,34 +254,9 @@ export async function synthesizeVoiceResponse(
  * @returns Path to fallback audio if available, false otherwise
  */
 async function checkShouldUseFallback(text: string): Promise<string | false> {
-  const normalizedText = text.trim().toLowerCase();
-  
-  // Map of common phrases to fallback audio files
-  // These would typically be pre-generated and stored in a static directory
-  const commonPhrases: Record<string, string> = {
-    'hello': '/tmp/fallback_hello.mp3',
-    'goodbye': '/tmp/fallback_goodbye.mp3',
-    'thank you': '/tmp/fallback_thank_you.mp3',
-    'i\'m sorry, but there was a technical issue': '/tmp/fallback_error.mp3',
-    'please try again later': '/tmp/fallback_try_again.mp3'
-  };
-  
-  // Check for exact matches
-  if (commonPhrases[normalizedText]) {
-    // Verify file exists
-    if (fs.existsSync(commonPhrases[normalizedText])) {
-      return commonPhrases[normalizedText];
-    }
-  }
-  
-  // Check for phrases contained in the text
-  for (const [phrase, audioPath] of Object.entries(commonPhrases)) {
-    if (normalizedText.includes(phrase) && fs.existsSync(audioPath)) {
-      return audioPath;
-    }
-  }
-  
-  return false;
+  // NO HARDCODED FALLBACK PHRASES - system must be fully dynamic
+  // All phrases must be configured through the system configuration UI
+  return false; // Never use hardcoded fallback audio files
 }
 
 /**

@@ -461,7 +461,8 @@ export class EnhancedVoiceAIService {
           );
         } catch (error) {
           logger.warn(`Context-aware response generation failed: ${getErrorMessage(error)}`);
-          responseText = "I understand. How can I help you with that?";
+          // NO FALLBACKS - throw error to force proper configuration
+          throw new Error(`Context-aware response generation failed: ${getErrorMessage(error)}. Please ensure your system is properly configured.`);
         }
       }
 
@@ -665,7 +666,8 @@ Generate a helpful, concise response. Remember to return ONLY valid JSON.`;
         await this.initializeLLMService();
         
         if (!this.llmService) {
-          throw new Error('Failed to initialize LLM Service - no LLM providers configured in database');
+          // NO FALLBACKS - throw error to force proper configuration
+          throw new Error('Failed to initialize LLM Service - no LLM providers configured in database. Please configure at least one LLM provider.');
         }
       }
 
@@ -725,27 +727,22 @@ Generate a helpful, concise response. Remember to return ONLY valid JSON.`;
         if (responseText.startsWith('Please provide') || 
             responseText.includes('need more context') ||
             responseText.includes('I need the')) {
-          logger.warn('LLM returned a context request, using fallback greeting response');
-          return {
-            text: "I'm here to assist you. What can I help you with today?",
-            intent: "greeting"
-          };
+          logger.warn('LLM returned a context request, using system configuration instead');
+          // NO FALLBACKS - throw error to force proper configuration
+          throw new Error('LLM requires more context. Please ensure your campaign script and system configuration provide sufficient context.');
         }
         
         // If it seems like a reasonable response, use it directly
         if (responseText.length > 0 && !responseText.startsWith('{')) {
-          logger.warn('LLM response was a plain string, using it as text with generic intent');
+          logger.warn('LLM response was a plain string, accepting as valid response');
           return {
             text: responseText,
             intent: "direct_response"
           };
         }
         
-        // Otherwise, use a generic error message
-        return {
-          text: "I'm sorry, I encountered an issue processing your request. Could you please repeat or rephrase?",
-          intent: "error_processing_llm"
-        };
+        // NO FALLBACKS - throw error to force proper configuration
+        throw new Error(`LLM returned invalid JSON response format. Please check your system configuration and LLM provider settings.`);
       }
       
       return {
@@ -754,10 +751,8 @@ Generate a helpful, concise response. Remember to return ONLY valid JSON.`;
       };
     } catch (error) {
       logger.error('Error generating AI response:', error);
-      return {
-        text: "I'm sorry, I didn't quite catch that. Could you please repeat what you said?",
-        intent: "clarification"
-      };
+      // NO FALLBACKS - throw error to force proper configuration
+      throw new Error(`Failed to generate AI response: ${getErrorMessage(error)}. Please ensure your LLM providers and system configuration are properly set up.`);
     }
   }
 

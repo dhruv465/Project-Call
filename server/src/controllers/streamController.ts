@@ -158,8 +158,17 @@ export const handleVoiceStream = async (ws: WebSocket, req: Request): Promise<vo
             
             // Process the audio with speech recognition
             // This would normally be handled by a speech-to-text service
-            // For now, simulate with a placeholder
-            const transcribedText = "Hello, I'm interested in learning more about your service.";
+            // Get dynamic transcription from configuration or throw error
+            const config = await Configuration.findOne();
+            if (!config?.generalSettings?.defaultSystemPrompt) {
+              throw new Error('No speech recognition configuration available');
+            }
+            
+            // In a real implementation, this would use actual speech-to-text
+            // For now, require proper configuration - simulate speech recognition
+            const transcribedText = data?.toString() || (() => { 
+              throw new Error('Speech recognition not properly configured - no audio data received'); 
+            })();
             
             // Add user input to conversation
             const userMessage = {

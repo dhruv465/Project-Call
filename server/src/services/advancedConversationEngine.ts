@@ -151,7 +151,8 @@ export class AdvancedConversationEngine {
       return response;
     } catch (error) {
       logger.error('Error generating conversation response:', error);
-      return this.generateFallbackResponse();
+      // NO HARDCODED RESPONSES - must be configured dynamically
+      throw new Error(`Failed to generate conversation response: ${error.message}. Please ensure your campaign and system configuration are complete.`);
     }
   }
 
@@ -386,32 +387,39 @@ export class AdvancedConversationEngine {
     if (handler) {
       return await handler(concern);
     }
-    return "I understand your concern. Let me address that for you.";
+    // NO HARDCODED RESPONSES - must be configured dynamically
+    throw new Error(`Objection handler for category '${category}' not configured. Please set up objection handling templates in your campaign configuration.`);
   }
 
   // Objection Handlers
   private async handlePriceObjection(concern: string): Promise<string> {
-    return "I understand budget is important. Let me show you the value and ROI this will provide. Many of our clients found that the investment paid for itself within the first few months.";
+    // NO HARDCODED RESPONSES - must be configured dynamically
+    throw new Error('Price objection handler not configured. Please set up objection handling templates in your campaign configuration.');
   }
 
   private async handleTimingObjection(concern: string): Promise<string> {
-    return "I appreciate that timing is crucial. That's exactly why we should explore this now - the sooner we start, the sooner you'll see results. We can work around your schedule.";
+    // NO HARDCODED RESPONSES - must be configured dynamically
+    throw new Error('Timing objection handler not configured. Please set up objection handling templates in your campaign configuration.');
   }
 
   private async handleAuthorityObjection(concern: string): Promise<string> {
-    return "That's perfectly reasonable. Who else would be involved in this decision? I'd be happy to provide materials you can share with them, or we could arrange a brief call with all decision-makers.";
+    // NO HARDCODED RESPONSES - must be configured dynamically
+    throw new Error('Authority objection handler not configured. Please set up objection handling templates in your campaign configuration.');
   }
 
   private async handleNeedObjection(concern: string): Promise<string> {
-    return "I understand. Let me ask you this - what challenges are you currently facing in this area? Sometimes we don't realize there's a better way until we see it.";
+    // NO HARDCODED RESPONSES - must be configured dynamically
+    throw new Error('Need objection handler not configured. Please set up objection handling templates in your campaign configuration.');
   }
 
   private async handleTrustObjection(concern: string): Promise<string> {
-    return "I completely understand your caution. Let me share some references from similar companies and our track record. We also offer guarantees to ensure your satisfaction.";
+    // NO HARDCODED RESPONSES - must be configured dynamically
+    throw new Error('Trust objection handler not configured. Please set up objection handling templates in your campaign configuration.');
   }
 
   private async handleCompetitorObjection(concern: string): Promise<string> {
-    return "That's great that you have a solution in place. I'm curious - what's working well, and what could be improved? Sometimes a fresh perspective can reveal new opportunities.";
+    // NO HARDCODED RESPONSES - must be configured dynamically
+    throw new Error('Competitor objection handler not configured. Please set up objection handling templates in your campaign configuration.');
   }
 
   // Conversation Flow Management
@@ -441,7 +449,8 @@ export class AdvancedConversationEngine {
       }
     } catch (error) {
       logger.error('Error determining response:', error);
-      return this.generateFallbackResponse();
+      // NO HARDCODED RESPONSES - must be configured dynamically
+      throw new Error(`Failed to determine conversation response: ${error.message}. Please ensure your campaign configuration includes all necessary response templates.`);
     }
   }
 
@@ -542,27 +551,18 @@ export class AdvancedConversationEngine {
       };
     }
 
-    return {
-      text: "I understand your concern. Let me address that for you. What specifically worries you about this?",
-      action: 'gather',
-      nextState: conversation.phase
-    };
+    // NO HARDCODED RESPONSES - must be configured dynamically
+    throw new Error('Objection detected but no handler configured. Please set up objection handling templates in your campaign configuration.');
   }
 
   private async generatePhaseResponse(phase: string, intent: IntentAnalysis | null): Promise<any> {
-    return {
-      text: `Let me provide more information relevant to your ${phase} phase.`,
-      action: 'gather',
-      nextState: phase
-    };
+    // NO HARDCODED RESPONSES - must be configured dynamically
+    throw new Error(`Phase response for '${phase}' not configured. Please set up phase-specific templates in your campaign configuration.`);
   }
 
   private generateFallbackResponse(): any {
-    return {
-      text: "I want to make sure I understand you correctly. Could you please repeat that or clarify what you meant?",
-      action: 'gather',
-      nextState: 'clarification'
-    };
+    // NO HARDCODED RESPONSES - must be configured dynamically
+    throw new Error('Fallback response requested but not configured. Please ensure your campaign configuration includes comprehensive response templates.');
   }
 
   // Conversation State Management
