@@ -205,7 +205,8 @@ export class ElevenLabsSDKService extends EventEmitter {
         text,
         voice_id: voiceId,
         model_id: modelId,
-        voice_settings: voiceSettings
+        voice_settings: voiceSettings,
+        output_format: 'mp3_44100_128' // Explicitly request MP3 format at high quality
       });
 
       return Buffer.from(audioBuffer);

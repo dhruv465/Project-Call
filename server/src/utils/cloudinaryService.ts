@@ -50,11 +50,13 @@ function generateCacheKey(buffer: Buffer): string {
  * Upload audio buffer to Cloudinary
  * @param audioBuffer Buffer containing audio data
  * @param folder Optional folder name in Cloudinary
+ * @param contentType Optional content type (default: 'audio/mpeg')
  * @returns Promise resolving to the Cloudinary URL
  */
 export async function uploadAudioBuffer(
   audioBuffer: Buffer, 
-  folder: string = 'voice-recordings'
+  folder: string = 'voice-recordings',
+  contentType: string = 'audio/mpeg'
 ): Promise<string> {
   try {
     // Check cache first
@@ -69,9 +71,18 @@ export async function uploadAudioBuffer(
     const result = await new Promise<any>((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         { 
-          resource_type: 'raw', // Use raw for binary data (works more reliably)
+          resource_type: 'auto', // Use 'auto' to detect audio files properly
           folder, 
           public_id: `audio-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+          // Ensure audio is processed correctly
+          format: 'mp3',
+          // Set content type explicitly
+          type: 'upload',
+          // Audio-specific settings for better playback with Twilio
+          audio_codec: 'mp3',
+          bit_rate: '128k',
+          // Add content type to resource metadata
+          context: `content_type=${contentType}`,
           // Auto-delete after 24 hours (via access control)
           access_control: [{ access_type: 'anonymous', start: new Date(), end: new Date(Date.now() + 86400000) }]
         },
@@ -117,8 +128,17 @@ export async function uploadAudioFile(
     // Read file as buffer
     const audioBuffer = fs.readFileSync(filePath);
     
-    // Use the buffer upload method
-    const cloudinaryUrl = await uploadAudioBuffer(audioBuffer, folder);
+    // Check file type to set appropriate content type
+    const isMP3 = filePath.toLowerCase().endsWith('.mp3') ||
+                 (audioBuffer.length > 2 && 
+                  ((audioBuffer[0] === 0x49 && audioBuffer[1] === 0x44 && audioBuffer[2] === 0x33) || // ID3 tag
+                   (audioBuffer[0] === 0xFF && (audioBuffer[1] === 0xFB || audioBuffer[1] === 0xFA)))); // MP3 frame
+    
+    const contentType = isMP3 ? 'audio/mpeg' : 'audio/mp3'; // Default to MP3 content type
+    logger.info(`Uploading audio file with content type: ${contentType}, size: ${audioBuffer.length} bytes`);
+    
+    // Use the buffer upload method with explicit content type
+    const cloudinaryUrl = await uploadAudioBuffer(audioBuffer, folder, contentType);
     
     // Clean up source file if requested
     if (cleanupFile) {

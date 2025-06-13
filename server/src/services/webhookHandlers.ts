@@ -7,7 +7,7 @@ import Configuration from '../models/Configuration';
 import { conversationEngine } from './index';
 import { AdvancedTelephonyService } from './advancedTelephonyService';
 import { EnhancedVoiceAIService } from './enhancedVoiceAIService';
-import { synthesizeVoiceResponse, processAudioForTwiML } from '../utils/voiceSynthesis';
+import { synthesizeVoiceResponse, processAudioForTwiML , prepareUrlForTwilioPlay } from '../utils/voiceSynthesis';
 import { getPreferredVoiceId } from '../utils/voiceUtils';
 import fs from 'fs';
 import path from 'path';
@@ -75,27 +75,30 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
               );
               
               if (audioResult.method === 'tts') {
-                // Use TTS fallback
-                twiml.say({ voice: 'alice', language: 'en-US' }, errorMessage);
+                // Check if this is a chunked audio request
+                if (!handleChunkedAudioForTwiML(twiml, audioResult.url, 'en')) {
+                  // Use regular TTS fallback
+                  twiml.say({ voice: 'alice', language: 'en-US' }, errorMessage);
+                }
               } else {
                 // Use Cloudinary URL or small base64 data
-                twiml.play(audioResult.url);
+                twiml.play(prepareUrlForTwilioPlay(audioResult.url));
               }
             } else {
-              // Fallback to empty audio to avoid Polly
-              twiml.play('');
+              // Use TTS fallback instead of empty audio
+              twiml.say({ voice: 'alice', language: 'en-US' }, errorMessage);
             }
           } else {
-            // Fallback to empty audio to avoid Polly
-            twiml.play('');
+            // Use TTS fallback instead of empty audio
+            twiml.say({ voice: 'alice', language: 'en-US' }, errorMessage);
           }
         } catch (error) {
-          // Fallback to empty audio to avoid Polly
-          twiml.play('');
+          // Use TTS fallback instead of empty audio
+          twiml.say({ voice: 'alice', language: 'en-US' }, errorMessage);
         }
       } else {
-        // Fallback to empty audio to avoid Polly
-        twiml.play('');
+        // Use TTS fallback instead of empty audio
+        twiml.say({ voice: 'alice', language: 'en-US' }, errorMessage);
       }
       
       twiml.hangup();
@@ -167,27 +170,30 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
               );
               
               if (audioResult.method === 'tts') {
-                // Use TTS fallback
-                twiml.say({ voice: 'alice', language: 'en-US' }, errorMessage);
+                // Check if this is a chunked audio request
+                if (!handleChunkedAudioForTwiML(twiml, audioResult.url, 'en')) {
+                  // Use regular TTS fallback
+                  twiml.say({ voice: 'alice', language: 'en-US' }, errorMessage);
+                }
               } else {
                 // Use Cloudinary URL or small base64 data
-                twiml.play(audioResult.url);
+                twiml.play(prepareUrlForTwilioPlay(audioResult.url));
               }
             } else {
-              // Fallback to empty audio
-              twiml.play('');
+              // Use TTS fallback instead of empty audio
+              twiml.say({ voice: 'alice', language: 'en-US' }, errorMessage);
             }
           } else {
-            // Fallback to empty audio
-            twiml.play('');
+            // Use TTS fallback instead of empty audio
+            twiml.say({ voice: 'alice', language: 'en-US' }, errorMessage);
           }
         } catch (error) {
-          // Fallback to empty audio
-          twiml.play('');
+          // Use TTS fallback instead of empty audio
+          twiml.say({ voice: 'alice', language: 'en-US' }, errorMessage);
         }
       } else {
-        // Fallback to empty audio
-        twiml.play('');
+        // Use TTS fallback instead of empty audio
+        twiml.say({ voice: 'alice', language: 'en-US' }, errorMessage);
       }
       twiml.hangup();
       res.type('text/xml');
@@ -257,14 +263,14 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
               );
               
               if (audioResult.method === 'tts') {
-                // Use TTS fallback
-                twiml.say({ 
-                  voice: 'alice', 
-                  language: campaign.primaryLanguage === 'hi' ? 'hi-IN' : 'en-US' 
-                }, formattedGreeting);
+                // Check if this is a chunked audio request
+                if (!handleChunkedAudioForTwiML(twiml, audioResult.url, campaign.primaryLanguage)) {
+                  // Use regular TTS fallback
+                  twiml.say({ voice: 'alice', language: campaign.primaryLanguage === 'hi' ? 'hi-IN' : 'en-US' }, formattedGreeting);
+                }
               } else {
                 // Use Cloudinary URL or small base64 data
-                twiml.play(audioResult.url);
+                twiml.play(prepareUrlForTwilioPlay(audioResult.url));
                 useElevenLabs = true;
               }
               
@@ -297,14 +303,14 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
               );
               
               if (audioResult.method === 'tts') {
-                // Use TTS fallback
-                twiml.say({ 
-                  voice: 'alice', 
-                  language: campaign.primaryLanguage === 'hi' ? 'hi-IN' : 'en-US' 
-                }, formattedGreeting);
+                // Check if this is a chunked audio request
+                if (!handleChunkedAudioForTwiML(twiml, audioResult.url, campaign.primaryLanguage)) {
+                  // Use regular TTS fallback
+                  twiml.say({ voice: 'alice', language: campaign.primaryLanguage === 'hi' ? 'hi-IN' : 'en-US' }, formattedGreeting);
+                }
               } else {
                 // Use Cloudinary URL or small base64 data
-                twiml.play(audioResult.url);
+                twiml.play(prepareUrlForTwilioPlay(audioResult.url));
                 useElevenLabs = true;
               }
             } else {
@@ -593,14 +599,14 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
                 );
                 
                 if (audioResult.method === 'tts') {
-                  // Use TTS fallback
-                  twiml.say({ 
-                    voice: 'alice', 
-                    language: campaign?.primaryLanguage === 'hi' ? 'hi-IN' : 'en-US' 
-                  }, aiResponse.text);
-                } else {
+                // Check if this is a chunked audio request
+                if (!handleChunkedAudioForTwiML(twiml, audioResult.url, 'en')) {
+                  // Use regular TTS fallback
+                  twiml.say({ voice: 'alice', language: campaign?.primaryLanguage === 'hi' ? 'hi-IN' : 'en-US' }, aiResponse.text);
+                }
+              } else {
                   // Use Cloudinary URL or small base64 data
-                  twiml.play(audioResult.url);
+                  twiml.play(prepareUrlForTwilioPlay(audioResult.url));
                   useElevenLabs = true;
                 }
               }
@@ -617,9 +623,12 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
       
       // Fallback if ElevenLabs is not available or fails
       if (!useElevenLabs) {
-        logger.info(`Using empty audio fallback for call ${callId} response`);
-        // Send empty audio instead of Polly voice
-        twiml.play('');
+        logger.info(`Using TTS fallback for call ${callId} response`);
+        // Use TTS instead of empty audio
+        twiml.say({ 
+          voice: 'alice', 
+          language: 'en-US' 
+        }, aiResponse.text);
       }
       
       // Check if conversation should continue based on intent
@@ -1241,4 +1250,125 @@ async function analyzeTranscription(conversationLog: Array<{role: string, conten
       followUpRecommendations: ['Follow up with standard process']
     };
   }
+}
+
+// Helper function to handle chunked audio text in TwiML
+function handleChunkedAudioForTwiML(twiml: any, audioText: string, language: string = 'en') {
+  try {
+    // Check if this is a chunked audio request
+    if (audioText && audioText.startsWith('USE_CHUNKED_AUDIO:')) {
+      // Extract the full text from the marker
+      const fullText = audioText.substring('USE_CHUNKED_AUDIO:'.length);
+      
+      // Check for special error markers
+      const hasCloudinaryError = fullText.startsWith('[CLOUDINARY_ERROR]');
+      if (hasCloudinaryError) {
+        logger.warn('Detected Cloudinary error in chunked audio, using extra-small chunks');
+        // Remove the error marker from the text
+        const cleanText = fullText.substring('[CLOUDINARY_ERROR]'.length).trim();
+        
+        // Use smaller chunks for Cloudinary errors
+        const chunks = splitTextIntoChunks(cleanText, 150); // Use very small chunks
+        logger.info(`Split text into ${chunks.length} small chunks (150 chars max) due to Cloudinary error`);
+        
+        // Add each chunk as a separate say command
+        for (const chunk of chunks) {
+          if (chunk.trim()) { // Only add non-empty chunks
+            twiml.say({ 
+              voice: 'alice', 
+              language: language === 'hi' ? 'hi-IN' : 'en-US' 
+            }, chunk);
+          }
+        }
+        return true;
+      }
+      
+      // Regular chunking for non-error cases
+      const chunks = splitTextIntoChunks(fullText);
+      logger.info(`Split text into ${chunks.length} chunks for TTS to avoid TwiML size limits`);
+      
+      // Add each chunk as a separate say command
+      for (const chunk of chunks) {
+        if (chunk.trim()) { // Only add non-empty chunks
+          twiml.say({ 
+            voice: 'alice', 
+            language: language === 'hi' ? 'hi-IN' : 'en-US' 
+          }, chunk);
+        }
+      }
+      return true; // Indicates we handled the chunked audio
+    }
+    return false; // Not a chunked audio request
+  } catch (error) {
+    // Super-robust error handling - never fail, just use basic TTS
+    logger.error(`Error in handleChunkedAudioForTwiML: ${error.message}`);
+    
+    // Provide a simple fallback message
+    twiml.say({ 
+      voice: 'alice', 
+      language: language === 'hi' ? 'hi-IN' : 'en-US' 
+    }, "I'm sorry, there was an issue with my response. Let's continue our conversation.");
+    
+    return true; // We handled it with a fallback
+  }
+}
+
+/**
+ * Split a large text into smaller chunks to avoid TwiML size limits
+ * This tries to split on sentence boundaries to maintain natural speech
+ * @param text Full text to split
+ * @param maxChunkLength Maximum length of each chunk (default: 250 characters)
+ * @returns Array of text chunks
+ */
+function splitTextIntoChunks(text: string, maxChunkLength: number = 250): string[] {
+  if (!text) return [];
+  
+  // If text is already small enough, return it as a single chunk
+  if (text.length <= maxChunkLength) {
+    return [text];
+  }
+
+  const chunks: string[] = [];
+  let currentPosition = 0;
+
+  while (currentPosition < text.length) {
+    // Determine end of current chunk (max length or earlier)
+    let chunkEnd = Math.min(currentPosition + maxChunkLength, text.length);
+    
+    // Try to find a sentence end (., !, ?) followed by a space or end of text
+    if (chunkEnd < text.length) {
+      // Search backward from max chunk length for a good break point
+      const sentenceEndMatch = text.substring(currentPosition, chunkEnd).match(/[.!?]\s+(?=[A-Z])/g);
+      
+      if (sentenceEndMatch && sentenceEndMatch.length > 0) {
+        // Find the last sentence end within this chunk
+        const lastIndex = text.substring(currentPosition, chunkEnd).lastIndexOf(sentenceEndMatch[sentenceEndMatch.length - 1]);
+        if (lastIndex > 0) {
+          // +2 to include the period and space
+          chunkEnd = currentPosition + lastIndex + 2;
+        }
+      } else {
+        // No sentence end found, try to break at a comma or space
+        const commaIndex = text.substring(currentPosition, chunkEnd).lastIndexOf(', ');
+        if (commaIndex > 0) {
+          chunkEnd = currentPosition + commaIndex + 2; // Include the comma and space
+        } else {
+          // Last resort: break at the last space
+          const spaceIndex = text.substring(currentPosition, chunkEnd).lastIndexOf(' ');
+          if (spaceIndex > 0) {
+            chunkEnd = currentPosition + spaceIndex + 1; // Include the space
+          }
+          // If no space found, we'll just break at maxChunkLength
+        }
+      }
+    }
+    
+    // Add the chunk to our results
+    chunks.push(text.substring(currentPosition, chunkEnd).trim());
+    
+    // Move to next position
+    currentPosition = chunkEnd;
+  }
+  
+  return chunks;
 }

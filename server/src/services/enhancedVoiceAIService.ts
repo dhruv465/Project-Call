@@ -633,30 +633,31 @@ export class EnhancedVoiceAIService {
         formattedConversationLog = "No prior conversation";
       }
       
-      const prompt = `You are a professional AI assistant handling a phone call.
+      // Prepare a clear system prompt that emphasizes proper JSON formatting
+      const systemPrompt = `You are a professional AI assistant handling a phone call.
       
-      IMPORTANT: You MUST respond with a valid JSON object containing 'text' and 'intent' fields ONLY.
-      Example valid response: {"text": "I understand your concern. How can I help?", "intent": "acknowledge_concern"}
+YOUR RESPONSE MUST BE VALID JSON IN THIS FORMAT ONLY:
+{"text": "your response text here", "intent": "intent_type_here"}
 
-      Current call details:
-      - Lead ID: ${leadId || 'Not provided'}
-      - Campaign ID: ${campaignId || 'Not provided'}
-      - Current phase: ${callContext.currentPhase || 'Unknown'}
-      - Language: ${callContext.language || 'English'}
-      - Compliance complete: ${callContext.complianceComplete ? 'Yes' : 'No'}
-      - Disclosure complete: ${callContext.disclosureComplete ? 'Yes' : 'No'}
+Example valid response: {"text": "I understand your concern. How can I help?", "intent": "acknowledge_concern"}
+
+DO NOT include anything outside the JSON. No explanations, no markdown, just the JSON object.`;
+
+      // Prepare a clear user prompt with all necessary context
+      const userPrompt = `User input: "${userInput}"
       
-      Recent conversation history:
-      ${formattedConversationLog}
-      
-      User's latest input: "${userInput}"
-      
-      Generate a helpful and appropriate response. Keep it concise and professional.
-      
-      YOU MUST RETURN YOUR RESPONSE AS A VALID JSON OBJECT IN THIS EXACT FORMAT:
-      {"text": "your response text here", "intent": "intent_type_here"}
-      
-      Do not include any explanation, just the JSON object.`;
+Previous conversation:
+${formattedConversationLog}
+
+Current call details:
+- Lead ID: ${leadId || 'Not provided'}
+- Campaign ID: ${campaignId || 'Not provided'}
+- Current phase: ${callContext.currentPhase || 'Unknown'}
+- Language: ${callContext.language || 'English'}
+- Compliance complete: ${callContext.complianceComplete ? 'Yes' : 'No'}
+- Disclosure complete: ${callContext.disclosureComplete ? 'Yes' : 'No'}
+
+Generate a helpful, concise response. Remember to return ONLY valid JSON.`;
 
       // Check if LLM service is available
       if (!this.llmService) {
@@ -668,12 +669,6 @@ export class EnhancedVoiceAIService {
         }
       }
 
-      // Use LLM service to generate response with configured provider
-      const messages: LLMMessage[] = [
-        { role: 'system', content: prompt },
-        { role: 'user', content: 'Generate response based on the context provided' }
-      ];
-
       // Get the default provider configured in the database
       const providers = this.llmService.listProviders();
       if (providers.length === 0) {
@@ -684,7 +679,10 @@ export class EnhancedVoiceAIService {
       const llmResponse = await this.llmService.chat({
         provider: providers[0],
         model: '', // Empty string will use the default model from the provider config
-        messages: messages,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
         options: {
           temperature: 0.7,
           maxTokens: 200
@@ -697,23 +695,55 @@ export class EnhancedVoiceAIService {
       // Parse the JSON response
       let result;
       try {
-        result = JSON.parse(llmResponse.content);
+        // Clean the response before parsing (remove any non-JSON parts)
+        let cleanedResponse = llmResponse.content.trim();
+        
+        // If response starts with backticks (like ```json), extract just the JSON part
+        if (cleanedResponse.startsWith('```')) {
+          const jsonStartIndex = cleanedResponse.indexOf('{');
+          const jsonEndIndex = cleanedResponse.lastIndexOf('}');
+          if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
+            cleanedResponse = cleanedResponse.substring(jsonStartIndex, jsonEndIndex + 1);
+          }
+        }
+        
+        // Try to parse the cleaned response
+        result = JSON.parse(cleanedResponse);
+        
+        // Validate the expected fields are present
+        if (!result.text || !result.intent) {
+          throw new Error('Missing required fields in JSON response');
+        }
       } catch (parseError) {
         logger.error(`Error parsing LLM JSON response: ${getErrorMessage(parseError)}`);
         logger.error(`Raw LLM response that failed to parse: ${llmResponse.content}`);
+        
         // It seems the LLM is sometimes returning a plain string.
-        // If the content looks like a direct answer rather than an error/malformed JSON,
-        // we can try to use it directly as the 'text' and set a generic 'intent'.
-        if (typeof llmResponse.content === 'string' && llmResponse.content.length > 0 && !llmResponse.content.startsWith('{')) {
-          logger.warn('LLM response was a plain string, using it as text and setting intent to "direct_response"');
+        const responseText = llmResponse.content.trim();
+        
+        // Check for specific error cases
+        if (responseText.startsWith('Please provide') || 
+            responseText.includes('need more context') ||
+            responseText.includes('I need the')) {
+          logger.warn('LLM returned a context request, using fallback greeting response');
           return {
-            text: llmResponse.content,
+            text: "I'm here to assist you. What can I help you with today?",
+            intent: "greeting"
+          };
+        }
+        
+        // If it seems like a reasonable response, use it directly
+        if (responseText.length > 0 && !responseText.startsWith('{')) {
+          logger.warn('LLM response was a plain string, using it as text with generic intent');
+          return {
+            text: responseText,
             intent: "direct_response"
           };
         }
-        // Otherwise, fall back to a generic error message.
+        
+        // Otherwise, use a generic error message
         return {
-          text: "I'm sorry, I encountered an issue processing the response. Could you please try again?",
+          text: "I'm sorry, I encountered an issue processing your request. Could you please repeat or rephrase?",
           intent: "error_processing_llm"
         };
       }
@@ -725,7 +755,7 @@ export class EnhancedVoiceAIService {
     } catch (error) {
       logger.error('Error generating AI response:', error);
       return {
-        text: "I'm sorry, I didn't quite catch that. Could you please repeat?",
+        text: "I'm sorry, I didn't quite catch that. Could you please repeat what you said?",
         intent: "clarification"
       };
     }
@@ -943,6 +973,24 @@ export class EnhancedVoiceAIService {
     try {
       const { text, personalityId, language = 'en', twiml, fallbackText = text } = params;
       
+      // Log the request to help with debugging
+      logger.info(`TwiML synthesis request for voice ID: ${personalityId}, text length: ${text.length}`);
+      
+      // Safety check for empty or invalid text
+      if (!text || text.trim() === '') {
+        logger.warn('Empty text provided to synthesizeAdaptiveVoiceForTwiML');
+        
+        // If twiml is provided, add fallback
+        if (twiml) {
+          twiml.say({ 
+            voice: 'alice', 
+            language: language === 'hi' ? 'hi-IN' : 'en-US' 
+          }, fallbackText || "I'm sorry, there was an issue with my response.");
+        }
+        
+        return { success: false };
+      }
+      
       // Synthesize the voice
       const speechResponse = await this.synthesizeAdaptiveVoice({
         text, 
@@ -959,7 +1007,7 @@ export class EnhancedVoiceAIService {
           twiml.say({ 
             voice: 'alice', 
             language: language === 'hi' ? 'hi-IN' : 'en-US' 
-          }, fallbackText);
+          }, fallbackText || "I'm sorry, there was an issue generating the audio response.");
         }
         
         return { success: false };
@@ -970,7 +1018,7 @@ export class EnhancedVoiceAIService {
       const path = require('path');
       const os = require('os');
       const cloudinaryService = require('../utils/cloudinaryService').default;
-      const { processAudioForTwiML } = require('../utils/voiceSynthesis');
+      const { processAudioForTwiML, prepareUrlForTwilioPlay } = require('../utils/voiceSynthesis');
       
       // Process the audio for TwiML
       const audioResult = await processAudioForTwiML(
@@ -982,14 +1030,42 @@ export class EnhancedVoiceAIService {
       // If twiml is provided, add the audio
       if (twiml) {
         if (audioResult.method === 'tts') {
-          // Use TTS fallback
+          // Check if this is a chunked audio request
+          if (audioResult.url && audioResult.url.startsWith('USE_CHUNKED_AUDIO:')) {
+            // Extract the text and split it into manageable chunks
+            const fullText = audioResult.url.substring('USE_CHUNKED_AUDIO:'.length);
+            
+            // Split text into chunks of roughly 500 characters each on sentence boundaries
+            const chunks = this.splitTextIntoChunks(fullText);
+            logger.info(`Split text into ${chunks.length} chunks for TTS to avoid TwiML size limits`);
+            
+            // Add each chunk as a separate say command
+            for (const chunk of chunks) {
+              if (chunk.trim()) { // Only add non-empty chunks
+                twiml.say({ 
+                  voice: 'alice', 
+                  language: language === 'hi' ? 'hi-IN' : 'en-US' 
+                }, chunk);
+              }
+            }
+          } else {
+            // Regular TTS fallback with the provided text
+            const textToSpeak = audioResult.url || fallbackText || "I'm sorry, there was an issue with my response.";
+            twiml.say({ 
+              voice: 'alice', 
+              language: language === 'hi' ? 'hi-IN' : 'en-US' 
+            }, textToSpeak);
+          }
+        } else if (audioResult.url && audioResult.url.trim() !== '') {
+          // Use Cloudinary URL or small base64 data only if URL is not empty
+          twiml.play(prepareUrlForTwilioPlay(audioResult.url));
+        } else {
+          // Safeguard against empty URL - fall back to TTS
+          logger.warn('Empty URL detected in audioResult, using TTS fallback');
           twiml.say({ 
             voice: 'alice', 
             language: language === 'hi' ? 'hi-IN' : 'en-US' 
-          }, fallbackText);
-        } else {
-          // Use Cloudinary URL or small base64 data
-          twiml.play(audioResult.url);
+          }, fallbackText || "I'm sorry, there was an issue with my response.");
         }
       }
       
@@ -1011,6 +1087,66 @@ export class EnhancedVoiceAIService {
       
       return { success: false };
     }
+  }
+
+  /**
+   * Split a large text into smaller chunks to avoid TwiML size limits
+   * This tries to split on sentence boundaries to maintain natural speech
+   * @param text Full text to split
+   * @param maxChunkLength Maximum length of each chunk (default: 500 characters)
+   * @returns Array of text chunks
+   */
+  private splitTextIntoChunks(text: string, maxChunkLength: number = 250): string[] {
+    if (!text) return [];
+    
+    // If text is already small enough, return it as a single chunk
+    if (text.length <= maxChunkLength) {
+      return [text];
+    }
+
+    const chunks: string[] = [];
+    let currentPosition = 0;
+
+    while (currentPosition < text.length) {
+      // Determine end of current chunk (max length or earlier)
+      let chunkEnd = Math.min(currentPosition + maxChunkLength, text.length);
+      
+      // Try to find a sentence end (., !, ?) followed by a space or end of text
+      if (chunkEnd < text.length) {
+        // Search backward from max chunk length for a good break point
+        const sentenceEndMatch = text.substring(currentPosition, chunkEnd).match(/[.!?]\s+(?=[A-Z])/g);
+        
+        if (sentenceEndMatch && sentenceEndMatch.length > 0) {
+          // Find the last sentence end within this chunk
+          const lastIndex = text.substring(currentPosition, chunkEnd).lastIndexOf(sentenceEndMatch[sentenceEndMatch.length - 1]);
+          if (lastIndex > 0) {
+            // +2 to include the period and space
+            chunkEnd = currentPosition + lastIndex + 2;
+          }
+        } else {
+          // No sentence end found, try to break at a comma or space
+          const commaIndex = text.substring(currentPosition, chunkEnd).lastIndexOf(', ');
+          if (commaIndex > 0) {
+            chunkEnd = currentPosition + commaIndex + 2; // Include the comma and space
+          } else {
+            // Last resort: break at the last space
+            const spaceIndex = text.substring(currentPosition, chunkEnd).lastIndexOf(' ');
+            if (spaceIndex > 0) {
+              chunkEnd = currentPosition + spaceIndex + 1; // Include the space
+            }
+            // If no space found, we'll just break at maxChunkLength
+          }
+        }
+      }
+      
+      // Add the chunk to our results
+      chunks.push(text.substring(currentPosition, chunkEnd).trim());
+      
+      // Move to next position
+      currentPosition = chunkEnd;
+    }
+    
+    return chunks;
   }
 }
 

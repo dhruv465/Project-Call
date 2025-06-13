@@ -40,7 +40,8 @@ export async function synthesizeVoiceResponse(
     // Skip if text is empty
     if (!text || text.trim() === '') {
       logger.warn('Empty text provided to synthesizeVoiceResponse');
-      twiml.play('');
+      // Use TTS fallback instead of empty audio
+      twiml.say({ voice: 'alice', language: language === 'hi' ? 'hi-IN' : 'en-US' }, 'I apologize, but there was an issue with my response.');
       return false;
     }
 
@@ -61,8 +62,8 @@ export async function synthesizeVoiceResponse(
       
       // Exit early if ElevenLabs is not configured
       if (!config?.elevenLabsConfig?.isEnabled || !config?.elevenLabsConfig?.apiKey) {
-        logger.debug('ElevenLabs not configured, using empty audio fallback');
-        twiml.play('');
+        logger.debug('ElevenLabs not configured, using TTS fallback');
+        twiml.say({ voice: 'alice', language: language === 'hi' ? 'hi-IN' : 'en-US' }, text);
         return false;
       }
       
@@ -71,8 +72,8 @@ export async function synthesizeVoiceResponse(
       const defaultProvider = config.llmConfig.providers.find(p => p.name === defaultProviderName);
       
       if (!defaultProvider?.isEnabled || !defaultProvider?.apiKey) {
-        logger.debug(`Default LLM provider ${defaultProviderName} not configured, using empty audio fallback`);
-        twiml.play('');
+        logger.debug(`Default LLM provider ${defaultProviderName} not configured, using TTS fallback`);
+        twiml.say({ voice: 'alice', language: language === 'hi' ? 'hi-IN' : 'en-US' }, text);
         return false;
       }
       
@@ -83,8 +84,8 @@ export async function synthesizeVoiceResponse(
         
         // If last verification was within the last hour, use fallback
         if (lastVerifiedTime && (now.getTime() - lastVerifiedTime.getTime() < 3600000)) {
-          logger.warn('ElevenLabs verification recently failed, using fallback');
-          twiml.play('');
+          logger.warn('ElevenLabs verification recently failed, using TTS fallback');
+          twiml.say({ voice: 'alice', language: language === 'hi' ? 'hi-IN' : 'en-US' }, text);
           return false;
         }
       }
@@ -141,43 +142,18 @@ export async function synthesizeVoiceResponse(
             
             // Check file size before falling back to base64
             const audioBuffer = fs.readFileSync(speechResponse);
-            if (audioBuffer.length > 48 * 1024) { // 48KB is 75% of 64KB limit
-              logger.error(`Audio file too large for base64 fallback: ${audioBuffer.length} bytes`);
-              // Use TTS as a safer fallback for large files
-              twiml.say({ voice: 'alice', language: language === 'hi' ? 'hi-IN' : 'en-US' }, text);
-              return false;
-            }
             
-            // Only use base64 for small files as a last resort
-            logger.warn(`Using base64 fallback for small audio file: ${audioBuffer.length} bytes`);
-            const audioBase64 = audioBuffer.toString('base64');
-            const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
-            
-            twiml.play(audioDataUrl);
-            return true;
+            // Always use TTS fallback if Cloudinary fails - never use base64
+            logger.warn(`Avoiding base64 encoding to prevent empty audio issues, using TTS fallback`);
+            twiml.say({ voice: 'alice', language: language === 'hi' ? 'hi-IN' : 'en-US' }, text);
+            return false;
           }
         } else {
-          // If Cloudinary is not configured, check audio size before using base64
-          logger.warn('Cloudinary not configured, checking audio size before proceeding');
-          const audioBuffer = fs.readFileSync(speechResponse);
-          
-          // Check file size - if over 48KB (75% of 64KB limit), use a fallback message
-          if (audioBuffer.length > 48 * 1024) {
-            logger.error(`Audio file too large for base64 encoding: ${audioBuffer.length} bytes`);
-            
-            // Use Twilio's TTS as a safe fallback for large files
-            const fallbackText = "I apologize, but I'm having trouble with my voice right now. Please try again later.";
-            twiml.say({ voice: 'alice', language: language === 'hi' ? 'hi-IN' : 'en-US' }, fallbackText);
-            return false;
-          } else {
-            // Only use base64 for very small audio files
-            logger.info(`Audio file small enough for base64 encoding: ${audioBuffer.length} bytes`);
-            const audioBase64 = audioBuffer.toString('base64');
-            const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
-            
-            twiml.play(audioDataUrl);
-            return true;
-          }
+          // If Cloudinary is not configured, always use TTS
+          logger.error('CRITICAL: Cloudinary not configured - check environment variables');
+          logger.warn('Using TTS fallback to prevent empty audio issues');
+          twiml.say({ voice: 'alice', language: language === 'hi' ? 'hi-IN' : 'en-US' }, text);
+          return false;
           }
         } else {
           throw new Error('Synthesized file is empty or does not exist');
@@ -227,24 +203,17 @@ export async function synthesizeVoiceResponse(
             logger.info(`Using Cloudinary URL for audio: ${cloudinaryUrl}`);
             return true;
           } catch (cloudinaryError) {
-            logger.error(`Cloudinary upload failed, falling back to base64: ${getErrorMessage(cloudinaryError)}`);
-            // Fall back to base64 if Cloudinary fails
-            const audioBuffer = fs.readFileSync(filePath);
-            const audioBase64 = audioBuffer.toString('base64');
-            const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
-            
-            twiml.play(audioDataUrl);
-            return true;
+            logger.error(`Cloudinary upload failed: ${getErrorMessage(cloudinaryError)}`);
+            // Always use TTS instead of base64 to prevent empty audio issues
+            logger.warn('Using TTS fallback to prevent empty audio issues');
+            twiml.say({ voice: 'alice', language: language === 'hi' ? 'hi-IN' : 'en-US' }, text);
+            return false;
           }
         } else {
-          // If Cloudinary is not configured, use base64 encoding
-          logger.warn('Cloudinary not configured, using base64 audio encoding (may exceed TwiML size limits)');
-          const audioBuffer = fs.readFileSync(filePath);
-          const audioBase64 = audioBuffer.toString('base64');
-          const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`;
-          
-          twiml.play(audioDataUrl);
-          return true;
+          // If Cloudinary is not configured, use TTS fallback
+          logger.error('CRITICAL: Cloudinary not configured for audio - using TTS fallback');
+          twiml.say({ voice: 'alice', language: language === 'hi' ? 'hi-IN' : 'en-US' }, text);
+          return false;
         }
       } else {
         throw new Error('Synthesized file is empty or does not exist');
@@ -263,16 +232,17 @@ export async function synthesizeVoiceResponse(
     
     // Use fallback behavior
     if (fallbackBehavior === 'silent') {
-      // Don't add anything to the TwiML
-      logger.info('Using silent fallback for voice synthesis');
+      // Use TTS instead of silent for better user experience
+      logger.info('Using TTS fallback instead of silent for better user experience');
+      twiml.say({ voice: 'alice', language: language === 'hi' ? 'hi-IN' : 'en-US' }, text);
     } else if (fallbackBehavior === 'tts') {
       // Use Twilio's built-in TTS as a last resort
       logger.info(`Using Twilio TTS fallback for voice synthesis: "${text.substring(0, 30)}${text.length > 30 ? '...' : ''}"`);
       twiml.say({ voice: 'alice', language: language === 'hi' ? 'hi-IN' : 'en-US' }, text);
     } else {
-      // Default to empty audio
-      logger.info('Using empty audio fallback for voice synthesis');
-      twiml.play('');
+      // Default to TTS instead of empty audio
+      logger.info('Using TTS fallback instead of empty audio for voice synthesis');
+      twiml.say({ voice: 'alice', language: language === 'hi' ? 'hi-IN' : 'en-US' }, text);
     }
     
     return false;
@@ -350,20 +320,97 @@ export async function processAudioForTwiML(
   let tempFilePath: string | null = null;
   
   try {
+    // First validate the audio format
+    const { buffer: validatedBuffer, format, needsConversion } = await validateAudioFormat(audioBuffer);
+    
+    // If format needs conversion, log a warning
+    if (needsConversion) {
+      logger.warn('Audio format may not be optimal for Twilio playback');
+    }
+    
+    // Use the validated buffer
+    audioBuffer = validatedBuffer;
+    
     // Get size of the audio buffer
     const audioSize = audioBuffer.length;
     const audioSizeKB = Math.round(audioSize / 1024 * 100) / 100;
-    logger.info(`Processing audio for TwiML, size: ${audioSize} bytes (${audioSizeKB}KB)`);
+    logger.info(`Processing audio for TwiML, size: ${audioSize} bytes (${audioSizeKB}KB), format: ${format}`);
     
     // Calculate the approximate base64 size
     const base64Size = Math.ceil(audioSize * 1.37); // Base64 encoding increases size by ~37%
     const base64SizeKB = Math.round(base64Size / 1024 * 100) / 100;
     
     if (base64Size > 60000) { // Close to 64KB limit for TwiML
-      logger.warn(`⚠️ Audio would be ${base64SizeKB}KB when base64 encoded - too large for TwiML (limit: 64KB)`);
+      logger.warn(`⚠️ Audio would be ${base64SizeKB}KB when base64 encoded - too large for TwiML (limit: 64KB). Using alternative approach.`);
     }
     
-    // Check if Cloudinary is configured
+    // Detailed logging for better debugging
+    logger.info(`Audio stats - Size: ${audioSizeKB}KB | Approx. Base64 size: ${base64SizeKB}KB | Text length: ${fallbackText.length} chars`);
+    
+    // Safety check - if the audio size is suspiciously small (might be corrupt)
+    if (audioSize < 1000) { // Less than 1KB is suspiciously small
+      logger.warn(`⚠️ Audio size is suspiciously small (${audioSize} bytes), might be corrupted - using TTS fallback`);
+      // Fall back to TTS for potentially corrupted audio
+      return {
+        method: 'tts',
+        url: fallbackText, // Return the text to be used with TTS
+        size: audioSize
+      };
+    }
+    
+    // Always try to split large audio files into smaller chunks
+    if (audioSize > 30 * 1024) { // If audio is larger than 30KB, split it
+      logger.info(`Audio file size (${audioSizeKB}KB) is large, splitting into chunks for better reliability`);
+      
+      try {
+        // First try uploading to Cloudinary even for large files
+        // This gives us the best audio quality while avoiding TwiML size limits
+        if (cloudinaryService.isCloudinaryConfigured()) {
+          // Create a temporary file to upload to Cloudinary
+          tempFilePath = require('path').join(
+            require('os').tmpdir(), 
+            `twiml-audio-${Date.now()}.mp3`
+          );
+          
+          // Write buffer to temp file
+          require('fs').writeFileSync(tempFilePath, audioBuffer);
+          
+          // Upload to Cloudinary with auto-cleanup
+          const cloudinaryUrl = await cloudinaryService.uploadAudioFile(tempFilePath, 'voice-recordings', true);
+          tempFilePath = null; // Set to null since the file has been cleaned up by the upload function
+          
+          logger.info(`Successfully uploaded large audio (${audioSizeKB}KB) to Cloudinary, URL: ${cloudinaryUrl}`);
+          
+          // Format URL for Twilio
+          const formattedUrl = prepareUrlForTwilioPlay(cloudinaryUrl);
+          
+          return {
+            method: 'cloudinary',
+            url: formattedUrl,
+            size: audioSize
+          };
+        }
+      } catch (cloudinaryError) {
+        logger.error(`Failed to upload large audio to Cloudinary: ${getErrorMessage(cloudinaryError)}, falling back to chunked TTS`);
+        
+        // Add a special error prefix to the message to help with debugging
+        return {
+          method: 'tts',
+          url: 'USE_CHUNKED_AUDIO:[CLOUDINARY_ERROR] ' + fallbackText, // Special marker with error indicator
+          size: audioSize
+        };
+      }
+      
+      // If Cloudinary upload failed or not configured, use chunked TTS
+      // For audio splitting, we return a special instruction to use TTS with a flag
+      return {
+        method: 'tts',
+        url: 'USE_CHUNKED_AUDIO:' + fallbackText, // Special marker for chunked audio
+        size: audioSize
+      };
+    }
+    
+    // For smaller files, use Cloudinary as usual
     if (cloudinaryService.isCloudinaryConfigured()) {
       try {
         // Create a temporary file to upload to Cloudinary
@@ -379,52 +426,35 @@ export async function processAudioForTwiML(
         const cloudinaryUrl = await cloudinaryService.uploadAudioFile(tempFilePath, 'voice-recordings', true);
         tempFilePath = null; // Set to null since the file has been cleaned up by the upload function
         
-        // Return Cloudinary URL
+        logger.info(`Successfully uploaded audio to Cloudinary, URL: ${cloudinaryUrl}`);
+        
+        // Format URL for Twilio
+        const formattedUrl = prepareUrlForTwilioPlay(cloudinaryUrl);
+        
         return {
           method: 'cloudinary',
-          url: cloudinaryUrl,
+          url: formattedUrl,
           size: audioSize
         };
       } catch (cloudinaryError) {
         logger.error(`Failed to upload to Cloudinary: ${getErrorMessage(cloudinaryError)}`);
         
-        // Check if file is too large for base64
-        if (audioSize > 48 * 1024) { // 48KB is 75% of Twilio's 64KB limit
-          logger.warn(`Audio too large (${audioSize} bytes) for base64 fallback, using TTS`);
-          return {
-            method: 'tts',
-            url: '', // Empty URL signals TTS should be used
-            size: audioSize
-          };
-        }
-        
-        // Small enough for base64
-        const audioBase64 = audioBuffer.toString('base64');
+        // Always use TTS fallback if Cloudinary fails - never use base64
+        logger.warn(`Using TTS fallback instead of base64 encoding to avoid empty audio issues`);
         return {
-          method: 'base64',
-          url: `data:audio/mpeg;base64,${audioBase64}`,
+          method: 'tts',
+          url: fallbackText, // Return the text to be used with TTS
           size: audioSize
         };
       }
     } else {
-      // Cloudinary not configured
-      logger.warn('Cloudinary not configured for audio processing');
+      // Cloudinary not configured - this should not happen if environment is set up properly
+      logger.error('CRITICAL: Cloudinary not configured for audio processing - check environment variables');
       
-      // Check if file is too large for base64
-      if (audioSize > 48 * 1024) {
-        logger.warn(`Audio too large (${audioSize} bytes) for base64 encoding without Cloudinary, using TTS`);
-        return {
-          method: 'tts',
-          url: '', // Empty URL signals TTS should be used
-          size: audioSize
-        };
-      }
-      
-      // Small enough for base64
-      const audioBase64 = audioBuffer.toString('base64');
+      // Always use TTS fallback if Cloudinary is not configured - never use base64
       return {
-        method: 'base64',
-        url: `data:audio/mpeg;base64,${audioBase64}`,
+        method: 'tts',
+        url: fallbackText, // Return the text to be used with TTS
         size: audioSize
       };
     }
@@ -432,7 +462,7 @@ export async function processAudioForTwiML(
     logger.error(`Error in processAudioForTwiML: ${getErrorMessage(error)}`);
     return {
       method: 'tts',
-      url: '',
+      url: fallbackText, // Return the text to be used with TTS
       size: 0
     };
   } finally {
@@ -448,4 +478,57 @@ export async function processAudioForTwiML(
       }
     }
   }
+}
+
+/**
+ * Validate and potentially convert audio format to ensure compatibility with Twilio
+ * @param audioBuffer The raw audio buffer from ElevenLabs
+ * @returns Validated/converted buffer and information about the format
+ */
+async function validateAudioFormat(audioBuffer: Buffer): Promise<{buffer: Buffer, format: string, needsConversion: boolean}> {
+  // Check if buffer is valid
+  if (!audioBuffer || audioBuffer.length < 100) {
+    logger.warn('Audio buffer is too small or invalid');
+    return { buffer: audioBuffer, format: 'unknown', needsConversion: false };
+  }
+  
+  // Simple check for MP3 format (check for MP3 header magic bytes)
+  // Most MP3 files start with ID3 tag (0x49 0x44 0x33) or directly with MP3 frame sync (0xFF 0xFB)
+  const isMP3 = (
+    // Check for ID3 header
+    (audioBuffer[0] === 0x49 && audioBuffer[1] === 0x44 && audioBuffer[2] === 0x33) ||
+    // Or check for MP3 frame sync
+    (audioBuffer[0] === 0xFF && (audioBuffer[1] === 0xFB || audioBuffer[1] === 0xFA))
+  );
+  
+  if (isMP3) {
+    logger.info('Audio format validated as MP3');
+    return { buffer: audioBuffer, format: 'mp3', needsConversion: false };
+  } else {
+    // Not an MP3 - this is unlikely as ElevenLabs should return MP3 when requested
+    logger.warn('Audio from ElevenLabs is not in MP3 format, this may cause issues with Twilio playback');
+    // We'd ideally convert here, but to keep it simple, we'll just return with a warning
+    return { buffer: audioBuffer, format: 'unknown', needsConversion: true };
+  }
+}
+
+/**
+ * Prepare a URL for Twilio <Play> tag with proper format parameters
+ * @param url The Cloudinary or other audio URL
+ * @returns URL with proper format parameters for Twilio
+ */
+export function prepareUrlForTwilioPlay(url: string): string {
+  // Skip if the URL is already empty
+  if (!url || url.trim() === '') {
+    return url;
+  }
+  
+  // Add content_type parameter for Twilio to properly recognize the audio format
+  // This is especially important for Cloudinary URLs
+  const formattedUrl = url.includes('?') 
+    ? `${url}&content_type=audio/mpeg` 
+    : `${url}?content_type=audio/mpeg`;
+    
+  logger.debug(`Formatted URL for Twilio Play: ${formattedUrl}`);
+  return formattedUrl;
 }
