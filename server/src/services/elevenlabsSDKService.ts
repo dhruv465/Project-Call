@@ -11,6 +11,8 @@ import logger from '../utils/logger';
 import { getErrorMessage } from '../utils/logger';
 import ElevenLabs from 'elevenlabs-node';
 import WebSocket from 'ws';
+import * as latencyConfig from '../config/latencyOptimization';
+import responseCache from '../utils/responseCache';
 
 // Types
 type Language = 'English' | 'Hindi';
@@ -42,7 +44,8 @@ export interface ConversationMessage {
 }
 
 export interface StreamOptions {
-  latencyOptimization?: boolean;
+  latencyOptimization?: boolean | number;
+  optimizationProfile?: 'ultraLow' | 'low' | 'balanced' | 'highQuality';
   voiceSettings?: {
     stability?: number;
     similarityBoost?: number;
@@ -50,6 +53,7 @@ export interface StreamOptions {
     speakerBoost?: boolean;
   };
   model?: string;
+  outputFormat?: string;
 }
 
 // Events that can be emitted by the service
@@ -74,6 +78,7 @@ export class ElevenLabsSDKService extends EventEmitter {
   private activeConnections: Map<string, WebSocket> = new Map();
   private openAIApiKey: string;
   private elevenlabs: ElevenLabs;
+  private responseCache: any; // For caching common responses
 
   /**
    * Create a new ElevenLabs SDK Service
@@ -93,6 +98,15 @@ export class ElevenLabsSDKService extends EventEmitter {
       this.elevenlabs = new ElevenLabs({
         apiKey: this.apiKey
       });
+      
+      // Initialize response cache
+      try {
+        this.responseCache = require('../utils/responseCache').default;
+        logger.debug('Response cache initialized for ElevenLabsSDKService');
+      } catch (cacheError) {
+        logger.warn(`Failed to initialize response cache: ${getErrorMessage(cacheError)}`);
+        this.responseCache = null;
+      }
       
       logger.info('ElevenLabs SDK Service initialized with API key', {
         keyLength: this.apiKey.length,
@@ -188,17 +202,33 @@ export class ElevenLabsSDKService extends EventEmitter {
       similarityBoost?: number;
       style?: number;
       modelId?: string;
+      optimizeLatency?: boolean;
     }
   ): Promise<Buffer> {
     try {
+      // Check cache first for common phrases (greetings, acknowledgments, etc.)
+      const cacheKey = `${voiceId}_${text}`;
+      if (this.responseCache && this.responseCache.has(cacheKey)) {
+        logger.info(`Cache hit for text: "${text.substring(0, 20)}..."`);
+        return this.responseCache.get(cacheKey);
+      }
+
       const voiceSettings = {
-        stability: options?.stability || 0.75,
+        stability: options?.stability || 0.5, // Lower stability for faster generation
         similarity_boost: options?.similarityBoost || 0.75,
         style: options?.style || 0.0,
         use_speaker_boost: true
       };
 
-      const modelId = options?.modelId || 'eleven_multilingual_v2';
+      // Use optimized model for latency-sensitive responses
+      const modelId = options?.optimizeLatency 
+        ? 'eleven_monolingual_v1' // Faster model for short responses
+        : (options?.modelId || 'eleven_multilingual_v2');
+      
+      // Use lower quality for faster responses
+      const outputFormat = options?.optimizeLatency 
+        ? 'mp3_44100_64' // Lower bitrate for faster generation
+        : 'mp3_44100_128';
       
       // Use the SDK to generate speech
       const audioBuffer = await this.elevenlabs.textToSpeech({
@@ -206,13 +236,101 @@ export class ElevenLabsSDKService extends EventEmitter {
         voice_id: voiceId,
         model_id: modelId,
         voice_settings: voiceSettings,
-        output_format: 'mp3_44100_128' // Explicitly request MP3 format at high quality
+        output_format: outputFormat
       });
 
-      return Buffer.from(audioBuffer);
+      const buffer = Buffer.from(audioBuffer);
+      
+      // Cache the result for common phrases (less than 100 chars)
+      if (this.responseCache && text.length < 100) {
+        this.responseCache.set(cacheKey, buffer);
+        logger.debug(`Cached response for: "${text.substring(0, 20)}..."`);
+      }
+
+      return buffer;
     } catch (error) {
       logger.error(`Error generating speech: ${getErrorMessage(error)}`);
       throw new Error(`Speech generation failed: ${getErrorMessage(error)}`);
+    }
+  }
+
+  /**
+   * Stream speech generation with optimized settings
+   * @param text Text to synthesize
+   * @param voiceId Voice ID to use
+   * @param onAudioChunk Callback for audio chunks
+   * @param options Options for speech synthesis
+   */
+  public async streamSpeechGeneration(
+    text: string,
+    voiceId: string,
+    onAudioChunk: (chunk: Buffer) => void,
+    options?: {
+      optimizeLatency?: boolean;
+      stability?: number;
+      similarityBoost?: number;
+      style?: number;
+    }
+  ): Promise<void> {
+    try {
+      // Check cache first for common phrases
+      const cacheKey = `${voiceId}_${text}`;
+      if (this.responseCache && this.responseCache.has(cacheKey)) {
+        logger.debug(`Using cached audio for text: "${text.substring(0, 20)}..."`);
+        onAudioChunk(this.responseCache.get(cacheKey));
+        return;
+      }
+      
+      // Use optimized settings for latency by default
+      const streamOptions = {
+        latencyOptimization: options?.optimizeLatency !== false, // Convert to boolean
+        voiceSettings: {
+          stability: options?.stability || 0.5, // Lower stability for faster generation
+          similarityBoost: options?.similarityBoost || 0.75,
+          style: options?.style || 0.0,
+          speakerBoost: true
+        }
+      };
+      
+      // Generate a temporary conversation ID for this one-time streaming
+      const tempConversationId = `temp_${Date.now()}`;
+      
+      // Create the conversation if it doesn't exist
+      if (!this.conversations.has(tempConversationId)) {
+        this.createConversation();
+      }
+      
+      // Use the streamSpeech method to stream the speech
+      await this.streamSpeech(
+        tempConversationId,
+        text,
+        voiceId,
+        onAudioChunk,
+        streamOptions
+      );
+      
+      // Cache the response if it's short (less than 100 chars)
+      if (this.responseCache && text.length < 100) {
+        try {
+          // Generate the complete audio in the background for caching
+          this.generateSpeech(text, voiceId, { optimizeLatency: true })
+            .then(buffer => {
+              if (this.responseCache) {
+                this.responseCache.set(cacheKey, buffer);
+                logger.debug(`Cached response for future use: "${text.substring(0, 20)}..."`);
+              }
+            })
+            .catch(err => {
+              logger.debug(`Failed to cache response: ${getErrorMessage(err)}`);
+            });
+        } catch (cacheError) {
+          // Ignore cache errors - caching is optional
+          logger.debug(`Error in background caching: ${getErrorMessage(cacheError)}`);
+        }
+      }
+    } catch (error) {
+      logger.error(`Error streaming speech generation: ${getErrorMessage(error)}`);
+      throw new Error(`Failed to stream speech: ${getErrorMessage(error)}`);
     }
   }
 
@@ -247,7 +365,7 @@ export class ElevenLabsSDKService extends EventEmitter {
     ws.on('open', () => {
       logger.info(`WebSocket connection opened for conversation ${conversationId}`);
       
-      // Send initialization message
+      // Send initialization message with optimized settings
       ws.send(JSON.stringify({
         text,
         voice_id: voiceId,
@@ -259,7 +377,12 @@ export class ElevenLabsSDKService extends EventEmitter {
           style: options?.voiceSettings?.style || 0.0,
           use_speaker_boost: options?.voiceSettings?.speakerBoost || true
         },
-        optimize_streaming_latency: options?.latencyOptimization || 0
+        optimize_streaming_latency: options?.latencyOptimization ? (
+          // Use integer levels 0-4 for latency optimization
+          // 0 = disabled, 4 = max optimization
+          options.latencyOptimization === true ? 3 : options.latencyOptimization
+        ) : 0,
+        output_format: options?.outputFormat || 'mp3_44100_128'
       }));
 
       // Emit connection status
@@ -623,6 +746,183 @@ export class ElevenLabsSDKService extends EventEmitter {
   public getActiveConversations(): ConversationState[] {
     return Array.from(this.conversations.values())
       .filter(conv => conv.active);
+  }
+
+  /**
+   * Generate speech with optimized latency settings based on profile
+   * @param text Text to synthesize
+   * @param voiceId Voice ID to use
+   * @param options Options for speech synthesis with optimization profile
+   */
+  public async generateOptimizedSpeech(
+    text: string,
+    voiceId: string,
+    options?: {
+      optimizationProfile?: 'ultraLow' | 'low' | 'balanced' | 'highQuality';
+      customSettings?: {
+        stability?: number;
+        similarityBoost?: number;
+        style?: number;
+      };
+      cacheAsPriority?: boolean;
+    }
+  ): Promise<Buffer> {
+    try {
+      // Check cache first for common phrases
+      const cacheKey = `${voiceId}_${text}`;
+      if (this.responseCache && this.responseCache.has(cacheKey)) {
+        logger.debug(`Cache hit for optimized speech: "${text.substring(0, 20)}..."`);
+        return this.responseCache.get(cacheKey);
+      }
+
+      // Default to balanced profile if none specified
+      const profile = options?.optimizationProfile || 'balanced';
+      const { voiceSettings } = require('../config/latencyOptimization');
+      const profileSettings = voiceSettings[profile];
+      
+      // Combine profile settings with any custom overrides
+      const speechSettings = {
+        stability: options?.customSettings?.stability || profileSettings.stability,
+        similarityBoost: options?.customSettings?.similarityBoost || profileSettings.similarityBoost,
+        style: options?.customSettings?.style || profileSettings.style,
+        modelId: profileSettings.model,
+        optimizeLatency: profile === 'ultraLow' || profile === 'low'
+      };
+      
+      // Generate speech with selected profile
+      const buffer = await this.generateSpeech(text, voiceId, speechSettings);
+      
+      // Cache the result and mark as priority if requested
+      if (this.responseCache) {
+        this.responseCache.set(cacheKey, buffer);
+        
+        if (options?.cacheAsPriority) {
+          this.responseCache.addPriorityItem(cacheKey);
+          logger.debug(`Cached as priority item: "${text.substring(0, 20)}..."`);
+        }
+      }
+      
+      return buffer;
+    } catch (error) {
+      logger.error(`Error generating optimized speech: ${getErrorMessage(error)}`);
+      throw new Error(`Optimized speech generation failed: ${getErrorMessage(error)}`);
+    }
+  }
+
+  /**
+   * Stream speech with optimized settings based on profile
+   * @param text Text to synthesize
+   * @param voiceId Voice ID to use
+   * @param onAudioChunk Callback for audio chunks
+   * @param options Options for speech synthesis with optimization profile
+   */
+  public async streamOptimizedSpeech(
+    textOrConversationId: string,
+    voiceId: string,
+    onAudioChunk: (chunk: Buffer) => void,
+    options?: {
+      optimizationProfile?: 'ultraLow' | 'low' | 'balanced' | 'highQuality';
+      cacheResult?: boolean;
+      conversationId?: string;
+      modelId?: string;
+      interrupted?: boolean;
+      text?: string;
+    }
+  ): Promise<void> {
+    try {
+      // Determine if this is the conversation overload or the text overload
+      const isConversationOverload = this.conversations.has(textOrConversationId) && !options?.text;
+      
+      // Set variables based on which overload is being used
+      const conversationId = isConversationOverload ? textOrConversationId : options?.conversationId;
+      const text = isConversationOverload ? (options?.text || '') : textOrConversationId;
+      
+      if (isConversationOverload && !options?.text) {
+        // This is a problem - we don't have text for the conversation overload
+        throw new Error('Text parameter is required when using conversation overload');
+      }
+      
+      // Check cache first
+      const cacheKey = `${voiceId}_${text}`;
+      if (this.responseCache && this.responseCache.has(cacheKey)) {
+        onAudioChunk(this.responseCache.get(cacheKey));
+        return;
+      }
+      
+      // Default to balanced profile if none specified
+      const profile = options?.optimizationProfile || 'balanced';
+      // Import directly to avoid issues with voiceSettings
+      const { voiceSettings } = require('../config/latencyOptimization');
+      const profileSettings = voiceSettings[profile];
+      
+      // Set latency optimization level based on profile
+      let latencyOptimization: boolean | number = false;
+      if (profile === 'ultraLow') {
+        latencyOptimization = 4; // Maximum optimization
+      } else if (profile === 'low') {
+        latencyOptimization = 3; // High optimization
+      } else if (profile === 'balanced') {
+        latencyOptimization = 2; // Moderate optimization
+      } else {
+        latencyOptimization = 0; // No optimization for high quality
+      }
+      
+      // Collect all chunks to store in cache if needed
+      const chunks: Buffer[] = [];
+      
+      // Create a proxy callback that captures audio chunks for caching
+      const onAudioChunkProxy = (chunk: Buffer) => {
+        // Collect for caching
+        chunks.push(chunk);
+        // Forward to caller
+        onAudioChunk(chunk);
+      };
+      
+      // Use appropriate method based on whether we have a valid conversationId
+      if (conversationId && this.conversations.has(conversationId)) {
+        await this.streamSpeech(
+          conversationId,
+          text,
+          voiceId,
+          onAudioChunkProxy,
+          {
+            latencyOptimization,
+            voiceSettings: {
+              stability: profileSettings.stability,
+              similarityBoost: profileSettings.similarityBoost,
+              style: profileSettings.style,
+              speakerBoost: profileSettings.speakerBoost
+            },
+            model: profileSettings.model || options?.modelId,
+            outputFormat: profileSettings.outputFormat
+          }
+        );
+      } else {
+        // Use temporary conversation ID or streamSpeechGeneration
+        const tempId = `temp_${Date.now()}`;
+        await this.streamSpeechGeneration(
+          text,
+          voiceId,
+          onAudioChunkProxy,
+          {
+            optimizeLatency: latencyOptimization !== 0,
+            stability: profileSettings.stability,
+            similarityBoost: profileSettings.similarityBoost,
+            style: profileSettings.style
+          }
+        );
+      }
+      
+      // Cache the complete audio if it's short or caching was explicitly requested
+      if ((options?.cacheResult || text.length < 100) && chunks.length > 0 && this.responseCache) {
+        const completeAudio = Buffer.concat(chunks);
+        this.responseCache.set(cacheKey, completeAudio);
+        logger.debug(`Cached streamed audio for: "${text.substring(0, 20)}..."`);
+      }
+    } catch (error) {
+      logger.error(`Error streaming optimized speech: ${getErrorMessage(error)}`);
+      throw new Error(`Optimized speech streaming failed: ${getErrorMessage(error)}`);
+    }
   }
 }
 

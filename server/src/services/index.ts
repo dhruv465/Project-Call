@@ -144,7 +144,25 @@ export const initializeServicesAfterDB = async () => {
         
         // Re-initialize the ElevenLabs SDK Service with the database API keys
         const { initializeSDKService } = await import('./elevenlabsSDKService');
-        initializeSDKService(elevenLabsApiKey, openAIApiKey);
+        const sdkService = initializeSDKService(elevenLabsApiKey, openAIApiKey);
+        
+        // Load the SDK extension with streaming methods
+        await import('./elevenlabsSDKExtension');
+        
+        // Initialize optimized stream controllers
+        const { initialize: initializeOptimizedController } = await import('../controllers/optimizedStreamController');
+        await initializeOptimizedController();
+        
+        // Initialize low-latency stream controller
+        const { initialize: initializeLowLatencyController } = await import('../controllers/lowLatencyStreamController');
+        await initializeLowLatencyController();
+        
+        // Initialize parallel processing service if SDK service is available
+        if (sdkService) {
+          const { initializeParallelProcessingService } = await import('./parallelProcessingService');
+          initializeParallelProcessingService(sdkService, llmService);
+          logger.info('Parallel processing service initialized for low-latency responses');
+        }
         
         // For EnhancedVoiceAIService, since there's no updateApiKeys method,
         // we'll create a new instance with the new keys

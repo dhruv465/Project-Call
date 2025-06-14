@@ -578,6 +578,32 @@ const startServer = async () => {
         metrics: `http://${HOST}:${PORT}/metrics`,
         api: `http://${HOST}:${PORT}/api`
       });
+      
+      // Initialize cache preloading for optimized latency
+      try {
+        const { preloadAllVoices } = require('./utils/cachePreloader');
+        const { cacheSettings } = require('./config/latencyOptimization');
+        
+        // Check if preloading is enabled
+        if (cacheSettings.preload.enabled) {
+          logger.info('Starting voice response cache preloading...');
+          
+          // Start preloading with a delay to allow server to stabilize
+          setTimeout(() => {
+            preloadAllVoices()
+              .then(result => {
+                logger.info(`Cache preloading completed: ${result.voiceCount} voices, ${result.phrasesLoaded} phrases`);
+              })
+              .catch(error => {
+                logger.error(`Cache preloading failed: ${error.message}`);
+              });
+          }, 5000); // 5-second delay before starting preload
+        } else {
+          logger.info('Voice response cache preloading disabled by configuration');
+        }
+      } catch (error) {
+        logger.error(`Error initializing cache preloading: ${error.message}`);
+      }
     });
     
     // Handle server errors

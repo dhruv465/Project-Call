@@ -1,4 +1,4 @@
-import winston from 'winston';
+import * as winston from 'winston';
 
 // Create a custom logger instance with desired format and transports
 const logger = winston.createLogger({
