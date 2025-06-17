@@ -220,10 +220,28 @@ export class ElevenLabsSDKService extends EventEmitter {
         use_speaker_boost: true
       };
 
+      // Get model selection from configuration if available
+      let useFlashModel = true; // Default to using Flash v2.5
+      
+      try {
+        const Configuration = require('../models/Configuration').default;
+        const config = await Configuration.findOne();
+        if (config && typeof config.elevenLabsConfig.useFlashModel !== 'undefined') {
+          useFlashModel = config.elevenLabsConfig.useFlashModel;
+        }
+      } catch (error) {
+        logger.warn(`Could not get Flash model setting from configuration, using default: ${useFlashModel}`);
+      }
+      
       // Use optimized model for latency-sensitive responses
-      const modelId = options?.optimizeLatency 
-        ? 'eleven_monolingual_v1' // Faster model for short responses
-        : (options?.modelId || 'eleven_multilingual_v2');
+      let modelId;
+      if (useFlashModel) {
+        modelId = 'eleven_turbo_v2'; // Flash v2.5 model for ultra-low latency (~75ms)
+      } else if (options?.optimizeLatency) {
+        modelId = 'eleven_monolingual_v1'; // Older faster model
+      } else {
+        modelId = options?.modelId || 'eleven_multilingual_v2'; // Default to multilingual
+      }
       
       // Use lower quality for faster responses
       const outputFormat = options?.optimizeLatency 

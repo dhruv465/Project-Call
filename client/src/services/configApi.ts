@@ -40,7 +40,7 @@ interface VoiceSynthesisTestData {
 }
 
 interface DeleteApiKeyParams {
-  provider: 'elevenlabs' | 'llm' | 'twilio' | 'webhook';
+  provider: 'elevenlabs' | 'llm' | 'twilio' | 'webhook' | 'deepgram';
   name?: string; // For LLM providers, specify which one (openai, anthropic, etc.)
 }
 

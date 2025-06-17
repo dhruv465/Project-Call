@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/useToast";
 import api from "@/services/api";
 import { configApi } from "@/services/configApi";
@@ -62,6 +63,13 @@ interface Configuration {
   voiceClarity: number;
   elevenLabsApiKey: string;
   elevenLabsStatus?: "unverified" | "verified" | "failed";
+  useFlashModel?: boolean;
+
+  // Speech Recognition Settings
+  deepgramApiKey: string;
+  deepgramStatus?: "unverified" | "verified" | "failed";
+  deepgramEnabled?: boolean;
+  deepgramModel?: string;
 
   // Phone Settings
   twilioAccountSid: string;
@@ -119,6 +127,13 @@ const Configuration = () => {
     voiceClarity: 0.9,
     elevenLabsApiKey: "",
     elevenLabsStatus: "unverified",
+    useFlashModel: true, // Default to using Flash model
+
+    // Speech Recognition Settings
+    deepgramApiKey: "",
+    deepgramStatus: "unverified",
+    deepgramEnabled: true,
+    deepgramModel: "nova-2",
 
     // Phone Settings
     twilioAccountSid: "",
@@ -415,6 +430,12 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           voiceClarity: data.elevenLabsConfig?.voiceClarity || 0.9,
           elevenLabsApiKey: data.elevenLabsConfig?.apiKey || "",
           elevenLabsStatus: data.elevenLabsConfig?.status || "unverified",
+          useFlashModel: data.elevenLabsConfig?.useFlashModel !== false, // Default to true if not specified
+
+          deepgramApiKey: data.deepgramConfig?.apiKey || "",
+          deepgramStatus: data.deepgramConfig?.status || "unverified",
+          deepgramEnabled: data.deepgramConfig?.isEnabled !== false, // Default to true if not specified
+          deepgramModel: data.deepgramConfig?.model || "nova-2",
 
           twilioAccountSid: data.twilioConfig?.accountSid || "",
           twilioAuthToken: data.twilioConfig?.authToken || "",
@@ -474,12 +495,24 @@ Keep the conversation natural and engaging. If they're not interested, politely 
         voiceSpeed: config.voiceSpeed,
         voiceStability: config.voiceStability,
         voiceClarity: config.voiceClarity,
+        useFlashModel: config.useFlashModel,
         elevenLabsApiKey: config.elevenLabsApiKey
           ? `${config.elevenLabsApiKey.slice(
               0,
               4
             )}...${config.elevenLabsApiKey.slice(-4)}`
           : "NOT SET",
+      });
+
+      console.log("Saving configuration with speech recognition settings:", {
+        deepgramApiKey: config.deepgramApiKey
+          ? `${config.deepgramApiKey.slice(
+              0,
+              4
+            )}...${config.deepgramApiKey.slice(-4)}`
+          : "NOT SET",
+        deepgramEnabled: config.deepgramEnabled,
+        deepgramModel: config.deepgramModel,
       });
 
       console.log("Saving configuration with LLM settings:", {
@@ -511,6 +544,14 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           voiceClarity: config.voiceClarity,
           status: config.elevenLabsStatus,
           availableVoices: availableVoices.length > 0 ? availableVoices : [],
+          useFlashModel: config.useFlashModel,
+        },
+        deepgramConfig: {
+          apiKey: config.deepgramApiKey,
+          isEnabled: config.deepgramEnabled,
+          model: config.deepgramModel || "nova-2",
+          tier: "enhanced",
+          status: config.deepgramStatus,
         },
         llmConfig: {
           defaultProvider: config.llmProvider,
@@ -992,6 +1033,13 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           description: "Your ElevenLabs settings have been removed.",
           variant: "destructive",
         });
+      } else if (itemToDelete.type === "deepgram") {
+        await configApi.deleteApiKey({ provider: "deepgram" });
+        toast({
+          title: "Deepgram Configuration Deleted",
+          description: "Your Deepgram API key has been removed.",
+          variant: "destructive",
+        });
       } else if (itemToDelete.type === "llm" && itemToDelete.name) {
         await configApi.deleteApiKey({
           provider: "llm",
@@ -1030,6 +1078,12 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             ...prevConfig,
             elevenLabsApiKey: "",
             elevenLabsStatus: "unverified",
+          };
+        } else if (itemToDelete.type === "deepgram") {
+          return {
+            ...prevConfig,
+            deepgramApiKey: "",
+            deepgramStatus: "unverified",
           };
         } else if (itemToDelete.type === "llm" && itemToDelete.name) {
           return {
@@ -1584,6 +1638,38 @@ Keep the conversation natural and engaging. If they're not interested, politely 
             </div>
           </div>
           
+          {config.voiceProvider === "elevenlabs" && (
+            <div className="flex items-center space-x-2 mt-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="useFlashModel"
+                  checked={config.useFlashModel}
+                  onCheckedChange={(checked) => updateConfig("useFlashModel", checked)}
+                />
+                <Label htmlFor="useFlashModel" className="cursor-pointer">
+                  Use ElevenLabs Flash v2.5 for ultra-low latency (~75ms)
+                </Label>
+              </div>
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <button className="h-5 w-5 text-muted-foreground hover:text-foreground">
+                    <Info className="h-4 w-4" />
+                  </button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold">Flash v2.5 Model</h4>
+                    <p className="text-sm text-muted-foreground">
+                      ElevenLabs Flash v2.5 (eleven_turbo_v2) is an ultra-low latency model optimized for real-time conversations.
+                      It provides much faster response times (around 75ms) compared to standard models,
+                      which significantly improves the natural flow of conversations.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </div>
+          )}
+          
           <Button
             variant="outline"
             size="sm"
@@ -1600,6 +1686,95 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           <div className="text-xs text-muted-foreground mt-2">
             Make sure you've entered a valid API key and voice ID before
             testing. Voice IDs can be found in your ElevenLabs dashboard.
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Speech Recognition Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mic className="h-5 w-5" />
+            Speech Recognition
+            <HoverCard>
+              <HoverCardTrigger asChild>
+                <button className="ml-1 h-5 w-5 text-muted-foreground hover:text-foreground transition-colors">
+                  <Info className="h-5 w-5" />
+                </button>
+              </HoverCardTrigger>
+              <HoverCardContent className="w-80">
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold">Speech Recognition</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Configure Deepgram Nova-2 for high-accuracy, low-latency speech-to-text services.
+                    Nova-2 provides significantly better transcription quality and reduced latency
+                    compared to other STT services.
+                  </p>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
+          </CardTitle>
+          <CardDescription>
+            Configure speech-to-text services for your AI calls
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="space-y-2 lg:col-span-1">
+              <div className="flex justify-between items-center">
+                <Label htmlFor="deepgramApiKey">Deepgram API Key</Label>
+                {config.deepgramApiKey && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteItem("deepgram")}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete Key
+                  </Button>
+                )}
+              </div>
+              <PasswordInput
+                id="deepgramApiKey"
+                value={config.deepgramApiKey}
+                onChange={(e) => updateConfig("deepgramApiKey", e.target.value)}
+                placeholder="Enter your Deepgram API key"
+              />
+            </div>
+            <div className="space-y-2 lg:col-span-1">
+              <Label htmlFor="deepgramModel">Model</Label>
+              <Select
+                value={config.deepgramModel}
+                onValueChange={(value) => updateConfig("deepgramModel", value)}
+              >
+                <SelectTrigger id="deepgramModel" className="w-full h-10 rounded-xl">
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nova-2">Nova-2 (Recommended)</SelectItem>
+                  <SelectItem value="nova">Nova</SelectItem>
+                  <SelectItem value="enhanced">Enhanced</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-2 mt-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="deepgramEnabled"
+                checked={config.deepgramEnabled}
+                onCheckedChange={(checked) => updateConfig("deepgramEnabled", checked)}
+              />
+              <Label htmlFor="deepgramEnabled" className="cursor-pointer">
+                Enable Deepgram for speech recognition (falls back to OpenAI Whisper if disabled)
+              </Label>
+            </div>
+          </div>
+          
+          <div className="text-xs text-muted-foreground mt-2">
+            Deepgram Nova-2 provides higher accuracy and lower latency than OpenAI Whisper for speech recognition.
           </div>
         </CardContent>
       </Card>
@@ -2045,6 +2220,8 @@ Keep the conversation natural and engaging. If they're not interested, politely 
                 "Are you sure you want to delete your Twilio configuration?"}
               {itemToDelete?.type === "elevenlabs" &&
                 "Are you sure you want to delete your ElevenLabs configuration?"}
+              {itemToDelete?.type === "deepgram" &&
+                "Are you sure you want to delete your Deepgram API key?"}
               {itemToDelete?.type === "llm" &&
                 `Are you sure you want to delete your ${itemToDelete.name} API key?`}
               {itemToDelete?.type === "webhook" &&

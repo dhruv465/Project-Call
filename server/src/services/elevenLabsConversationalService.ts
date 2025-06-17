@@ -443,8 +443,29 @@ export class ElevenLabsConversationalService extends EventEmitter {
         speakerBoost: true
       };
 
-      // Choose appropriate model based on language
-      const modelId = language === 'hi' ? 'eleven_multilingual_v2' : 'eleven_monolingual_v1';
+      // Choose appropriate model based on language and flash model availability
+      let modelId;
+      
+      // Check if we should use Flash v2.5 model
+      let useFlashModel = true; // Default to using Flash v2.5
+      
+      try {
+        const Configuration = require('../models/Configuration').default;
+        const config = await Configuration.findOne();
+        if (config && typeof config.elevenLabsConfig.useFlashModel !== 'undefined') {
+          useFlashModel = config.elevenLabsConfig.useFlashModel;
+        }
+      } catch (error) {
+        logger.warn(`Could not get Flash model setting from configuration, using default: ${useFlashModel}`);
+      }
+      
+      if (useFlashModel) {
+        modelId = 'eleven_turbo_v2'; // Flash v2.5 model for ultra-low latency (~75ms)
+      } else if (language === 'hi') {
+        modelId = 'eleven_multilingual_v2'; // Use multilingual model for Hindi
+      } else {
+        modelId = 'eleven_monolingual_v1'; // Use monolingual for English if not using Flash
+      }
 
       // Generate the speech
       const audioBuffer = await this.generateSpeech(

@@ -33,6 +33,16 @@ export interface IConfiguration extends mongoose.Document {
       resetDate?: Date;
       status: string;
     };
+    useFlashModel?: boolean; // Whether to use the Flash v2.5 model
+  };
+  deepgramConfig: {
+    apiKey: string;
+    isEnabled: boolean;
+    model: string; // 'nova-2' by default
+    tier: string; // 'enhanced' by default
+    lastVerified?: Date | null;
+    status?: 'unverified' | 'verified' | 'failed';
+    lastError?: string;
   };
   voiceAIConfig: {
     personalities: {
@@ -84,9 +94,14 @@ export interface IConfiguration extends mongoose.Document {
       isEnabled: boolean;
       lastVerified?: Date | null;
       status?: 'unverified' | 'verified' | 'failed';
+      useRealtimeAPI?: boolean; // Whether to use the OpenAI Realtime API for ultra-low latency
+      defaultModel?: string; // Default model for the provider
+      baseUrl?: string; // Optional base URL for the provider
+      organization?: string; // Optional organization ID for OpenAI
     }[];
     defaultProvider: string;
     defaultModel: string;
+    llmService?: any; // Runtime instance of LLMService for sharing
     temperature: number;
     maxTokens: number;
   };
@@ -273,6 +288,41 @@ const ConfigurationSchema = new mongoose.Schema(
         status: {
           type: String,
         },
+      },
+      useFlashModel: {
+        type: Boolean,
+        default: true,
+      },
+    },
+    deepgramConfig: {
+      apiKey: {
+        type: String,
+        required: false,
+        default: '',
+      },
+      isEnabled: {
+        type: Boolean,
+        default: false,
+      },
+      model: {
+        type: String,
+        default: 'nova-2',
+      },
+      tier: {
+        type: String,
+        default: 'enhanced',
+      },
+      lastVerified: {
+        type: Date,
+        default: null,
+      },
+      status: {
+        type: String,
+        enum: ['unverified', 'verified', 'failed'],
+        default: 'unverified',
+      },
+      lastError: {
+        type: String,
       },
     },
     voiceAIConfig: {

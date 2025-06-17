@@ -290,11 +290,29 @@ export const handleOptimizedVoiceStream = async (ws: WebSocket, req: Request): P
             const completeAudio = Buffer.concat(audioBuffer);
             audioBuffer = []; // Reset buffer
             
-            // Process the audio with speech recognition
-            // This would normally be handled by a speech-to-text service
-            const transcribedText = data?.toString() || (() => { 
-              throw new Error('Speech recognition not properly configured - no audio data received'); 
-            })();
+            // Process the audio with speech recognition using Deepgram if available
+            let transcribedText;
+            
+            // Get the speech analysis service from the conversation engine
+            const speechAnalysisService = conversationEngine.getSpeechAnalysisService();
+            
+            try {
+              // Try to transcribe using Deepgram
+              if (config.deepgramConfig?.isEnabled && speechAnalysisService) {
+                logger.info(`Using Deepgram for speech recognition in call ${callId}`);
+                transcribedText = await speechAnalysisService.transcribeAudio(completeAudio);
+              } else {
+                // Fallback to existing method
+                logger.warn(`Deepgram not configured, using fallback for call ${callId}`);
+                transcribedText = data?.toString() || (() => { 
+                  throw new Error('Speech recognition not properly configured - no audio data received'); 
+                })();
+              }
+            } catch (transcriptionError) {
+              logger.error(`Error in speech transcription for call ${callId}: ${transcriptionError.message}`);
+              // Fallback to existing method
+              transcribedText = data?.toString() || "Sorry, I couldn't hear you clearly.";
+            }
             
             // Add user input to conversation
             const userMessage = {
@@ -344,8 +362,53 @@ export const handleOptimizedVoiceStream = async (ws: WebSocket, req: Request): P
                                  session.currentPersonality.voiceId || 
                                  config.elevenLabsConfig.availableVoices[0].voiceId;
             
-            // Wait for AI response
-            const aiResponse = await aiResponsePromise;
+            // Get the LLM provider configuration
+            const openAIProvider = config.llmConfig.providers.find(p => p.name === 'openai');
+            
+            // Generate AI response - use Realtime API if available and enabled
+            let aiResponse;
+            if (openAIProvider?.useRealtimeAPI) {
+              logger.info(`Using OpenAI Realtime API for call ${callId}`);
+              // Use the LLM service from the global instance
+              const llmService = global.llmService;
+              if (!llmService) {
+                logger.warn('LLM service not found in global instance, falling back to conversation engine');
+                aiResponse = await aiResponsePromise;
+              } else {
+                // Use direct LLM service for realtime processing
+                const messages = session.conversationHistory.map(turn => ({
+                  role: turn.speaker === 'agent' ? 'assistant' : 'user',
+                  content: turn.content
+                }));
+                
+                // Add current message
+                messages.push({
+                  role: 'user',
+                  content: transcribedText
+                });
+                
+                // We'll collect the response here
+                let responseText = '';
+                
+                // Use the realtime chat method for ultra-low latency
+                await llmService.realtimeChat({
+                  provider: 'openai',
+                  model: openAIProvider.defaultModel,
+                  messages: messages,
+                  options: {
+                    temperature: 0.7,
+                    maxTokens: 150
+                  }
+                }, (chunk) => {
+                  responseText += chunk.content;
+                });
+                
+                aiResponse = { text: responseText };
+              }
+            } else {
+              // Use standard conversation engine
+              aiResponse = await aiResponsePromise;
+            }
             
             // Stream the audio response for lowest latency
             try {

@@ -424,6 +424,7 @@ const initializeServices = async () => {
     let openAIApiKey = '';
     let anthropicApiKey = '';
     let googleSpeechApiKey = '';
+    let deepgramApiKey = '';
     
     // If configuration exists, use it; otherwise use empty keys (no environment fallback)
     if (config) {
@@ -442,12 +443,17 @@ const initializeServices = async () => {
       // Google (if configured)
       const googleProvider = config.llmConfig?.providers?.find((p: any) => p.name === 'google');
       googleSpeechApiKey = googleProvider?.apiKey || '';
+      
+      // Deepgram for STT (Nova-2)
+      const deepgramApiKey = config.deepgramConfig?.apiKey || '';
+      logger.info('Deepgram API key ' + (deepgramApiKey ? 'found' : 'not found') + ' in configuration');
     } else {
       logger.warn('No configuration found in database, services will operate without API keys');
       elevenLabsApiKey = '';
       openAIApiKey = '';
       anthropicApiKey = '';
       googleSpeechApiKey = '';
+      deepgramApiKey = '';
     }
 
     // Speech synthesis service
@@ -461,7 +467,8 @@ const initializeServices = async () => {
       elevenLabsApiKey,
       openAIApiKey,
       anthropicApiKey,
-      googleSpeechApiKey
+      googleSpeechApiKey,
+      deepgramApiKey
     );
 
     // Campaign service
@@ -469,7 +476,8 @@ const initializeServices = async () => {
       elevenLabsApiKey,
       openAIApiKey,
       anthropicApiKey,
-      googleSpeechApiKey
+      googleSpeechApiKey,
+      deepgramApiKey
     );
     
     // Initialize AdvancedTelephonyService manually (safe initialization)

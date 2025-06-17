@@ -84,13 +84,15 @@ export class CampaignService {
     elevenLabsApiKey: string = '', 
     openAIApiKey: string = '', 
     anthropicApiKey?: string,
-    googleSpeechKey?: string
+    googleSpeechKey?: string,
+    deepgramApiKey?: string
   ) {
     this.conversationEngine = new ConversationEngineService(
       elevenLabsApiKey,
       openAIApiKey,
       anthropicApiKey,
-      googleSpeechKey
+      googleSpeechKey,
+      deepgramApiKey
     );
     
     // Initialize with credentials from database

@@ -38,9 +38,9 @@ export class ConversationEngineService {
   private llmService: LLMService;
   private activeSessions: Map<string, CallSession> = new Map();
 
-  constructor(elevenLabsApiKey: string, openAIApiKey: string, anthropicApiKey?: string, googleSpeechKey?: string) {
+  constructor(elevenLabsApiKey: string, openAIApiKey: string, anthropicApiKey?: string, googleSpeechKey?: string, deepgramApiKey?: string) {
     this.voiceAI = new EnhancedVoiceAIService(elevenLabsApiKey);
-    this.speechAnalysis = new SpeechAnalysisService(openAIApiKey, googleSpeechKey);
+    this.speechAnalysis = new SpeechAnalysisService(openAIApiKey, googleSpeechKey, deepgramApiKey);
     
     // Configure LLM service
     const llmConfig: LLMConfig = {
@@ -139,6 +139,14 @@ export class ConversationEngineService {
       logger.error('Error creating conversation session:', getErrorMessage(error));
       throw error;
     }
+  }
+
+  /**
+   * Get the speech analysis service instance
+   * Used by controllers that need direct access to transcription capabilities
+   */
+  getSpeechAnalysisService(): SpeechAnalysisService {
+    return this.speechAnalysis;
   }
 
   // Process user input and generate response

@@ -156,19 +156,35 @@ export const handleVoiceStream = async (ws: WebSocket, req: Request): Promise<vo
             const completeAudio = Buffer.concat(audioBuffer);
             audioBuffer = []; // Reset buffer
             
-            // Process the audio with speech recognition
-            // This would normally be handled by a speech-to-text service
-            // Get dynamic transcription from configuration or throw error
-            const config = await Configuration.findOne();
-            if (!config?.generalSettings?.defaultSystemPrompt) {
-              throw new Error('No speech recognition configuration available');
-            }
+            // Process the audio with speech recognition using Deepgram if available
+            let transcribedText;
             
-            // In a real implementation, this would use actual speech-to-text
-            // For now, require proper configuration - simulate speech recognition
-            const transcribedText = data?.toString() || (() => { 
-              throw new Error('Speech recognition not properly configured - no audio data received'); 
-            })();
+            // Get the speech analysis service from the conversation engine
+            const speechAnalysisService = conversationEngine.getSpeechAnalysisService();
+            
+            try {
+              // Get dynamic transcription from configuration
+              const config = await Configuration.findOne();
+              
+              // Try to transcribe using Deepgram
+              if (config?.deepgramConfig?.isEnabled && speechAnalysisService) {
+                logger.info(`Using Deepgram for speech recognition in call ${callId}`);
+                transcribedText = await speechAnalysisService.transcribeAudio(completeAudio);
+              } else {
+                // Fallback to existing method
+                logger.warn(`Deepgram not configured, using fallback for call ${callId}`);
+                if (!config?.generalSettings?.defaultSystemPrompt) {
+                  throw new Error('No speech recognition configuration available');
+                }
+                transcribedText = data?.toString() || (() => { 
+                  throw new Error('Speech recognition not properly configured - no audio data received'); 
+                })();
+              }
+            } catch (transcriptionError) {
+              logger.error(`Error in speech transcription for call ${callId}: ${transcriptionError.message}`);
+              // Fallback to existing method
+              transcribedText = data?.toString() || "Sorry, I couldn't hear you clearly.";
+            }
             
             // Add user input to conversation
             const userMessage = {
@@ -178,11 +194,59 @@ export const handleVoiceStream = async (ws: WebSocket, req: Request): Promise<vo
               content: transcribedText
             };
             
-            // Generate AI response
-            const aiResponse = await conversationEngine.processUserInput(
-              conversationId, 
-              transcribedText
-            );
+            // Get the LLM provider configuration
+            const openAIProvider = config.llmConfig.providers.find(p => p.name === 'openai');
+            
+            // Generate AI response - use Realtime API if available and enabled
+            let aiResponse;
+            if (openAIProvider?.useRealtimeAPI) {
+              logger.info(`Using OpenAI Realtime API for call ${callId}`);
+              // Use the LLM service from the global instance
+              const llmService = global.llmService;
+              if (!llmService) {
+                logger.warn('LLM service not found in global instance, falling back to conversation engine');
+                aiResponse = await conversationEngine.processUserInput(
+                  conversationId, 
+                  transcribedText
+                );
+              } else {
+                // Use direct LLM service for realtime processing
+                const messages = session.conversationHistory.map(turn => ({
+                  role: turn.speaker === 'agent' ? 'assistant' : 'user',
+                  content: turn.content
+                }));
+                
+                // Add current message
+                messages.push({
+                  role: 'user',
+                  content: transcribedText
+                });
+                
+                // We'll collect the response here
+                let responseText = '';
+                
+                // Use the realtime chat method for ultra-low latency
+                await llmService.realtimeChat({
+                  provider: 'openai',
+                  model: openAIProvider.defaultModel,
+                  messages: messages,
+                  options: {
+                    temperature: 0.7,
+                    maxTokens: 150
+                  }
+                }, (chunk) => {
+                  responseText += chunk.content;
+                });
+                
+                aiResponse = { text: responseText };
+              }
+            } else {
+              // Use standard conversation engine
+              aiResponse = await conversationEngine.processUserInput(
+                conversationId, 
+                transcribedText
+              );
+            }
             
             // Use the same personality ID that worked for the opening message
             const personalityId = session.currentPersonality.id || 

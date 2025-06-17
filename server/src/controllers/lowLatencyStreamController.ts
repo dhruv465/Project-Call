@@ -185,21 +185,24 @@ export const handleLowLatencyVoiceStream = async (ws: WebSocket, req: Request): 
         ws.close(1008, 'Voice synthesis failed to initialize');
         return;
       }
-    }
-    
-    // Get or initialize parallel processing service
-    processingService = getParallelProcessingService();
-    if (!processingService) {
-      // Create LLM service for parallel processing
-      const llmConfig = {
-        providers: config.llmConfig.providers,
-        defaultProvider: config.llmConfig.defaultProvider
-      };
-      
-      const llmService = new LLMService(llmConfig);
-      
-      // Initialize the parallel processing service
-      processingService = initializeParallelProcessingService(sdkService, llmService);
+    }      // Get or initialize parallel processing service
+      processingService = getParallelProcessingService();
+      if (!processingService) {
+        // Create LLM service for parallel processing
+        const llmConfig = {
+          providers: config.llmConfig.providers,
+          defaultProvider: config.llmConfig.defaultProvider
+        };
+        
+        const llmService = new LLMService(llmConfig);
+        
+        // Store the LLM service in the config for shared access
+        if (!config.llmConfig.llmService) {
+          config.llmConfig.llmService = llmService;
+        }
+        
+        // Initialize the parallel processing service
+        processingService = initializeParallelProcessingService(sdkService, llmService);
     }
     
     // Set up event handlers for processing service
@@ -300,11 +303,29 @@ export const handleLowLatencyVoiceStream = async (ws: WebSocket, req: Request): 
             const completeAudio = Buffer.concat(audioBuffer);
             audioBuffer = []; // Reset buffer
             
-            // Process the audio with speech recognition
-            // This would normally be handled by a speech-to-text service
-            const transcribedText = data?.toString() || (() => { 
-              throw new Error('Speech recognition not properly configured - no audio data received'); 
-            })();
+            // Process the audio with speech recognition using Deepgram if available
+            let transcribedText;
+            
+            // Get the speech analysis service from the conversation engine
+            const speechAnalysisService = conversationEngine.getSpeechAnalysisService();
+            
+            try {
+              // Try to transcribe using Deepgram
+              if (config.deepgramConfig?.isEnabled && speechAnalysisService) {
+                logger.info(`Using Deepgram for speech recognition in call ${callId}`);
+                transcribedText = await speechAnalysisService.transcribeAudio(completeAudio);
+              } else {
+                // Fallback to existing method
+                logger.warn(`Deepgram not configured, using fallback for call ${callId}`);
+                transcribedText = data?.toString() || (() => { 
+                  throw new Error('Speech recognition not properly configured - no audio data received'); 
+                })();
+              }
+            } catch (transcriptionError) {
+              logger.error(`Error in speech transcription for call ${callId}: ${transcriptionError.message}`);
+              // Fallback to existing method
+              transcribedText = data?.toString() || "Sorry, I couldn't hear you clearly.";
+            }
             
             // Process the user input with parallel processing for minimal latency
             const personalityId = session.currentPersonality.id || 

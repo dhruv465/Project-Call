@@ -794,6 +794,57 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
       });
     }
 
+    // Update Deepgram config if provided
+    if (updatedConfig.deepgramConfig) {
+      logger.info('Updating Deepgram configuration...');
+      
+      // Initialize deepgramConfig if it doesn't exist
+      if (!config.deepgramConfig) {
+        config.deepgramConfig = {
+          apiKey: '',
+          isEnabled: false,
+          model: 'nova-2',
+          tier: 'enhanced',
+          status: 'unverified'
+        };
+      }
+      
+      // Validate Deepgram API key if provided and not empty
+      if (updatedConfig.deepgramConfig.apiKey && updatedConfig.deepgramConfig.apiKey.trim() !== '') {
+        // Basic validation - Deepgram API keys should start with specific pattern
+        if (!updatedConfig.deepgramConfig.apiKey.startsWith('dgk_')) {
+          return res.status(400).json({ 
+            message: 'Invalid Deepgram API key format. Deepgram API keys should start with "dgk_"',
+            error: 'Invalid API key format' 
+          });
+        }
+        
+        logger.info('Deepgram API key provided, will update configuration');
+      }
+      
+      config.deepgramConfig = {
+        ...existingConfig.deepgramConfig,
+        apiKey: updateApiKeyIfChanged(updatedConfig.deepgramConfig.apiKey, existingConfig.deepgramConfig?.apiKey || ''),
+        isEnabled: handleFieldUpdate(updatedConfig.deepgramConfig.isEnabled, existingConfig.deepgramConfig?.isEnabled || false),
+        model: handleFieldUpdate(updatedConfig.deepgramConfig.model, existingConfig.deepgramConfig?.model || 'nova-2'),
+        tier: handleFieldUpdate(updatedConfig.deepgramConfig.tier, existingConfig.deepgramConfig?.tier || 'enhanced'),
+        status: updatedConfig.deepgramConfig.apiKey && updatedConfig.deepgramConfig.apiKey.trim() !== '' 
+          ? 'verified'  // Set to verified if API key is provided (can be enhanced with actual validation)
+          : existingConfig.deepgramConfig?.status || 'unverified'
+      };
+      
+      // Mark deepgramConfig as modified
+      config.markModified('deepgramConfig');
+      
+      logger.info('Deepgram configuration updated:', {
+        isEnabled: config.deepgramConfig.isEnabled,
+        hasApiKey: !!config.deepgramConfig.apiKey,
+        model: config.deepgramConfig.model,
+        tier: config.deepgramConfig.tier,
+        status: config.deepgramConfig.status
+      });
+    }
+
     // Save configuration changes
     try {
       // Process API keys - log what will be saved to the database

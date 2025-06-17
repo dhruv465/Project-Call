@@ -149,6 +149,17 @@ export interface VoiceAIConfig {
   conversationalAI: ConversationalAIConfig;
 }
 
+// Deepgram Configuration Types
+export interface DeepgramConfig {
+  apiKey: string;
+  isEnabled: boolean;
+  model: string;
+  tier: string;
+  lastVerified?: Date;
+  status?: 'unverified' | 'verified' | 'failed';
+  lastError?: string;
+}
+
 // Full Configuration Interface
 export interface IConfiguration {
   twilioConfig: TwilioConfig;
@@ -158,6 +169,7 @@ export interface IConfiguration {
   complianceSettings: ComplianceSettings;
   webhookConfig: WebhookConfig;
   voiceAIConfig: VoiceAIConfig;
+  deepgramConfig: DeepgramConfig;
   toObject(): any;
   save(): Promise<any>;
 }
@@ -177,4 +189,5 @@ export interface UpdatedConfig {
   complianceSettings?: Partial<ComplianceSettings>;
   webhookConfig?: Partial<WebhookConfig>;
   voiceAIConfig?: Partial<VoiceAIConfig>;
+  deepgramConfig?: Partial<DeepgramConfig>;
 }

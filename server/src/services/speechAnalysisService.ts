@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { logger } from '../index';
+import { Deepgram } from '@deepgram/sdk';
+import { getErrorMessage } from '../utils/logger';
 
 export interface SpeechAnalysis {
   transcript: string;
@@ -38,21 +40,44 @@ export interface ConversationContext {
 export class SpeechAnalysisService {
   private openAIApiKey: string;
   private googleSpeechKey?: string;
+  private deepgramApiKey?: string;
+  private deepgramClient?: Deepgram;
 
-  constructor(openAIApiKey: string, googleSpeechKey?: string) {
+  constructor(openAIApiKey: string, googleSpeechKey?: string, deepgramApiKey?: string) {
     this.openAIApiKey = openAIApiKey;
     this.googleSpeechKey = googleSpeechKey;
+    this.deepgramApiKey = deepgramApiKey;
+    
+    if (deepgramApiKey) {
+      this.initializeDeepgram(deepgramApiKey);
+    }
+  }
+
+  /**
+   * Initialize Deepgram client
+   */
+  private initializeDeepgram(apiKey: string): void {
+    try {
+      this.deepgramClient = new Deepgram(apiKey);
+      logger.info('Deepgram client initialized successfully');
+    } catch (error) {
+      logger.error(`Failed to initialize Deepgram client: ${getErrorMessage(error)}`);
+    }
   }
 
   /**
    * Update API keys for the service
    */
-  public updateApiKeys(openAIApiKey?: string, googleSpeechKey?: string): void {
+  public updateApiKeys(openAIApiKey?: string, googleSpeechKey?: string, deepgramApiKey?: string): void {
     if (openAIApiKey) {
       this.openAIApiKey = openAIApiKey;
     }
     if (googleSpeechKey !== undefined) {
       this.googleSpeechKey = googleSpeechKey;
+    }
+    if (deepgramApiKey) {
+      this.deepgramApiKey = deepgramApiKey;
+      this.initializeDeepgram(deepgramApiKey);
     }
     logger.info('SpeechAnalysisService API keys updated');
   }
@@ -71,43 +96,102 @@ export class SpeechAnalysisService {
     return this.googleSpeechKey;
   }
 
-  // Speech-to-Text with Language Detection
+  /**
+   * Get current Deepgram API key
+   */
+  public getDeepgramApiKey(): string | undefined {
+    return this.deepgramApiKey;
+  }
+
+  // Speech-to-Text with Language Detection using Deepgram Nova-2
   async transcribeAudio(
     audioBuffer: Buffer,
     language?: 'English' | 'Hindi'
   ): Promise<{ transcript: string; language: string; confidence: number }> {
     try {
-      // Using OpenAI Whisper for transcription with language detection
-      const formData = new FormData();
-      const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
-      formData.append('file', audioBlob, 'audio.wav');
-      formData.append('model', 'whisper-1');
-      
-      if (language) {
-        formData.append('language', language === 'English' ? 'en' : 'hi');
-      }
-
-      const response = await axios.post(
-        'https://api.openai.com/v1/audio/transcriptions',
-        formData,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.openAIApiKey}`,
-            'Content-Type': 'multipart/form-data'
+      // First check if we have Deepgram API key and client
+      if (this.deepgramApiKey && this.deepgramClient) {
+        logger.info('Using Deepgram Nova-2 for transcription');
+        
+        // Prepare transcription options
+        const options = {
+          model: 'nova-2', // Use the Nova-2 model for better accuracy
+          smart_format: true,
+          language: language ? (language === 'English' ? 'en' : 'hi') : undefined,
+          detect_language: language ? false : true,
+          punctuate: true,
+          utterances: true, // Get utterance-level timestamps
+          diarize: true, // Speaker identification
+          tier: 'enhanced' // Use enhanced model for higher accuracy
+        };
+        
+        // Use direct API call with axios since SDK version may differ
+        const response = await axios.post(
+          'https://api.deepgram.com/v1/listen',
+          audioBuffer,
+          {
+            params: options,
+            headers: {
+              'Authorization': `Token ${this.deepgramApiKey}`,
+              'Content-Type': 'audio/wav'
+            }
           }
+        );
+        
+        // Extract the transcript from response
+        const transcript = response.data?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
+        const confidence = response.data?.results?.channels?.[0]?.alternatives?.[0]?.confidence || 0;
+        
+        // Get detected language or use the provided one
+        let detectedLanguage: 'English' | 'Hindi';
+        if (response.data?.results?.channels?.[0]?.detected_language === 'hi') {
+          detectedLanguage = 'Hindi';
+        } else {
+          detectedLanguage = 'English'; // Default to English or use detected language
         }
-      );
+        
+        logger.info(`Deepgram transcription completed: ${transcript.substring(0, 100)}...`);
+        
+        return {
+          transcript,
+          language: detectedLanguage,
+          confidence
+        };
+      } else {
+        logger.warn('Deepgram not configured, falling back to OpenAI Whisper');
+        
+        // Use OpenAI Whisper as fallback (original implementation)
+        const formData = new FormData();
+        const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
+        formData.append('file', audioBlob, 'audio.wav');
+        formData.append('model', 'whisper-1');
+        
+        if (language) {
+          formData.append('language', language === 'English' ? 'en' : 'hi');
+        }
 
-      const detectedLanguage = this.detectLanguage(response.data.text);
-      
-      return {
-        transcript: response.data.text,
-        language: detectedLanguage,
-        confidence: 0.9 // OpenAI Whisper generally has high confidence
-      };
+        const response = await axios.post(
+          'https://api.openai.com/v1/audio/transcriptions',
+          formData,
+          {
+            headers: {
+              'Authorization': `Bearer ${this.openAIApiKey}`,
+              'Content-Type': 'multipart/form-data'
+            }
+          }
+        );
+
+        const detectedLanguage = this.detectLanguage(response.data.text);
+        
+        return {
+          transcript: response.data.text,
+          language: detectedLanguage,
+          confidence: 0.9 // OpenAI Whisper generally has high confidence
+        };
+      }
     } catch (error) {
-      logger.error('Error transcribing audio:', error);
-      throw new Error('Failed to transcribe audio');
+      logger.error(`Error transcribing audio: ${getErrorMessage(error)}`);
+      throw new Error(`Failed to transcribe audio: ${getErrorMessage(error)}`);
     }
   }
 

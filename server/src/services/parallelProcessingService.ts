@@ -362,15 +362,43 @@ Language: ${context.language || 'English'}`
       // Add context as a system message at the beginning
       const messagesWithContext = [contextMessage, ...messages];
       
-      const response = await this.llmService.chat({
-        provider: 'openai',
-        model: 'gpt-4',
-        messages: messagesWithContext,
-        options: {
-          temperature: 0.7,
-          maxTokens: 150
-        }
-      });
+      // Check if OpenAI Realtime API is enabled and use it for ultra-low latency
+      const openAIProvider = global.llmService?.getConfig()?.providers.find(p => p.name === 'openai');
+      let response;
+      
+      if (openAIProvider?.useRealtimeAPI) {
+        // Use realtime API for ultra-low latency response
+        logger.info(`Using OpenAI Realtime API for conversation ${conversationId}`);
+        
+        // We'll collect the response here
+        let responseText = '';
+        
+        // Use the realtime chat method
+        await this.llmService.realtimeChat({
+          provider: 'openai',
+          model: openAIProvider.defaultModel || 'gpt-4',
+          messages: messagesWithContext,
+          options: {
+            temperature: 0.7,
+            maxTokens: 150
+          }
+        }, (chunk) => {
+          responseText += chunk.content;
+        });
+        
+        response = { content: responseText };
+      } else {
+        // Use standard API
+        response = await this.llmService.chat({
+          provider: 'openai',
+          model: 'gpt-4',
+          messages: messagesWithContext,
+          options: {
+            temperature: 0.7,
+            maxTokens: 150
+          }
+        });
+      }
       
       return {
         text: response.content,

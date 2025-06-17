@@ -7,7 +7,7 @@ export const voiceSettings = {
     style: 0.1,
     speakerBoost: true,
     outputFormat: 'mp3_44100_64',
-    model: 'eleven_monolingual_v1'
+    model: 'eleven_turbo_v2' // Use Flash v2.5 model for ultra-low latency (~75ms)
   },
   
   // Low latency for quick responses
@@ -17,7 +17,7 @@ export const voiceSettings = {
     style: 0.2,
     speakerBoost: true,
     outputFormat: 'mp3_44100_96',
-    model: 'eleven_monolingual_v1'
+    model: 'eleven_turbo_v2' // Use Flash v2.5 model
   },
   
   // Balanced latency for normal conversation
@@ -27,7 +27,7 @@ export const voiceSettings = {
     style: 0.3,
     speakerBoost: true,
     outputFormat: 'mp3_44100_128',
-    model: 'eleven_multilingual_v2'
+    model: 'eleven_turbo_v2' // Still use Flash v2.5 model but with better quality settings
   },
   
   // High quality for important statements
@@ -37,7 +37,7 @@ export const voiceSettings = {
     style: 0.4,
     speakerBoost: true,
     outputFormat: 'mp3_44100_192',
-    model: 'eleven_multilingual_v2'
+    model: 'eleven_multilingual_v2' // Fall back to multilingual model for highest quality
   }
 };
 

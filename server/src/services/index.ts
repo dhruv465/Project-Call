@@ -79,6 +79,10 @@ export const llmService = new LLMService({
   timeoutMs: 30000
 });
 
+// Make the LLM service available globally
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(global as any).llmService = llmService;
+
 // Create advanced service instances
 export const advancedConversationEngine = new AdvancedConversationEngine(llmService, voiceAIService);
 
@@ -218,7 +222,8 @@ export const reinitializeGlobalLLMService = async () => {
           apiKey: p.apiKey,
           isEnabled: p.isEnabled,
           models: p.availableModels || [],
-          defaultModel: p.availableModels && p.availableModels.length > 0 ? p.availableModels[0] : undefined
+          defaultModel: p.availableModels && p.availableModels.length > 0 ? p.availableModels[0] : undefined,
+          useRealtimeAPI: p.useRealtimeAPI || false // Ensure this is included in the LLM service config
         })),
         defaultProvider: (config.llmConfig.defaultProvider?.toLowerCase() || 'openai') as any,
         defaultModel: config.llmConfig.defaultModel || 'gpt-4',
@@ -233,7 +238,12 @@ export const reinitializeGlobalLLMService = async () => {
       // Update the global LLM service configuration
       llmService.updateConfig(llmConfig);
       
-      logger.info('Global LLM service reinitialized with database configuration');
+      // Store the llmService instance in the configuration for shared access across controllers
+      // This is stored as a property but not persisted to the database
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (config as any).llmConfig.llmService = llmService;
+      
+      logger.info('Global LLM service reinitialized with database configuration and stored for shared access');
     } else {
       logger.warn('No LLM configuration found in database for global service');
     }

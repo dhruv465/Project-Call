@@ -132,6 +132,30 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
     const campaign = await Campaign.findById(call.campaignId);
     const configuration = await Configuration.findOne();
     
+    // Log the current configuration state for debugging
+    logger.info(`📋 Current configuration state for call ${callId}:`, {
+      configExists: !!configuration,
+      deepgramConfig: {
+        isEnabled: configuration?.deepgramConfig?.isEnabled,
+        hasApiKey: !!configuration?.deepgramConfig?.apiKey,
+        model: configuration?.deepgramConfig?.model
+      },
+      elevenLabsConfig: {
+        isEnabled: configuration?.elevenLabsConfig?.isEnabled,
+        useFlashModel: configuration?.elevenLabsConfig?.useFlashModel,
+        hasApiKey: !!configuration?.elevenLabsConfig?.apiKey
+      },
+      llmConfig: {
+        defaultProvider: configuration?.llmConfig?.defaultProvider,
+        providers: configuration?.llmConfig?.providers?.map(p => ({
+          name: p.name,
+          isEnabled: p.isEnabled,
+          useRealtimeAPI: p.useRealtimeAPI,
+          hasApiKey: !!p.apiKey
+        }))
+      }
+    });
+    
     if (!campaign || !configuration) {
       logger.error('Campaign or configuration not found');
       
@@ -342,48 +366,113 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
       twiml.say({ voice: 'alice' }, campaign.initialPrompt.trim());
     }
     
-    // Set up gather for speech input with timeout handling
-    const gather = twiml.gather({
-      input: 'speech',
-      action: `${process.env.WEBHOOK_BASE_URL}/api/calls/gather?callId=${callId}&conversationId=${conversationId}`,
-      method: 'POST',
-      speechTimeout: 3,
-      speechModel: 'phone_call',
-      timeout: 10,  // Increased timeout to give user more time
-      numDigits: 1  // Allow for backup DTMF input
+    // Check if we should use WebSocket streaming with Deepgram and new AI stack
+    const deepgramEnabled = configuration?.deepgramConfig?.isEnabled;
+    const flashModelEnabled = configuration?.elevenLabsConfig?.useFlashModel;
+    const realtimeAPIEnabled = configuration?.llmConfig?.providers?.some(p => p.useRealtimeAPI);
+    
+    logger.info(`Configuration check for call ${callId}: Deepgram enabled=${deepgramEnabled}, Flash model=${flashModelEnabled}, Realtime API=${realtimeAPIEnabled}`, {
+      deepgramConfig: configuration?.deepgramConfig,
+      elevenLabsUseFlash: configuration?.elevenLabsConfig?.useFlashModel,
+      llmProviders: configuration?.llmConfig?.providers?.map(p => ({ name: p.name, useRealtimeAPI: p.useRealtimeAPI, isEnabled: p.isEnabled }))
     });
     
-    // Add a brief pause to let the greeting audio finish
-    gather.pause({ length: 1 });
+    const useAdvancedStreaming = deepgramEnabled || flashModelEnabled || realtimeAPIEnabled;
     
-    // Only add timeout fallback - this will only execute if no speech is detected
-    // Get message from configuration for timeout handling
-    const config = await Configuration.findOne();
-    const goodbyeMessage = config?.callResponses?.goodbye || "Thank you for your time. Goodbye.";
-    
-    // Determine the default LLM provider and pass its key
-    const defaultLlmProviderName = configuration?.llmConfig?.defaultProvider;
-    const defaultLlmProvider = configuration?.llmConfig?.providers?.find(p => p.name === defaultLlmProviderName);
-
-    // Use ElevenLabs for goodbye message - only on timeout
-    const usedElevenLabs = await synthesizeVoiceResponse(
-      twiml, 
-      goodbyeMessage, 
-      {
-        voiceId: campaign?.voiceConfiguration?.voiceId,
-        language: campaign.primaryLanguage === 'hi' ? 'hi' : 'en',
-        campaignId: campaign?._id?.toString(),
-        elevenLabsApiKey: configuration?.elevenLabsConfig?.apiKey,
-        llmApiKey: defaultLlmProvider?.apiKey, // Use the configured default LLM API key
-        fallbackBehavior: 'tts' // Use Twilio TTS as fallback instead of empty audio
+    if (useAdvancedStreaming) {
+      logger.info(`Using advanced WebSocket streaming for call ${callId} with features: Deepgram=${!!configuration?.deepgramConfig?.isEnabled}, Flash=${!!configuration?.elevenLabsConfig?.useFlashModel}, Realtime=${!!configuration?.llmConfig?.providers?.some(p => p.useRealtimeAPI)}`);
+      
+      // Use WebSocket streaming with the new AI stack
+      const connect = twiml.connect();
+      const stream = connect.stream({
+        url: `wss://${req.headers.host}/api/stream/voice/low-latency?callId=${callId}&conversationId=${conversationId}`,
+        name: 'project-call-stream'
+      });
+      
+      // Add stream parameters for enhanced functionality
+      stream.parameter({
+        name: 'callId',
+        value: callId
+      });
+      stream.parameter({
+        name: 'conversationId', 
+        value: conversationId
+      });
+      stream.parameter({
+        name: 'campaignId',
+        value: call.campaignId.toString()
+      });
+      stream.parameter({
+        name: 'leadId',
+        value: call.leadId.toString()
+      });
+      
+      // Add advanced features parameters
+      if (configuration?.deepgramConfig?.isEnabled) {
+        stream.parameter({
+          name: 'useDeepgram',
+          value: 'true'
+        });
       }
-    );
-    
-    if (!usedElevenLabs) {
-      logger.info(`Used Twilio TTS for goodbye message for call ${callId}`);
+      if (configuration?.elevenLabsConfig?.useFlashModel) {
+        stream.parameter({
+          name: 'useFlashModel',
+          value: 'true'
+        });
+      }
+      if (configuration?.llmConfig?.providers?.some(p => p.useRealtimeAPI)) {
+        stream.parameter({
+          name: 'useRealtimeAPI',
+          value: 'true'
+        });
+      }
+      
+    } else {
+      // Use traditional gather method with Twilio's built-in speech recognition
+      logger.info(`Using traditional gather method for call ${callId}`);
+      
+      const gather = twiml.gather({
+        input: 'speech',
+        action: `${process.env.WEBHOOK_BASE_URL}/api/calls/gather?callId=${callId}&conversationId=${conversationId}`,
+        method: 'POST',
+        speechTimeout: 3,
+        speechModel: 'phone_call',
+        timeout: 10,  // Increased timeout to give user more time
+        numDigits: 1  // Allow for backup DTMF input
+      });
+      
+      // Add a brief pause to let the greeting audio finish
+      gather.pause({ length: 1 });
+      
+      // Only add timeout fallback - this will only execute if no speech is detected
+      // Get message from configuration for timeout handling
+      const config = await Configuration.findOne();
+      const goodbyeMessage = config?.callResponses?.goodbye || "Thank you for your time. Goodbye.";
+      
+      // Determine the default LLM provider and pass its key
+      const defaultLlmProviderName = configuration?.llmConfig?.defaultProvider;
+      const defaultLlmProvider = configuration?.llmConfig?.providers?.find(p => p.name === defaultLlmProviderName);
+
+      // Use ElevenLabs for goodbye message - only on timeout
+      const usedElevenLabs = await synthesizeVoiceResponse(
+        twiml, 
+        goodbyeMessage, 
+        {
+          voiceId: campaign?.voiceConfiguration?.voiceId,
+          language: campaign.primaryLanguage === 'hi' ? 'hi' : 'en',
+          campaignId: campaign?._id?.toString(),
+          elevenLabsApiKey: configuration?.elevenLabsConfig?.apiKey,
+          llmApiKey: defaultLlmProvider?.apiKey, // Use the configured default LLM API key
+          fallbackBehavior: 'tts' // Use Twilio TTS as fallback instead of empty audio
+        }
+      );
+      
+      if (!usedElevenLabs) {
+        logger.info(`Used Twilio TTS for goodbye message for call ${callId}`);
+      }
+      
+      twiml.hangup();
     }
-    
-    twiml.hangup();
     
     // Log TwiML for debugging
     const twimlString = twiml.toString();

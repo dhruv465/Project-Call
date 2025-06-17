@@ -94,6 +94,13 @@ export class LLMService {
           return await client.chat(args[0]);
         case 'streamChat':
           return await client.streamChat(args[0], args[1]);
+        case 'realtimeChat':
+          if ('realtimeChat' in client) {
+            return await client.realtimeChat!(args[0], args[1]);
+          } else {
+            // Fall back to regular streaming if realtime not supported
+            return await client.streamChat(args[0], args[1]);
+          }
         case 'testConnection':
           return await client.testConnection();
         case 'getAvailableModels':
@@ -401,6 +408,48 @@ export class LLMService {
       // If all fallbacks failed, throw the original error
       throw error;
     }
+  }
+  
+  /**
+   * Stream chat completion with ultra-low latency using the Realtime API
+   * Falls back to standard streaming if realtime is not available
+   */
+  async realtimeChat(request: LLMChatRequest, onChunk: (chunk: LLMStreamChunk) => void): Promise<void> {
+    const providerName = request.provider;
+    
+    try {
+      const provider = this.getProvider(providerName);
+      
+      if (!provider || typeof provider.realtimeChat !== 'function') {
+        logger.info(`Realtime API not available for provider ${providerName}, falling back to standard streaming`);
+        return this.streamChat(request, onChunk);
+      }
+      
+      logger.info(`Using realtime chat with provider: ${providerName}, model: ${request.model}`);
+      
+      try {
+        await provider.realtimeChat!({
+          model: request.model,
+          messages: request.messages,
+          options: request.options,
+          responseFormat: request.responseFormat
+        }, onChunk);
+        return;
+      } catch (realtimeError) {
+        logger.warn(`Realtime API failed, falling back to standard streaming: ${realtimeError}`);
+        return this.streamChat(request, onChunk);
+      }
+    } catch (error) {
+      logger.error(`Failed to get provider for realtime chat: ${error}`);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get the service configuration
+   */
+  getConfig(): LLMConfig {
+    return this.config;
   }
   
   /**

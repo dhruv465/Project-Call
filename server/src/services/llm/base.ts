@@ -10,9 +10,6 @@ import {
   LLMCompletionRequest,
   LLMResponse,
   LLMStreamChunk,
-  LLMMessage,
-  LLMRequestOptions,
-  TokenUsage,
   ModelInfo
 } from './types';
 
@@ -56,17 +53,25 @@ export interface ILLMProviderClient {
   ): Promise<void>;
   
   /**
-   * Count tokens for a prompt or messages
+   * Use Realtime API for ultra-low latency responses (OpenAI specific)
    */
-  countTokens(prompt: string | LLMMessage[]): Promise<number>;
+  realtimeChat?(
+    request: Omit<LLMChatRequest, 'provider'>,
+    onChunk: (chunk: LLMStreamChunk) => void
+  ): Promise<void>;
   
   /**
-   * List available models for this provider
+   * Count tokens for a prompt or messages
    */
-  listModels(): Promise<string[]>;
+  countTokens(input: string | import('./types').LLMMessage[]): Promise<number>;
   
   /**
    * Get detailed information about available models
    */
   getAvailableModels(): Promise<ModelInfo[]>;
+  
+  /**
+   * Legacy method to list available models (use getAvailableModels instead)
+   */
+  listModels?(): Promise<string[]>;
 }
