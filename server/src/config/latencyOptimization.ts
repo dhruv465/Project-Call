@@ -87,7 +87,8 @@ export const cacheSettings = {
   // Preload settings
   preload: {
     // Whether to preload common phrases on startup
-    enabled: true,
+    // Disabled in development to avoid API rate limiting issues
+    enabled: process.env.NODE_ENV === 'production',
     
     // Voice IDs to preload for
     voiceIds: [], // This will be populated from configuration

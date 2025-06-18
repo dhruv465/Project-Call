@@ -102,6 +102,24 @@ export const initializeResponseCache = async (): Promise<void> => {
  * Uses parallel processing and human-like audio cues to reduce perceived latency
  */
 export const handleLowLatencyVoiceStream = async (ws: WebSocket, req: Request): Promise<void> => {
+  // Add proper WebSocket ready state check and error handling
+  if (ws.readyState !== WebSocket.OPEN) {
+    logger.warn('WebSocket connection not in OPEN state during initialization');
+    return;
+  }
+
+  // Send immediate acknowledgment to complete handshake
+  try {
+    ws.send(JSON.stringify({ 
+      event: 'connected', 
+      message: 'WebSocket connection established',
+      timestamp: new Date().toISOString()
+    }));
+  } catch (error) {
+    logger.error('Failed to send initial WebSocket message:', error);
+    return;
+  }
+
   // Extract query parameters
   const url = new URL(req.url, `http://${req.headers.host}`);
   const callId = url.searchParams.get('callId');
@@ -265,7 +283,9 @@ export const handleLowLatencyVoiceStream = async (ws: WebSocket, req: Request): 
           // Try cache first
           const cacheKey = `${fallbackVoice}_${fallbackGreeting}`;
           if (responseCache.has(cacheKey)) {
-            ws.send(responseCache.get(cacheKey));
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(responseCache.get(cacheKey));
+            }
           } else {
             // Generate simple greeting with optimized latency
             const buffer = await sdkService.generateOptimizedSpeech(
@@ -277,7 +297,9 @@ export const handleLowLatencyVoiceStream = async (ws: WebSocket, req: Request): 
               }
             );
             
-            ws.send(buffer);
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(buffer);
+            }
           }
         } catch (fallbackError) {
           logger.error(`Fallback greeting failed for call ${callId}:`, fallbackError);
@@ -293,6 +315,12 @@ export const handleLowLatencyVoiceStream = async (ws: WebSocket, req: Request): 
     // Handle incoming audio data
     ws.on('message', async (data: WebSocket.Data) => {
       try {
+        // Check WebSocket state before processing
+        if (ws.readyState !== WebSocket.OPEN) {
+          logger.warn(`WebSocket not open, skipping message processing for call ${callId}`);
+          return;
+        }
+
         // Process as binary data
         if (data instanceof Buffer) {
           // Accumulate audio data
@@ -334,7 +362,15 @@ export const handleLowLatencyVoiceStream = async (ws: WebSocket, req: Request): 
             
             // Define callback to send audio chunks
             const streamCallback = (chunk: Buffer) => {
-              ws.send(chunk);
+              try {
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(chunk);
+                } else {
+                  logger.warn(`Cannot send audio chunk, WebSocket not open for call ${callId}`);
+                }
+              } catch (sendError) {
+                logger.error(`Error sending audio chunk for call ${callId}:`, sendError);
+              }
             };
             
             // Process user input with optimized parallel processing

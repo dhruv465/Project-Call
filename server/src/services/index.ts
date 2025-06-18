@@ -39,6 +39,7 @@ const initializeFromDatabase = async () => {
       return;
     }
 
+    console.log('Loading API configuration from database...');
     const config = await Configuration.findOne();
     if (config) {
       elevenLabsApiKey = config.elevenLabsConfig?.apiKey || '';
@@ -51,6 +52,16 @@ const initializeFromDatabase = async () => {
       
       const googleProvider = config.llmConfig?.providers?.find((p: any) => p.name === 'google');
       googleSpeechKey = googleProvider?.apiKey || '';
+
+      // Log API key status (showing length for security, not actual keys)
+      console.log('API keys loaded from database:', {
+        elevenLabsApiKey: elevenLabsApiKey ? `SET (${elevenLabsApiKey.length} chars)` : 'NOT SET',
+        openAIApiKey: openAIApiKey ? `SET (${openAIApiKey.length} chars)` : 'NOT SET',
+        anthropicApiKey: anthropicApiKey ? `SET (${anthropicApiKey.length} chars)` : 'NOT SET',
+        googleSpeechKey: googleSpeechKey ? `SET (${googleSpeechKey.length} chars)` : 'NOT SET'
+      });
+    } else {
+      console.warn('No configuration document found in database');
     }
   } catch (error) {
     console.warn('Failed to load configuration from database, using empty keys:', error);
@@ -68,23 +79,87 @@ const getInitializedKeys = async () => {
   };
 };
 
-// Initialize with empty keys for now - services will reload from database as needed
-export const conversationEngine = new ConversationEngineService('', '', '', '');
+// Use lazy initialization pattern to avoid creating services with empty API keys
+let _conversationEngine: ConversationEngineService | null = null;
+let _voiceAIService: EnhancedVoiceAIService | null = null;
+let _llmService: LLMService | null = null;
+let _advancedConversationEngine: AdvancedConversationEngine | null = null;
 
-// Create service instances for controllers
-export const voiceAIService = new EnhancedVoiceAIService('');
-export const llmService = new LLMService({
-  providers: [],
-  fallbackProviders: [],
-  timeoutMs: 30000
+// Flag to track if services have been properly initialized with database configuration
+let servicesInitialized = false;
+
+// Getter functions that ensure services are initialized before returning
+export const getConversationEngine = (): ConversationEngineService => {
+  if (!_conversationEngine) {
+    console.warn('ConversationEngine accessed before initialization, creating with empty keys');
+    _conversationEngine = new ConversationEngineService('', '', '', '');
+  }
+  return _conversationEngine;
+};
+
+export const getVoiceAIService = (): EnhancedVoiceAIService => {
+  if (!_voiceAIService) {
+    console.warn('VoiceAIService accessed before initialization, creating with empty key');
+    _voiceAIService = new EnhancedVoiceAIService('');
+  }
+  return _voiceAIService;
+};
+
+export const getLLMService = (): LLMService => {
+  if (!_llmService) {
+    console.warn('LLMService accessed before initialization, creating with empty config');
+    _llmService = new LLMService({
+      providers: [],
+      fallbackProviders: [],
+      timeoutMs: 30000
+    });
+    // Make the LLM service available globally
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).llmService = _llmService;
+  }
+  return _llmService;
+};
+
+export const getAdvancedConversationEngine = (): AdvancedConversationEngine => {
+  if (!_advancedConversationEngine) {
+    console.warn('AdvancedConversationEngine accessed before initialization, creating with lazy services');
+    _advancedConversationEngine = new AdvancedConversationEngine(getLLMService(), getVoiceAIService());
+  }
+  return _advancedConversationEngine;
+};
+
+// Legacy exports for backward compatibility (use getters internally)
+export const conversationEngine = new Proxy({} as ConversationEngineService, {
+  get: (target, prop) => getConversationEngine()[prop as keyof ConversationEngineService],
+  set: (target, prop, value) => {
+    (getConversationEngine() as any)[prop] = value;
+    return true;
+  }
 });
 
-// Make the LLM service available globally
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(global as any).llmService = llmService;
+export const voiceAIService = new Proxy({} as EnhancedVoiceAIService, {
+  get: (target, prop) => getVoiceAIService()[prop as keyof EnhancedVoiceAIService],
+  set: (target, prop, value) => {
+    (getVoiceAIService() as any)[prop] = value;
+    return true;
+  }
+});
 
-// Create advanced service instances
-export const advancedConversationEngine = new AdvancedConversationEngine(llmService, voiceAIService);
+export const llmService = new Proxy({} as LLMService, {
+  get: (target, prop) => getLLMService()[prop as keyof LLMService],
+  set: (target, prop, value) => {
+    (getLLMService() as any)[prop] = value;
+    return true;
+  }
+});
+
+export const advancedConversationEngine = new Proxy({} as AdvancedConversationEngine, {
+  get: (target, prop) => getAdvancedConversationEngine()[prop as keyof AdvancedConversationEngine],
+  set: (target, prop, value) => {
+    (getAdvancedConversationEngine() as any)[prop] = value;
+    return true;
+  }
+});
 
 // Export the conversation state machine
 export { conversationStateMachine };
@@ -126,29 +201,66 @@ export {
 // Export initialization function for post-database services
 export const initializeServicesAfterDB = async () => {
   try {
+    console.log('Starting services initialization after database connection...');
+    
     // Re-initialize services that depend on database configuration
     await initializeFromDatabase();
     
-    // Import and call reinitializeLLMServiceWithDbConfig to ensure LLM service is properly initialized
+    console.log('About to initialize services with keys:', {
+      hasElevenLabsKey: !!elevenLabsApiKey,
+      hasOpenAIKey: !!openAIApiKey,
+      elevenLabsKeyLength: elevenLabsApiKey?.length || 0,
+      openAIKeyLength: openAIApiKey?.length || 0
+    });
+    
+    // Initialize services with proper API keys from database
+    if (elevenLabsApiKey || openAIApiKey || anthropicApiKey || googleSpeechKey) {
+      console.log('Initializing services with API keys from database...');
+      
+      // Initialize ConversationEngine with all API keys
+      _conversationEngine = new ConversationEngineService(
+        elevenLabsApiKey, 
+        openAIApiKey, 
+        anthropicApiKey, 
+        googleSpeechKey
+      );
+      
+      // Initialize VoiceAI service with ElevenLabs API key
+      if (elevenLabsApiKey) {
+        _voiceAIService = new EnhancedVoiceAIService(elevenLabsApiKey);
+        console.log('VoiceAI service initialized with API key');
+      }
+      
+      // Initialize LLM service with proper configuration
+      await reinitializeGlobalLLMService();
+      
+      // Initialize advanced conversation engine with initialized services
+      _advancedConversationEngine = new AdvancedConversationEngine(getLLMService(), getVoiceAIService());
+      
+      servicesInitialized = true;
+      console.log('Core services initialized with database configuration');
+    } else {
+      console.warn('No API keys found in database, services will remain with empty configuration');
+    }
+
+    // Import and call reinitializeLLMServiceWithDbConfig to ensure campaign service LLM is properly initialized
     const { reinitializeLLMServiceWithDbConfig } = await import('./advancedCampaignService');
     await reinitializeLLMServiceWithDbConfig();
     
-    // Also reinitialize the global LLM service instance
-    await reinitializeGlobalLLMService();
-    
-    // Note: AdvancedCampaignService will self-initialize when methods are called
-    // due to the ensureLLMServiceInitialized pattern implemented
-    
-    // Reinitialize voice services with new instances that have the latest API keys
+    // Initialize ElevenLabs services if API keys are available
     if (elevenLabsApiKey && openAIApiKey) {
       try {
+        console.log('Initializing ElevenLabs services with API keys from database...');
+        
         // Re-initialize the ElevenLabs Conversational Service with the database API keys
         const { initializeConversationalService } = await import('./elevenLabsConversationalService');
         initializeConversationalService(elevenLabsApiKey, openAIApiKey);
+        console.log('ElevenLabs Conversational Service initialized');
         
         // Re-initialize the ElevenLabs SDK Service with the database API keys
         const { initializeSDKService } = await import('./elevenlabsSDKService');
         const sdkService = initializeSDKService(elevenLabsApiKey, openAIApiKey);
+        console.log('ElevenLabs SDK Service initialized:', !!sdkService);
         
         // Load the SDK extension with streaming methods
         await import('./elevenlabsSDKExtension');
@@ -164,35 +276,30 @@ export const initializeServicesAfterDB = async () => {
         // Initialize parallel processing service if SDK service is available
         if (sdkService) {
           const { initializeParallelProcessingService } = await import('./parallelProcessingService');
-          initializeParallelProcessingService(sdkService, llmService);
+          initializeParallelProcessingService(sdkService, getLLMService());
           logger.info('Parallel processing service initialized for low-latency responses');
         }
         
-        // For EnhancedVoiceAIService, since there's no updateApiKeys method,
-        // we'll create a new instance with the new keys
-        const newVoiceAIService = new EnhancedVoiceAIService(elevenLabsApiKey);
-        
-        // Replace the global reference if it exists
-        if (global.voiceAIService) {
-          global.voiceAIService = newVoiceAIService;
-        }
-        
-        // Update the exported instance
-        exports.voiceAIService = newVoiceAIService;
-        
-        logger.info('Voice AI services re-initialized with database configuration');
+        console.log('Voice AI services initialized with database configuration');
+        logger.info('Voice AI services initialized with database configuration');
       } catch (voiceAIError) {
-        logger.error('Failed to reinitialize Voice AI services:', voiceAIError);
+        console.error('Failed to initialize Voice AI services:', voiceAIError);
+        logger.error('Failed to initialize Voice AI services:', voiceAIError);
       }
+    } else {
+      console.warn('Skipping voice services initialization - missing API keys:', {
+        hasElevenLabsKey: !!elevenLabsApiKey,
+        hasOpenAIKey: !!openAIApiKey
+      });
     }
     
-    // Reinitialize conversation engine with new API keys
+    // Update global conversation engine if it exists
     if (global.conversationEngine && typeof global.conversationEngine.updateApiKeys === 'function') {
       try {
         global.conversationEngine.updateApiKeys(elevenLabsApiKey, openAIApiKey, anthropicApiKey, googleSpeechKey);
-        logger.info('Conversation engine re-initialized with database configuration');
+        logger.info('Global conversation engine updated with database configuration');
       } catch (error) {
-        logger.error('Failed to update conversation engine API keys:', error);
+        logger.error('Failed to update global conversation engine API keys:', error);
       }
     }
     
@@ -204,7 +311,7 @@ export const initializeServicesAfterDB = async () => {
       logger.error('Failed to update telephony service configuration:', error);
     }
     
-    console.log('Services re-initialized with database configuration');
+    console.log('All services re-initialized with database configuration');
   } catch (error) {
     console.error('Error re-initializing services after database connection:', error);
   }
@@ -235,13 +342,22 @@ export const reinitializeGlobalLLMService = async () => {
         }
       };
       
-      // Update the global LLM service configuration
-      llmService.updateConfig(llmConfig);
+      // Create or update the LLM service with proper configuration
+      if (!_llmService) {
+        _llmService = new LLMService(llmConfig);
+      } else {
+        // Update the existing service configuration
+        _llmService.updateConfig(llmConfig);
+      }
+      
+      // Make the LLM service available globally
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (global as any).llmService = _llmService;
       
       // Store the llmService instance in the configuration for shared access across controllers
       // This is stored as a property but not persisted to the database
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (config as any).llmConfig.llmService = llmService;
+      (config as any).llmConfig.llmService = _llmService;
       
       logger.info('Global LLM service reinitialized with database configuration and stored for shared access');
     } else {

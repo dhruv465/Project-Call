@@ -385,7 +385,7 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
       // Use WebSocket streaming with the new AI stack
       const connect = twiml.connect();
       const stream = connect.stream({
-        url: `wss://${req.headers.host}/api/stream/voice/low-latency?callId=${callId}&conversationId=${conversationId}`,
+        url: `wss://${req.headers.host}/voice/low-latency?callId=${callId}&conversationId=${conversationId}`,
         name: 'project-call-stream'
       });
       

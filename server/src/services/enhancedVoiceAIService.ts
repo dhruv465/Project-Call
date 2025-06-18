@@ -46,16 +46,28 @@ export class EnhancedVoiceAIService {
   private llmService: LLMService | null = null;
 
   constructor(elevenLabsApiKey: string) {
+    console.log('EnhancedVoiceAIService constructor called with:', {
+      hasApiKey: !!elevenLabsApiKey,
+      apiKeyLength: elevenLabsApiKey?.length || 0
+    });
+    
     this.elevenLabsApiKey = elevenLabsApiKey;
     
     // Initialize services
+    console.log('Initializing conversational service...');
     this.initializeConversationalService();
+    
+    console.log('Initializing SDK service...');
     this.initializeSDKService();
     
     // Initialize LLM service asynchronously - it will fetch from the database
+    console.log('Starting LLM service initialization...');
     this.initializeLLMService().catch(error => {
+      console.error(`Failed to initialize LLM Service: ${getErrorMessage(error)}`);
       logger.error(`Failed to initialize LLM Service: ${getErrorMessage(error)}`);
     });
+    
+    console.log('EnhancedVoiceAIService initialization completed');
   }
   
   /**
@@ -80,22 +92,30 @@ export class EnhancedVoiceAIService {
    */
   private initializeSDKService(): void {
     try {
+      console.log('EnhancedVoiceAIService.initializeSDKService called with API key:', {
+        hasApiKey: !!this.elevenLabsApiKey,
+        apiKeyLength: this.elevenLabsApiKey?.length || 0
+      });
+      
       if (!this.elevenLabsApiKey) {
         throw new Error('ElevenLabs API key is missing');
       }
       
       // Initialize without OpenAI dependency - LLM service will handle AI responses
+      console.log('Calling initializeSDKService from enhancedVoiceAIService...');
       this.sdkService = initializeSDKService(
         this.elevenLabsApiKey,
         '' // Empty OpenAI key since we'll use LLM service
       );
       
       if (this.sdkService) {
+        console.log('ElevenLabs SDK Service initialized successfully in EnhancedVoiceAIService');
         logger.info('ElevenLabs SDK Service initialized successfully');
       } else {
         throw new Error('SDK service initialization returned null');
       }
     } catch (error) {
+      console.error(`Failed to initialize ElevenLabs SDK Service in EnhancedVoiceAIService: ${getErrorMessage(error)}`);
       logger.error(`Failed to initialize ElevenLabs SDK Service: ${getErrorMessage(error)}`);
       this.sdkService = null;
     }

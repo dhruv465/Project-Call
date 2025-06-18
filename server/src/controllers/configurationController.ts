@@ -5,6 +5,7 @@ import axios from 'axios';
 import twilio from 'twilio';
 import { 
   validateElevenLabsKey, 
+  validateDeepgramKey,
   validateVoiceParameters, 
   validateLLMParameters,
   validateGeneralSettings,
@@ -811,15 +812,20 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
       
       // Validate Deepgram API key if provided and not empty
       if (updatedConfig.deepgramConfig.apiKey && updatedConfig.deepgramConfig.apiKey.trim() !== '') {
-        // Basic validation - Deepgram API keys should start with specific pattern
-        if (!updatedConfig.deepgramConfig.apiKey.startsWith('dgk_')) {
-          return res.status(400).json({ 
-            message: 'Invalid Deepgram API key format. Deepgram API keys should start with "dgk_"',
-            error: 'Invalid API key format' 
-          });
+        // Check if it's not a masked key first
+        if (enhancedIsMaskedApiKey(updatedConfig.deepgramConfig.apiKey)) {
+          logger.info('Deepgram API key is masked, will keep existing key');
+        } else {
+          // Validate the API key format
+          const validation = validateDeepgramKey(updatedConfig.deepgramConfig.apiKey);
+          if (!validation.isValid) {
+            return res.status(400).json({ 
+              message: 'Invalid Deepgram API key format',
+              error: validation.error 
+            });
+          }
+          logger.info('Deepgram API key provided and validated, will update configuration');
         }
-        
-        logger.info('Deepgram API key provided, will update configuration');
       }
       
       config.deepgramConfig = {

@@ -112,6 +112,10 @@ if (!fs.existsSync('logs')) {
 // Initialize express app
 const app = express();
 const server = http.createServer(app);
+
+// Initialize WebSocket support
+const wsInstance = expressWs(app, server);
+
 const io = new SocketIOServer(server, {
   cors: {
     origin: process.env.CLIENT_URL || 'http://localhost:3000',
@@ -119,8 +123,6 @@ const io = new SocketIOServer(server, {
     credentials: true,
   },
 });
-
-// Initialize WebSocket support
 
 // Enhanced middleware setup for production
 const corsOrigin = process.env.CORS_ORIGIN || process.env.CLIENT_URL || 'http://localhost:3000';
@@ -612,6 +614,21 @@ const startServer = async () => {
       } catch (error) {
         logger.error(`Error initializing cache preloading: ${error.message}`);
       }
+
+      // Initialize temporary file cleanup
+      try {
+        const { TempFileCleanup } = require('./utils/tempFileCleanup');
+        
+        // Perform emergency cleanup of any existing temp files
+        TempFileCleanup.emergencyCleanup();
+        
+        // Start periodic cleanup
+        TempFileCleanup.startPeriodicCleanup();
+        
+        logger.info('Temporary file cleanup initialized');
+      } catch (error) {
+        logger.error(`Error initializing temp file cleanup: ${error.message}`);
+      }
     });
     
     // Handle server errors
@@ -692,7 +709,15 @@ const gracefulShutdown = (signal: string) => {
     }
     
     try {
+      // Stop temp file cleanup process
+      const { TempFileCleanup } = require('./utils/tempFileCleanup');
+      TempFileCleanup.stopPeriodicCleanup();
+      
+      // Perform final cleanup of temp files
+      TempFileCleanup.emergencyCleanup();
+      
       // Close database connections
+      logger.info('Closing database connection...');
       await mongoose.connection.close();
       logger.info('Database connections closed');
       

@@ -45,6 +45,28 @@ export function validateElevenLabsKey(apiKey: string | undefined): ValidationRes
   return { isValid: true };
 }
 
+// Validate Deepgram API Key
+export function validateDeepgramKey(apiKey: string | undefined): ValidationResult {
+  if (!apiKey) {
+    return { isValid: true }; // Allow empty key for disabling the service
+  }
+  if (apiKey.length < 30) {
+    return {
+      isValid: false,
+      error: 'Deepgram API key must be at least 30 characters long'
+    };
+  }
+  // Based on observed patterns, Deepgram API keys are typically around 40 characters
+  // but we allow a reasonable range for flexibility
+  if (apiKey.length > 100) {
+    return {
+      isValid: false,
+      error: 'Deepgram API key appears to be too long (max 100 characters)'
+    };
+  }
+  return { isValid: true };
+}
+
 // Validate Voice Parameters
 export function validateVoiceParameters(params: {
   voiceSpeed?: number;

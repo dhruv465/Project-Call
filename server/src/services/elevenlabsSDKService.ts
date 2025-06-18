@@ -86,6 +86,13 @@ export class ElevenLabsSDKService extends EventEmitter {
   constructor(apiKey: string, openAIApiKey: string) {
     super();
     
+    console.log('ElevenLabsSDKService constructor called with:', {
+      hasApiKey: !!apiKey,
+      apiKeyLength: apiKey?.length || 0,
+      hasOpenAIKey: !!openAIApiKey,
+      openAIKeyLength: openAIApiKey?.length || 0
+    });
+    
     if (!apiKey || apiKey.trim() === '') {
       throw new Error('ElevenLabs API key is required for SDK initialization');
     }
@@ -108,11 +115,17 @@ export class ElevenLabsSDKService extends EventEmitter {
         this.responseCache = null;
       }
       
+      console.log('ElevenLabs SDK Service initialized successfully with API key', {
+        keyLength: this.apiKey.length,
+        keyPrefix: this.apiKey.substring(0, 3) + '...'
+      });
+      
       logger.info('ElevenLabs SDK Service initialized with API key', {
         keyLength: this.apiKey.length,
         keyPrefix: this.apiKey.substring(0, 3) + '...'
       });
     } catch (error) {
+      console.error(`Failed to initialize ElevenLabs SDK: ${getErrorMessage(error)}`);
       logger.error(`Failed to initialize ElevenLabs SDK: ${getErrorMessage(error)}`);
       throw new Error(`ElevenLabs SDK initialization failed: ${getErrorMessage(error)}`);
     }
@@ -206,6 +219,17 @@ export class ElevenLabsSDKService extends EventEmitter {
     }
   ): Promise<Buffer> {
     try {
+      // Validate input parameters
+      if (!text || typeof text !== 'string' || text.trim() === '') {
+        throw new Error(`Invalid text parameter: ${typeof text} - "${text}"`);
+      }
+      
+      if (!voiceId || typeof voiceId !== 'string' || voiceId.trim() === '') {
+        throw new Error(`Invalid voiceId parameter: ${typeof voiceId} - "${voiceId}"`);
+      }
+
+      logger.debug(`Generating speech for text: "${text.substring(0, 50)}..." with voice: ${voiceId}`);
+
       // Check cache first for common phrases (greetings, acknowledgments, etc.)
       const cacheKey = `${voiceId}_${text}`;
       if (this.responseCache && this.responseCache.has(cacheKey)) {
@@ -248,16 +272,145 @@ export class ElevenLabsSDKService extends EventEmitter {
         ? 'mp3_44100_64' // Lower bitrate for faster generation
         : 'mp3_44100_128';
       
-      // Use the SDK to generate speech
-      const audioBuffer = await this.elevenlabs.textToSpeech({
-        text,
-        voice_id: voiceId,
-        model_id: modelId,
-        voice_settings: voiceSettings,
-        output_format: outputFormat
+      logger.debug(`Making ElevenLabs API call with params:`, {
+        voiceId: voiceId,
+        textLength: text.length,
+        modelId: modelId,
+        outputFormat: outputFormat,
+        stability: voiceSettings.stability,
+        apiKeyPrefix: this.apiKey.substring(0, 10) + '...'
       });
 
-      const buffer = Buffer.from(audioBuffer);
+      // Validate voice ID exists before making the API call
+      try {
+        const voices = await this.getVoices();
+        const voiceExists = voices.some(voice => voice.voiceId === voiceId);
+        if (!voiceExists) {
+          logger.warn(`Voice ID ${voiceId} not found in available voices. Available voices: ${voices.map(v => v.voiceId).slice(0, 5).join(', ')}...`);
+        }
+      } catch (voiceError) {
+        logger.warn(`Could not validate voice ID (continuing anyway): ${getErrorMessage(voiceError)}`);
+      }
+
+      // Use the SDK to generate speech with proper error handling
+      let audioResponse;
+      const tempFileName = `temp_${Date.now()}.mp3`;
+      
+      try {
+        audioResponse = await this.elevenlabs.textToSpeech({
+          voiceId: voiceId,
+          textInput: text,
+          fileName: tempFileName, // Required parameter for elevenlabs-node
+          modelId: modelId,
+          stability: voiceSettings.stability,
+          similarityBoost: voiceSettings.similarity_boost,
+          style: voiceSettings.style
+        });
+      } catch (apiError: any) {
+        // Clean up temp file if it was created during the error
+        try {
+          const fs = require('fs');
+          if (fs.existsSync(tempFileName)) {
+            fs.unlinkSync(tempFileName);
+            logger.debug(`Cleaned up temp file after API error: ${tempFileName}`);
+          }
+        } catch (cleanupError) {
+          logger.warn(`Failed to cleanup temp file after API error: ${tempFileName}`, cleanupError);
+        }
+        
+        // Handle specific API errors
+        if (apiError.response?.status === 401) {
+          logger.error(`API Key validation details:`, {
+            apiKeyLength: this.apiKey?.length,
+            apiKeyPrefix: this.apiKey?.substring(0, 10),
+            voiceId: voiceId,
+            modelId: modelId
+          });
+          throw new Error(`ElevenLabs API authentication failed. Please check your API key. Status: ${apiError.response.status}`);
+        } else if (apiError.response?.status === 422) {
+          throw new Error(`ElevenLabs API validation error: ${apiError.response?.data?.detail || 'Invalid request parameters'}`);
+        } else if (apiError.response?.status === 429) {
+          throw new Error(`ElevenLabs API rate limit exceeded. Please try again later.`);
+        } else if (apiError.code === 'ERR_BAD_REQUEST' && apiError.response?.status) {
+          throw new Error(`ElevenLabs API error (${apiError.response.status}): ${apiError.response.statusText || 'Unknown error'}`);
+        } else {
+          throw new Error(`ElevenLabs API call failed: ${getErrorMessage(apiError)}`);
+        }
+      }
+
+      logger.debug(`ElevenLabs API response type: ${typeof audioResponse}, isBuffer: ${Buffer.isBuffer(audioResponse)}, isNull: ${audioResponse === null}`);
+
+      // Handle different response types from elevenlabs-node
+      let buffer: Buffer;
+      
+      if (!audioResponse) {
+        throw new Error('ElevenLabs API returned empty response');
+      }
+
+      // Check if the response is an error object
+      if (typeof audioResponse === 'object' && audioResponse.constructor !== Buffer) {
+        const errorObj = audioResponse as any;
+        if (errorObj.error || errorObj.status === 401) {
+          throw new Error(`ElevenLabs API error: ${errorObj.error || 'Authentication failed (401)'}`);
+        }
+      }
+
+      // Handle different response formats
+      if (Buffer.isBuffer(audioResponse)) {
+        buffer = audioResponse;
+      } else if (typeof audioResponse === 'string') {
+        // If it's a file path, read the file
+        const fs = require('fs');
+        try {
+          buffer = fs.readFileSync(audioResponse);
+          // Clean up temporary file
+          fs.unlinkSync(audioResponse);
+        } catch (fsError) {
+          throw new Error(`Failed to read audio file: ${getErrorMessage(fsError)}`);
+        }
+      } else if (typeof audioResponse === 'object' && audioResponse !== null) {
+        // Handle object response with fileName (newer elevenlabs-node behavior)
+        const responseObj = audioResponse as any;
+        if (responseObj.fileName && responseObj.status === 'ok') {
+          const fs = require('fs');
+          let tempFilePath: string | null = null;
+          
+          try {
+            tempFilePath = responseObj.fileName;
+            buffer = fs.readFileSync(tempFilePath);
+            logger.debug(`Successfully read audio from file: ${tempFilePath}`);
+          } catch (fsError) {
+            throw new Error(`Failed to read audio file ${tempFilePath}: ${getErrorMessage(fsError)}`);
+          } finally {
+            // Ensure temp file is always cleaned up
+            if (tempFilePath && fs.existsSync(tempFilePath)) {
+              try {
+                fs.unlinkSync(tempFilePath);
+                logger.debug(`Cleaned up temp file: ${tempFilePath}`);
+              } catch (cleanupError) {
+                logger.warn(`Failed to cleanup temp file: ${tempFilePath}`, cleanupError);
+              }
+            }
+          }
+        } else {
+          // Handle error object
+          throw new Error(`ElevenLabs API error: ${responseObj.error || responseObj.message || 'Unknown error'}`);
+        }
+      } else if (audioResponse instanceof ArrayBuffer) {
+        buffer = Buffer.from(audioResponse);
+      } else if (Array.isArray(audioResponse)) {
+        buffer = Buffer.from(audioResponse);
+      } else {
+        logger.error('Unexpected audioResponse type:', {
+          type: typeof audioResponse,
+          isArray: Array.isArray(audioResponse),
+          isNull: audioResponse === null,
+          isUndefined: audioResponse === undefined,
+          constructor: audioResponse?.constructor?.name,
+          value: audioResponse
+        });
+        throw new Error(`ElevenLabs API returned unexpected response type: ${typeof audioResponse}`);
+      }
       
       // Cache the result for common phrases (less than 100 chars)
       if (this.responseCache && text.length < 100) {
@@ -596,10 +749,13 @@ export class ElevenLabsSDKService extends EventEmitter {
 
       // Generate the speech using the SDK with timeout handling
       const synthesisPromise = this.elevenlabs.textToSpeech({
-        text,
-        voice_id: personalityId,
-        model_id: modelId,
-        voice_settings: voiceSettings
+        voiceId: personalityId,
+        textInput: text,
+        fileName: `synthesis_${Date.now()}.mp3`, // Required parameter for elevenlabs-node
+        modelId: modelId,
+        stability: voiceSettings.stability,
+        similarityBoost: voiceSettings.similarity_boost,
+        style: voiceSettings.style
       });
       
       // Add a timeout to prevent hanging on API issues
@@ -608,7 +764,36 @@ export class ElevenLabsSDKService extends EventEmitter {
       });
       
       // Race the promises
-      const audioBuffer = await Promise.race([synthesisPromise, timeoutPromise]);
+      const audioResponse = await Promise.race([synthesisPromise, timeoutPromise]);
+
+      // Handle different response types from elevenlabs-node
+      let audioBuffer: Buffer;
+      
+      if (!audioResponse) {
+        throw new Error('ElevenLabs API returned empty response');
+      }
+
+      // Handle different response formats
+      if (Buffer.isBuffer(audioResponse)) {
+        audioBuffer = audioResponse;
+      } else if (typeof audioResponse === 'string') {
+        // If it's a file path, read the file
+        const fs = require('fs');
+        try {
+          audioBuffer = fs.readFileSync(audioResponse);
+          // Clean up temporary file
+          fs.unlinkSync(audioResponse);
+        } catch (fsError) {
+          throw new Error(`Failed to read audio file: ${getErrorMessage(fsError)}`);
+        }
+      } else if (audioResponse instanceof ArrayBuffer) {
+        audioBuffer = Buffer.from(audioResponse);
+      } else if (Array.isArray(audioResponse)) {
+        audioBuffer = Buffer.from(audioResponse);
+      } else {
+        logger.error('Unexpected audioResponse type in synthesizeAdaptiveVoice:', typeof audioResponse, audioResponse);
+        throw new Error(`ElevenLabs API returned unexpected response type: ${typeof audioResponse}`);
+      }
 
       // Log successful synthesis
       logger.info(`Successfully synthesized voice with ElevenLabs SDK for ${text.length} characters`);
@@ -958,17 +1143,29 @@ export function initializeSDKService(
   openAIApiKey: string
 ): ElevenLabsSDKService | null {
   try {
+    console.log('initializeSDKService called with:', {
+      hasApiKey: !!apiKey,
+      apiKeyLength: apiKey?.length || 0,
+      hasOpenAIKey: !!openAIApiKey,
+      existingService: !!sdkService
+    });
+    
     if (!apiKey || apiKey.trim() === '') {
+      console.error('Cannot initialize SDK Service: ElevenLabs API key is missing or empty');
       logger.error('Cannot initialize SDK Service: ElevenLabs API key is missing or empty');
       return null;
     }
     
     if (!sdkService) {
+      console.log('Creating new ElevenLabsSDKService instance...');
       sdkService = new ElevenLabsSDKService(apiKey, openAIApiKey);
+      console.log('ElevenLabs SDK Service initialized successfully with new instance');
       logger.info('ElevenLabs SDK Service initialized successfully with new instance');
     } else {
       // Update API keys if service already exists
+      console.log('Updating existing ElevenLabsSDKService with new API keys...');
       sdkService.updateApiKeys(apiKey, openAIApiKey);
+      console.log('ElevenLabs SDK Service updated with new API keys');
       logger.info('ElevenLabs SDK Service updated with new API keys');
     }
     
@@ -982,20 +1179,25 @@ export function initializeSDKService(
     Promise.race([
       (async () => {
         try {
+          console.log('Starting background API key validation...');
           await sdkService.getVoices();
+          console.log('ElevenLabs API key validated successfully');
           logger.info('ElevenLabs API key validated successfully');
         } catch (error) {
+          console.error(`ElevenLabs API key validation failed: ${getErrorMessage(error)}`);
           logger.error(`ElevenLabs API key validation failed: ${getErrorMessage(error)}`);
           // Don't set to null here, as it might just be a temporary network issue
         }
       })(),
       timeoutPromise
     ]).catch(error => {
+      console.warn(`API validation check: ${getErrorMessage(error)}`);
       logger.warn(`API validation check: ${getErrorMessage(error)}`);
     });
     
     return sdkService;
   } catch (error) {
+    console.error(`Failed to initialize ElevenLabs SDK Service: ${getErrorMessage(error)}`);
     logger.error(`Failed to initialize ElevenLabs SDK Service: ${getErrorMessage(error)}`);
     return null;
   }

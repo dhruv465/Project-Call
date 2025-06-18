@@ -21,13 +21,6 @@ else
   echo "ℹ️  server/.env already exists. Skipping creation."
 fi
 
-# Install git hooks
-echo "🔄 Installing git hooks..."
-mkdir -p .git/hooks
-cp -f git-hooks/pre-commit .git/hooks/
-chmod +x .git/hooks/pre-commit
-echo "✅ Git hooks installed"
-
 # Check node_modules
 if [ ! -d "server/node_modules" ]; then
   echo "📦 server/node_modules not found. Running npm install..."
@@ -51,14 +44,7 @@ else
   echo "❌ server/.env file is missing"
 fi
 
-if [ -x ".git/hooks/pre-commit" ]; then
-  echo "✅ pre-commit hook is installed"
-else
-  echo "❌ pre-commit hook is not installed correctly"
-fi
-
 echo ""
 echo "🎉 Setup complete! Remember to update your .env file with real credentials."
-echo "⚠️  Never commit your .env file or any sensitive information to the repository."
 echo ""
 echo "✨ You're ready to start developing!"
