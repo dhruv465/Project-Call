@@ -376,6 +376,83 @@ export const handleConversationalAIStream = async (ws: WebSocket, req: Request):
       settings: conversationalSettings
     }));
     
+    // Check if this is a new connection - if so, send the initial script message
+    // first before waiting for user input
+    try {
+      // Get campaign ID from request parameters if available
+      const campaignId = url.searchParams.get('campaignId');
+      
+      if (campaignId) {
+        // Get campaign to retrieve initial script/prompt
+        const Campaign = require('../models/Campaign').default;
+        const campaign = await Campaign.findById(campaignId);
+        
+        if (campaign && campaign.script?.versions?.length > 0) {
+          // Get the active script version or use the first one
+          const activeScript = campaign.script.versions.find(v => v.isActive) || campaign.script.versions[0];
+          
+          if (activeScript?.content) {
+            logger.info(`Sending initial script for conversation ${conversationId}`);
+            
+            // Generate initial message from script
+            const initialMessage = activeScript.content.trim();
+            
+            // Send script as a message type first
+            ws.send(JSON.stringify({
+              type: 'initialScript',
+              text: initialMessage,
+              conversationId
+            }));
+            
+            // Start processing flag to prevent other processing while synthesizing
+            isProcessing = true;
+            
+            // Collect audio chunks
+            const audioChunks: Buffer[] = [];
+            
+            // Start conversation with streaming
+            await voiceAI.createRealisticConversation(
+              initialMessage,
+              voiceId,
+              {
+                conversationId,
+                language: campaign.primaryLanguage || 'English',
+                interruptible: conversationalSettings.interruptible,
+                contextAwareness: true,
+                modelId: conversationalSettings.defaultModelId || 'eleven_multilingual_v2',
+                onAudioChunk: (chunk: Buffer) => {
+                  // Send audio chunk to client
+                  ws.send(chunk);
+                  audioChunks.push(chunk);
+                },
+                onInterruption: () => {
+                  ws.send(JSON.stringify({
+                    type: 'interrupted',
+                    conversationId
+                  }));
+                },
+                onCompletion: (response) => {
+                  ws.send(JSON.stringify({
+                    type: 'completed',
+                    conversationId,
+                    interrupted: response.interrupted || false,
+                    metadata: response.metadata || {}
+                  }));
+                  isProcessing = false;
+                }
+              }
+            ).catch((error) => {
+              logger.error(`Error sending initial script: ${error.message}`);
+              isProcessing = false;
+            });
+          }
+        }
+      }
+    } catch (error) {
+      logger.error(`Error sending initial script: ${error.message}`);
+      isProcessing = false;
+    }
+    
     // Handle messages from client
     ws.on('message', async (message: WebSocket.Data) => {
       try {

@@ -6,7 +6,7 @@
  */
 
 // Initialize the WebSocket connection
-function initializeConversationalAI(voiceId, conversationId = null) {
+function initializeConversationalAI(voiceId, conversationId = null, campaignId = null) {
   // Construct WebSocket URL with query parameters
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const baseUrl = window.location.hostname === 'localhost' ? 
@@ -16,6 +16,7 @@ function initializeConversationalAI(voiceId, conversationId = null) {
   const queryParams = new URLSearchParams();
   if (voiceId) queryParams.append('voiceId', voiceId);
   if (conversationId) queryParams.append('conversationId', conversationId);
+  if (campaignId) queryParams.append('campaignId', campaignId);
   
   const wsUrl = `${baseUrl}/voice/conversational-ai?${queryParams.toString()}`;
   
@@ -49,6 +50,16 @@ function initializeConversationalAI(voiceId, conversationId = null) {
             // WebSocket is ready to accept messages
             activeConversationId = message.conversationId;
             console.log('Conversational AI ready', message);
+            
+            // If this is a new conversation with initial script,
+            // server will automatically send the script message
+            // No need to send anything yet
+            break;
+            
+          case 'initialScript':
+            // Initial script message from campaign
+            console.log('Received initial script:', message);
+            // The audio for this will be sent as binary data
             break;
             
           case 'processing':
@@ -182,8 +193,8 @@ function initializeConversationalAI(voiceId, conversationId = null) {
 
 // Example usage:
 /*
-// Initialize with a voice ID
-const conversationalAI = initializeConversationalAI('voice-id-here');
+// Initialize with a voice ID and campaign ID
+const conversationalAI = initializeConversationalAI('voice-id-here', null, 'campaign-id-here');
 
 // Send a message
 document.getElementById('sendButton').addEventListener('click', () => {
@@ -201,3 +212,6 @@ document.getElementById('closeButton').addEventListener('click', () => {
   conversationalAI.close();
 });
 */
+
+// Export the function for use in other modules
+export default initializeConversationalAI;
