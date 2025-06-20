@@ -24,6 +24,7 @@ import leadRoutes from './routes/leadRoutes';
 import rootWebhookRoutes from './routes/rootWebhookRoutes';
 import streamRoutes from './routes/streamRoutes';
 import telephonyRoutes from './routes/telephonyRoutes';
+import transcriptionRoutes from './routes/transcriptionRoutes';
 import userRoutes from './routes/userRoutes';
 import voiceAIRoutes from './routes/voiceAIRoutes';
 
@@ -330,6 +331,7 @@ app.use('/api/configuration', configurationRoutes);
 app.use('/api/lumina-outreach', voiceAIRoutes);
 app.use('/api/telephony', telephonyRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/transcription', transcriptionRoutes);
 
 // Debug routes only in development
 if (process.env.NODE_ENV !== 'production') {

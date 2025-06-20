@@ -1,0 +1,245 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lumina-app
+  namespace: lumina-outreach
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lumina-outreach
+      component: app
+  template:
+    metadata:
+      labels:
+        app: lumina-outreach
+        component: app
+    spec:
+      containers:
+      - name: api-gateway
+        image: ${REGISTRY}/lumina-api-gateway:${TAG}
+        ports:
+        - containerPort: 3000
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: API_GATEWAY_PORT
+          value: "3000"
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: lumina-secrets
+              key: redis_url
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: lumina-secrets
+              key: jwt_secret
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      - name: media-service
+        image: ${REGISTRY}/lumina-media-service:${TAG}
+        ports:
+        - containerPort: 3002
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3002"
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: lumina-secrets
+              key: redis_url
+        - name: DEEPGRAM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: lumina-secrets
+              key: deepgram_api_key
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 1
+            memory: 1Gi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3002
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      - name: analytics-service
+        image: ${REGISTRY}/lumina-analytics-service:${TAG}
+        ports:
+        - containerPort: 3003
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3003"
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: lumina-secrets
+              key: redis_url
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: lumina-secrets
+              key: mongodb_uri
+        resources:
+          requests:
+            cpu: 300m
+            memory: 512Mi
+          limits:
+            cpu: 800m
+            memory: 1Gi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3003
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lumina-app
+  namespace: lumina-outreach
+spec:
+  selector:
+    app: lumina-outreach
+    component: app
+  ports:
+  - name: api-gateway
+    port: 80
+    targetPort: 3000
+  - name: media-service
+    port: 3002
+    targetPort: 3002
+  - name: analytics-service
+    port: 3003
+    targetPort: 3003
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lumina-ingress
+  namespace: lumina-outreach
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+  - hosts:
+    - app.luminaoutreach.com
+    - api.luminaoutreach.com
+    secretName: lumina-tls
+  rules:
+  - host: app.luminaoutreach.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: lumina-app
+            port:
+              number: 80
+  - host: api.luminaoutreach.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: lumina-app
+            port:
+              number: 80
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lumina-config
+  namespace: lumina-outreach
+data:
+  redis_host: "redis-master.redis.svc.cluster.local"
+  redis_port: "6379"
+  media_service_url: "http://lumina-app:3002"
+  analytics_service_url: "http://lumina-app:3003"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: lumina-secrets
+  namespace: lumina-outreach
+type: Opaque
+data:
+  mongodb_uri: ${BASE64_MONGODB_URI}
+  redis_url: ${BASE64_REDIS_URL}
+  deepgram_api_key: ${BASE64_DEEPGRAM_API_KEY}
+  jwt_secret: ${BASE64_JWT_SECRET}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: lumina-db-backup
+  namespace: lumina-outreach
+spec:
+  schedule: "0 2 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: mongodb-backup
+            image: mongo:4.4
+            command:
+            - /bin/bash
+            - -c
+            - |
+              mongodump --uri=${MONGODB_URI} --gzip --archive=/backup/lumina-$(date +%Y%m%d).gz
+            env:
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: lumina-secrets
+                  key: mongodb_uri
+            volumeMounts:
+            - name: backup-volume
+              mountPath: /backup
+          restartPolicy: OnFailure
+          volumes:
+          - name: backup-volume
+            persistentVolumeClaim:
+              claimName: lumina-backup-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lumina-backup-pvc
+  namespace: lumina-outreach
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard

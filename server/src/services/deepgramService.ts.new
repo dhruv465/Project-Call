@@ -1,0 +1,375 @@
+import { createClient, DeepgramClient, LiveTranscriptionEvents } from '@deepgram/sdk';
+import { getErrorMessage } from '../utils/logger';
+import logger from '../utils/logger';
+import { EventEmitter } from 'events';
+import { v4 as uuidv4 } from 'uuid';
+import Configuration from '../models/Configuration';
+
+export enum DeepgramEvent {
+  TRANSCRIPT_RECEIVED = 'transcript-received',
+  TRANSCRIPT_FINAL = 'transcript-final',
+  ERROR = 'error',
+  CONNECTION_STATUS = 'connection-status'
+}
+
+export interface TranscriptResult {
+  id: string;
+  callId: string;
+  text: string;
+  isFinal: boolean;
+  confidence: number;
+  words: Array<{
+    word: string;
+    start: number;
+    end: number;
+    confidence: number;
+  }>;
+  metadata: {
+    startTime: number;
+    endTime: number;
+    processingLatency: number;
+  };
+}
+
+interface DeepgramStreamOptions {
+  language?: string;
+  model?: string;
+  tier?: string;
+  detectLanguage?: boolean;
+  punctuate?: boolean;
+  profanityFilter?: boolean;
+  redact?: boolean;
+  diarize?: boolean;
+  keywords?: string[];
+  endpointing?: number;
+  utteranceEndMs?: number;
+}
+
+// Define Deepgram config interface for database
+interface DeepgramConfig {
+  language?: string;
+  model?: string;
+  detectLanguage?: boolean;
+  apiKey?: string;
+}
+
+/**
+ * Service for real-time speech-to-text using Deepgram
+ * Provides ultra-low latency transcription with WebSocket streaming
+ */
+export class DeepgramService extends EventEmitter {
+  private apiKey: string;
+  private client: DeepgramClient;
+  private activeConnections: Map<string, any> = new Map();
+  private defaultModel: string = 'nova-2';
+  private defaultOptions: DeepgramStreamOptions = {
+    language: 'en',
+    model: 'nova-2',
+    punctuate: true,
+    endpointing: 150, // 150ms of silence to consider end of speech
+    utteranceEndMs: 500 // 500ms to finalize an utterance
+  };
+
+  /**
+   * Create a new Deepgram Service instance
+   * @param apiKey Deepgram API key
+   */
+  constructor(apiKey: string) {
+    super();
+    this.apiKey = apiKey;
+    this.client = createClient(apiKey);
+    logger.info('Deepgram Service initialized');
+  }
+
+  /**
+   * Update the API key
+   * @param apiKey New Deepgram API key
+   */
+  public updateApiKey(apiKey: string): void {
+    this.apiKey = apiKey;
+    this.client = createClient(apiKey);
+    logger.info('Deepgram API key updated');
+  }
+
+  /**
+   * Transcribe an audio file with high accuracy
+   * @param audioBuffer Audio buffer to transcribe
+   * @param options Transcription options
+   * @returns Transcription result
+   */
+  public async transcribeAudio(
+    audioBuffer: Buffer,
+    options?: {
+      language?: string;
+      model?: string;
+      detectLanguage?: boolean;
+    }
+  ): Promise<any> {
+    try {
+      const startTime = Date.now();
+      
+      // Get configuration from database
+      const config = await Configuration.findOne();
+      const deepgramConfig = (config?.deepgramConfig || {}) as DeepgramConfig;
+      
+      // Create transcription options
+      const transcriptionOptions = {
+        language: options?.language || deepgramConfig.language || 'en',
+        model: options?.model || deepgramConfig.model || this.defaultModel,
+        detect_language: options?.detectLanguage || deepgramConfig.detectLanguage || false,
+        punctuate: true,
+        smart_format: true
+      };
+
+      // Perform the transcription
+      const response = await this.client.listen.prerecorded.transcribeFile(audioBuffer, {
+        mimetype: 'audio/wav',
+        options: transcriptionOptions
+      });
+
+      const endTime = Date.now();
+      const latency = endTime - startTime;
+
+      logger.info(`Deepgram transcription completed in ${latency}ms`);
+
+      // Return the transcription result with corrected property access
+      const result = response.result?.results?.utterances?.[0] || response.result?.channels?.[0]?.alternatives?.[0];
+      return {
+        transcript: result?.transcript || '',
+        confidence: result?.confidence || 0,
+        words: result?.words || [],
+        language: response.result?.metadata?.language || options?.language || 'en',
+        latency
+      };
+    } catch (error) {
+      logger.error(`Error transcribing audio with Deepgram: ${getErrorMessage(error)}`);
+      throw new Error(`Transcription failed: ${getErrorMessage(error)}`);
+    }
+  }
+
+  /**
+   * Create a real-time transcription stream
+   * @param callId Call ID for tracking
+   * @param options Stream options
+   * @returns Connection ID
+   */
+  public createTranscriptionStream(
+    callId: string,
+    options?: DeepgramStreamOptions
+  ): string {
+    try {
+      const connectionId = uuidv4();
+      
+      // Merge default options with provided options
+      const streamOptions = {
+        ...this.defaultOptions,
+        ...options
+      };
+
+      logger.info(`Creating Deepgram transcription stream for call ${callId}`, {
+        model: streamOptions.model,
+        language: streamOptions.language
+      });
+
+      // Create live transcription with latest API
+      const connection = this.client.listen.live({
+        language: streamOptions.language,
+        model: streamOptions.model,
+        tier: streamOptions.tier || 'enhanced',
+        punctuate: streamOptions.punctuate !== false,
+        diarize: streamOptions.diarize || false,
+        multichannel: false,
+        alternatives: 1,
+        endpointing: streamOptions.endpointing !== undefined ? streamOptions.endpointing : this.defaultOptions.endpointing,
+        utterance_end_ms: streamOptions.utteranceEndMs !== undefined ? streamOptions.utteranceEndMs : this.defaultOptions.utteranceEndMs,
+        smart_format: true,
+        encoding: 'linear16',
+        sample_rate: 16000,
+        interim_results: true,
+        keywords: streamOptions.keywords || []
+      });
+
+      // Store connection for management
+      this.activeConnections.set(connectionId, connection);
+
+      // Emit connection status
+      this.emit(DeepgramEvent.CONNECTION_STATUS, {
+        connectionId,
+        callId,
+        status: 'connected'
+      });
+
+      // Handle transcript results
+      connection.on(LiveTranscriptionEvents.Transcript, (data) => {
+        // Only process if we have valid results
+        if (data?.channel?.alternatives?.[0]) {
+          const alt = data.channel.alternatives[0];
+          
+          // Create structured transcript result
+          const result: TranscriptResult = {
+            id: uuidv4(),
+            callId,
+            text: alt.transcript || '',
+            isFinal: data.is_final || false,
+            confidence: alt.confidence || 0,
+            words: alt.words?.map((word: any) => ({
+              word: word.word,
+              start: word.start,
+              end: word.end,
+              confidence: word.confidence
+            })) || [],
+            metadata: {
+              startTime: data.start || 0,
+              endTime: data.end || 0,
+              processingLatency: data.audio_meta?.processing_latency_ms || 0
+            }
+          };
+
+          // Log detailed metrics for final results
+          if (result.isFinal) {
+            logger.info(`Deepgram final transcript for call ${callId}`, {
+              text: result.text,
+              confidence: result.confidence,
+              latency: result.metadata.processingLatency
+            });
+            this.emit(DeepgramEvent.TRANSCRIPT_FINAL, result);
+          } else {
+            // Emit interim results without excessive logging
+            this.emit(DeepgramEvent.TRANSCRIPT_RECEIVED, result);
+          }
+        }
+      });
+
+      // Handle errors
+      connection.on(LiveTranscriptionEvents.Error, (error) => {
+        logger.error(`Deepgram stream error for call ${callId}: ${getErrorMessage(error)}`);
+        this.emit(DeepgramEvent.ERROR, {
+          connectionId,
+          callId,
+          error: getErrorMessage(error)
+        });
+      });
+
+      // Handle close events
+      connection.on(LiveTranscriptionEvents.Close, () => {
+        logger.info(`Deepgram stream closed for call ${callId}`);
+        this.activeConnections.delete(connectionId);
+        this.emit(DeepgramEvent.CONNECTION_STATUS, {
+          connectionId,
+          callId,
+          status: 'disconnected'
+        });
+      });
+
+      // Handle open events
+      connection.on(LiveTranscriptionEvents.Open, () => {
+        logger.info(`Deepgram stream opened for call ${callId}`);
+        this.emit(DeepgramEvent.CONNECTION_STATUS, {
+          connectionId,
+          callId,
+          status: 'open'
+        });
+      });
+
+      return connectionId;
+    } catch (error) {
+      logger.error(`Error creating Deepgram stream: ${getErrorMessage(error)}`);
+      throw new Error(`Failed to create transcription stream: ${getErrorMessage(error)}`);
+    }
+  }
+
+  /**
+   * Send audio data to an active transcription stream
+   * @param connectionId Connection ID
+   * @param audioData Audio data as Buffer
+   */
+  public sendAudioToStream(connectionId: string, audioData: Buffer): void {
+    const connection = this.activeConnections.get(connectionId);
+    if (!connection) {
+      logger.warn(`No active Deepgram connection found for ID ${connectionId}`);
+      return;
+    }
+
+    try {
+      // Check if connection is open before sending
+      if (connection.isOpen || connection.getReadyState() === 1) { // 1 = OPEN
+        connection.send(audioData);
+      } else {
+        logger.warn(`Deepgram connection ${connectionId} is not open`);
+      }
+    } catch (error) {
+      logger.error(`Error sending audio to Deepgram: ${getErrorMessage(error)}`);
+    }
+  }
+
+  /**
+   * Close a transcription stream
+   * @param connectionId Connection ID
+   */
+  public closeTranscriptionStream(connectionId: string): void {
+    const connection = this.activeConnections.get(connectionId);
+    if (!connection) {
+      logger.warn(`No active Deepgram connection found for ID ${connectionId}`);
+      return;
+    }
+
+    try {
+      // Close the connection if it's open
+      if (connection.isOpen || connection.getReadyState() === 1) { // 1 = OPEN
+        connection.finish();
+        logger.info(`Closed Deepgram connection ${connectionId}`);
+      }
+      
+      // Clean up the connection
+      this.activeConnections.delete(connectionId);
+    } catch (error) {
+      logger.error(`Error closing Deepgram connection: ${getErrorMessage(error)}`);
+    }
+  }
+
+  /**
+   * Get all active connection IDs
+   * @returns Array of active connection IDs
+   */
+  public getActiveConnectionIds(): string[] {
+    return Array.from(this.activeConnections.keys());
+  }
+
+  /**
+   * Close all active connections
+   */
+  public closeAllConnections(): void {
+    const connectionIds = this.getActiveConnectionIds();
+    logger.info(`Closing ${connectionIds.length} Deepgram connections`);
+    
+    connectionIds.forEach(id => {
+      this.closeTranscriptionStream(id);
+    });
+  }
+}
+
+// Singleton instance
+let deepgramServiceInstance: DeepgramService | null = null;
+
+/**
+ * Initialize the Deepgram Service
+ * @param apiKey Deepgram API key
+ * @returns Service instance
+ */
+export function initializeDeepgramService(apiKey: string): DeepgramService {
+  if (!deepgramServiceInstance) {
+    deepgramServiceInstance = new DeepgramService(apiKey);
+  } else {
+    // Update API key if service already exists
+    deepgramServiceInstance.updateApiKey(apiKey);
+  }
+  return deepgramServiceInstance;
+}
+
+/**
+ * Get the Deepgram Service instance
+ * @returns Service instance or null if not initialized
+ */
+export function getDeepgramService(): DeepgramService | null {
+  return deepgramServiceInstance;
+}

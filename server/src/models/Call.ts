@@ -50,6 +50,7 @@ export interface ICall extends mongoose.Document {
   customerInteraction?: {
     totalSpeakingTime: number;
     speakingTimeRatio: number; // AI speaking time / customer speaking time
+    primaryEmotion?: string; // Added missing property
     interruptions: Array<{
       timestamp: Date;
       duration: number;
@@ -73,6 +74,8 @@ export interface ICall extends mongoose.Document {
     };
     qualityScore: number;
     complianceScore?: number;
+    interruptions?: number; // Added missing property
+    scriptAdherence?: number; // Added missing property
     intentDetection?: {
       primaryIntent: string;
       confidence: number;
@@ -98,6 +101,16 @@ export interface ICall extends mongoose.Document {
       personalityAlignment: number;
       overallScore: number;
     };
+  };
+  metadata?: {
+    transcription?: {
+      connectionId?: string;
+      startTime?: number;
+      endTime?: number;
+      provider?: string;
+      processingLatency?: number;
+    };
+    custom?: Record<string, any>;
   };
   conversationLog?: Array<{
     role: string;
@@ -193,6 +206,7 @@ const CallSchema = new mongoose.Schema({
   customerInteraction: {
     totalSpeakingTime: Number,
     speakingTimeRatio: Number,
+    primaryEmotion: String,
     interruptions: [{
       timestamp: Date,
       duration: Number,
@@ -219,6 +233,8 @@ const CallSchema = new mongoose.Schema({
     },
     qualityScore: Number,
     complianceScore: Number,
+    interruptions: Number,
+    scriptAdherence: Number,
     intentDetection: {
       primaryIntent: String,
       confidence: Number,
@@ -253,6 +269,16 @@ const CallSchema = new mongoose.Schema({
       personalityAlignment: Number,
       overallScore: Number
     }
+  },
+  metadata: {
+    transcription: {
+      connectionId: String,
+      startTime: Number,
+      endTime: Number,
+      provider: String,
+      processingLatency: Number
+    },
+    custom: mongoose.Schema.Types.Mixed
   },
   conversationLog: [{
     role: { type: String, required: true },
