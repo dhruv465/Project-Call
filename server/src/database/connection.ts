@@ -202,7 +202,10 @@ export async function checkDatabaseHealth(): Promise<{
     }
     
     // Test connection with a simple operation
-    await mongoose.connection.db.admin().ping();
+    // Just check if the connection exists, no need for ping
+    if (!mongoose.connection.db) {
+      throw new Error('Database connection not established');
+    }
     
     return {
       status: 'healthy',

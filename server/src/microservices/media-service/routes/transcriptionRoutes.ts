@@ -109,11 +109,11 @@ export function registerTranscriptionRoutes(
     return {
       state: transcriptionCircuit.status.state,
       stats: {
-        successes: transcriptionCircuit.stats.successes,
-        failures: transcriptionCircuit.stats.failures,
-        rejects: transcriptionCircuit.stats.rejects,
-        timeouts: transcriptionCircuit.stats.timeouts,
-        latencyMean: transcriptionCircuit.stats.latency.mean,
+        successes: transcriptionCircuit.status.stats.successes,
+        failures: transcriptionCircuit.status.stats.failures,
+        rejects: transcriptionCircuit.status.stats.rejects,
+        timeouts: transcriptionCircuit.status.stats.timeouts,
+        latencyMean: transcriptionCircuit.status.stats.latencyMean,
       }
     };
   });
@@ -227,7 +227,12 @@ export function registerTranscriptionRoutes(
         
         // Return fallback or error
         if (transcriptionCircuit.status.state === 'open') {
-          result = transcriptionCircuit.fallback();
+          result = transcriptionCircuit.fallback(() => {
+            return { 
+              transcription: "Fallback transcription due to service unavailability", 
+              confidence: 0 
+            };
+          });
         } else {
           throw error;
         }

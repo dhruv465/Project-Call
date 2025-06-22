@@ -125,8 +125,27 @@ export const handleLowLatencyVoiceStream = async (ws: WebSocket, req: Request): 
   const callId = url.searchParams.get('callId');
   const conversationId = url.searchParams.get('conversationId');
   
+  // Enhanced logging for debugging
+  logger.info(`WebSocket connection attempt for low-latency stream`, {
+    url: req.url,
+    fullUrl: url.toString(),
+    searchParams: Array.from(url.searchParams.entries()),
+    callId,
+    conversationId,
+    headers: {
+      host: req.headers.host,
+      origin: req.headers.origin,
+      userAgent: req.headers['user-agent']
+    }
+  });
+  
   if (!callId || !conversationId) {
-    logger.error('Missing callId or conversationId in voice stream');
+    logger.error('Missing callId or conversationId in voice stream', {
+      url: req.url,
+      callId,
+      conversationId,
+      searchParams: Array.from(url.searchParams.entries())
+    });
     ws.close(1008, 'Missing required parameters');
     return;
   }

@@ -21,8 +21,8 @@ router.post('/verify-ids', authenticate, async (req, res) => {
     logger.info('Request body:', req.body);
     
     // Check if IDs are valid MongoDB ObjectIDs
-    const isValidLeadId = mongoose.Types.ObjectId.isValid(leadId);
-    const isValidCampaignId = mongoose.Types.ObjectId.isValid(campaignId);
+    const isValidLeadId = mongoose.isValidObjectId(leadId);
+    const isValidCampaignId = mongoose.isValidObjectId(campaignId);
     
     let leadObj = null;
     let campaignObj = null;

@@ -25,6 +25,31 @@ router.post('/', async (req, res) => {
     url: req.url
   });
 
+  // Check for Twilio system notifications first
+  if (req.body.Level && req.body.Payload && req.body.AccountSid) {
+    // This is a Twilio system notification (error/warning)
+    const payload = JSON.parse(req.body.Payload || '{}');
+    const level = req.body.Level;
+    const errorCode = payload.error_code;
+    
+    console.log(`Twilio system notification received:`, {
+      level,
+      errorCode,
+      resourceSid: payload.resource_sid,
+      serviceSid: payload.service_sid
+    });
+    
+    // Log the notification but don't treat it as an error
+    if (level === 'ERROR') {
+      console.error(`Twilio error notification: ${errorCode} for resource ${payload.resource_sid}`);
+    } else if (level === 'WARNING') {
+      console.warn(`Twilio warning notification: ${errorCode} for resource ${payload.resource_sid}`);
+    }
+    
+    // Return success for system notifications
+    return res.status(200).json({ message: 'System notification received' });
+  }
+
   // Route to appropriate handler based on webhookType query parameter
   switch (webhookType) {
     case 'voice':

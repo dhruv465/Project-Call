@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import { CircuitBreaker, BreakerOptions } from 'opossum';
+import opossum from 'opossum';
 import logger from '../utils/logger';
 
 /**
@@ -65,10 +65,10 @@ export class ApiConnectionPool {
     }
     
     // Setup circuit breaker if enabled
-    let circuitBreaker: CircuitBreaker | null = null;
+    let circuitBreaker: any | null = null;
     
     if (this.useCircuitBreaker) {
-      const breakerOptions: BreakerOptions = {
+      const breakerOptions: any = {
         timeout: config.circuitBreaker?.timeout || 30000,
         resetTimeout: config.circuitBreaker?.resetTimeout || 30000,
         errorThresholdPercentage: config.circuitBreaker?.errorThreshold || 50,
@@ -78,7 +78,7 @@ export class ApiConnectionPool {
       };
       
       // Create circuit breaker
-      circuitBreaker = new CircuitBreaker(
+      circuitBreaker = new opossum(
         (requestConfig: AxiosRequestConfig) => {
           // Get an available instance from the pool
           const instance = instances[Math.floor(Math.random() * instances.length)];
@@ -288,7 +288,7 @@ export interface RequestOptions {
 export interface PooledConnection {
   service: string;
   instances: AxiosInstance[];
-  circuitBreaker: CircuitBreaker | null;
+  circuitBreaker: any | null;
   poolSize: number;
   activeRequests: number;
   stats: {

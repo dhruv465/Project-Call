@@ -50,7 +50,7 @@ export class LeadService {
    */
   public async getLeadById(id: string): Promise<ILead | null> {
     try {
-      if (!mongoose.Types.ObjectId.isValid(id)) {
+      if (!mongoose.isValidObjectId(id)) {
         throw new Error('Invalid lead ID format');
       }
       
@@ -80,7 +80,7 @@ export class LeadService {
    */
   public async updateLead(id: string, updateData: LeadUpdateData): Promise<ILead | null> {
     try {
-      if (!mongoose.Types.ObjectId.isValid(id)) {
+      if (!mongoose.isValidObjectId(id)) {
         throw new Error('Invalid lead ID format');
       }
       
@@ -103,7 +103,7 @@ export class LeadService {
    */
   public async deleteLead(id: string): Promise<boolean> {
     try {
-      if (!mongoose.Types.ObjectId.isValid(id)) {
+      if (!mongoose.isValidObjectId(id)) {
         throw new Error('Invalid lead ID format');
       }
       
@@ -210,7 +210,7 @@ export class LeadService {
       
       // Exclude specific leads
       if (excludeIds.length > 0) {
-        const validIds = excludeIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+        const validIds = excludeIds.filter(id => mongoose.isValidObjectId(id));
         if (validIds.length > 0) {
           query._id = { $nin: validIds.map(id => new mongoose.Types.ObjectId(id)) };
         }
@@ -276,7 +276,7 @@ export class LeadService {
     callbackDate?: Date
   ): Promise<ILead | null> {
     try {
-      if (!mongoose.Types.ObjectId.isValid(id)) {
+      if (!mongoose.isValidObjectId(id)) {
         throw new Error('Invalid lead ID format');
       }
       

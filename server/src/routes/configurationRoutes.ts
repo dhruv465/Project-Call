@@ -11,7 +11,6 @@ import {
   deleteApiKey,
   verifyElevenLabsApiKey
 } from '../controllers/configurationController';
-import { makeTestCall } from '../controllers/testCallController';
 import { testLLMChat, testLLMConnection, getAllLLMModels, getProviderLLMModels, getDynamicProviderModels } from '../controllers/llmControllers';
 import { logger } from '../index';
 
@@ -46,7 +45,7 @@ router.post('/test-llm-chat', testLLMChat);
 router.post('/test-twilio', testTwilioConnection);
 router.post('/test-elevenlabs', testElevenLabsConnection);
 router.post('/test-voice', testVoiceSynthesis);
-router.post('/test-call', makeTestCall);
+// router.post('/test-call', makeTestCall); // Removed due to missing controller
 router.post('/verify/elevenlabs', verifyElevenLabsApiKey);
 
 export default router;

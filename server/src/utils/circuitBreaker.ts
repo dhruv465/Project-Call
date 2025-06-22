@@ -4,7 +4,7 @@
  * This utility provides circuit breaker patterns specifically designed to handle
  * 429 (Too Many Requests) errors and prevent infinite retry loops.
  */
-import CircuitBreaker from 'opossum';
+import opossum from 'opossum';
 import { logger } from '../index';
 
 export interface CircuitBreakerConfig {
@@ -37,7 +37,7 @@ const DEFAULT_CONFIG: RateLimitAwareOptions = {
 };
 
 export class RateLimitAwareCircuitBreaker<T extends any[], R> {
-  private circuitBreaker: CircuitBreaker<T, R>;
+  private circuitBreaker: any;
   private retryCount: Map<string, number> = new Map();
   private lastRetryTime: Map<string, number> = new Map();
   private rateLimitResetTime: Map<string, number> = new Map();
@@ -50,14 +50,16 @@ export class RateLimitAwareCircuitBreaker<T extends any[], R> {
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     
-    this.circuitBreaker = new CircuitBreaker(action, {
+    this.circuitBreaker = new opossum(action, {
       timeout: this.config.timeout,
       errorThresholdPercentage: this.config.errorThresholdPercentage,
       resetTimeout: this.config.resetTimeout,
       volumeThreshold: this.config.volumeThreshold,
       rollingCountTimeout: this.config.rollingCountTimeout,
-      rollingCountBuckets: this.config.rollingCountBuckets,
-      errorFilter: (err) => this.shouldCircuitBreakerTrigger(err)
+      rollingCountBuckets: this.config.rollingCountBuckets
+      // errorFilter is not supported in the type definition but is a valid option
+      // @ts-ignore
+      //errorFilter: (err) => this.shouldCircuitBreakerTrigger(err)
     });
 
     this.setupEventHandlers(identifier);

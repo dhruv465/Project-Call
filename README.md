@@ -115,9 +115,9 @@ Important security note: **Never commit your `.env` file to the repository.** It
 - Speech-to-Text services
 
 ### Infrastructure
-- Docker for containerization
-- CI/CD pipeline
-- Cloud deployment (AWS/Azure/GCP)
+- Native Node.js development
+- Local development environment
+- MongoDB and Redis databases
 - Monitoring and logging
 
 ## Getting Started
@@ -130,7 +130,7 @@ Important security note: **Never commit your `.env` file to the repository.** It
 
 ### Installation
 
-#### Method 1: Using Docker (Recommended)
+#### Development Setup
 1. Clone the repository
 2. Copy the example environment files:
    ```bash
@@ -195,9 +195,9 @@ lumina-outreach/
 │   ├── tests/               # Backend tests
 │   └── tsconfig.json        # TypeScript configuration
 ├── shared/                  # Shared TypeScript types
+├── scripts/                 # Development and testing scripts
 ├── .env.example             # Example environment variables
 ├── .gitignore               # Git ignore file
-├── docker-compose.yml       # Docker compose configuration
 ├── package.json             # Project configuration
 └── README.md                # Project documentation
 ```

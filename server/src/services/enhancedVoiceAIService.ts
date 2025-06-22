@@ -17,6 +17,7 @@ import {
 import { LLMService } from './llm/service';
 import { LLMConfig, LLMProvider, LLMMessage } from './llm/types';
 import { getPreferredVoiceId } from '../utils/voiceUtils';
+import Campaign from '../models/Campaign';
 
 export interface VoicePersonality {
   id: string;
@@ -642,6 +643,38 @@ export class EnhancedVoiceAIService {
     try {
       const { userInput, conversationLog, leadId, campaignId, callContext } = params;
       
+      // Load campaign data to get the script
+      let campaignScript = '';
+      let campaignGoal = '';
+      let systemPromptFromCampaign = '';
+      
+      if (campaignId) {
+        try {
+          const campaign = await Campaign.findById(campaignId);
+          if (campaign) {
+            // Get active script version
+            const activeScript = campaign.script?.versions?.find(v => v.isActive);
+            if (activeScript) {
+              campaignScript = activeScript.content;
+              logger.info(`Loaded campaign script for ${campaignId}: ${campaignScript.substring(0, 100)}...`);
+            }
+            
+            campaignGoal = campaign.goal || '';
+            systemPromptFromCampaign = campaign.llmConfiguration?.systemPrompt || '';
+            
+            logger.info(`Campaign context loaded:`, {
+              campaignId,
+              hasScript: !!campaignScript,
+              scriptLength: campaignScript.length,
+              hasGoal: !!campaignGoal,
+              hasSystemPrompt: !!systemPromptFromCampaign
+            });
+          }
+        } catch (error) {
+          logger.error(`Error loading campaign ${campaignId}:`, error);
+        }
+      }
+      
       // Convert conversation log to a clear format with roles and content
       let formattedConversationLog = '';
       if (conversationLog && conversationLog.length > 0) {
@@ -654,15 +687,30 @@ export class EnhancedVoiceAIService {
         formattedConversationLog = "No prior conversation";
       }
       
-      // Prepare a clear system prompt that emphasizes proper JSON formatting
-      const systemPrompt = `You are a professional AI assistant handling a phone call.
-      
+      // Prepare a comprehensive system prompt that includes campaign script
+      const systemPrompt = `You are a professional AI assistant handling a phone call for a sales/outreach campaign.
+
+${campaignScript ? `CAMPAIGN SCRIPT TO FOLLOW:
+${campaignScript}
+
+IMPORTANT: Use this script as your primary guide. Adapt it naturally to the conversation flow, but ensure you cover the key points and follow the intended messaging.` : ''}
+
+${campaignGoal ? `CAMPAIGN GOAL: ${campaignGoal}` : ''}
+
+${systemPromptFromCampaign ? `ADDITIONAL INSTRUCTIONS: ${systemPromptFromCampaign}` : ''}
+
 YOUR RESPONSE MUST BE VALID JSON IN THIS FORMAT ONLY:
 {"text": "your response text here", "intent": "intent_type_here"}
 
 Example valid response: {"text": "I understand your concern. How can I help?", "intent": "acknowledge_concern"}
 
-DO NOT include anything outside the JSON. No explanations, no markdown, just the JSON object.`;
+DO NOT include anything outside the JSON. No explanations, no markdown, just the JSON object.
+
+Remember to:
+1. Follow the campaign script and messaging
+2. Be natural and conversational
+3. Work towards the campaign goal
+4. Keep responses concise and engaging`;
 
       // Prepare a clear user prompt with all necessary context
       const userPrompt = `User input: "${userInput}"
@@ -678,7 +726,7 @@ Current call details:
 - Compliance complete: ${callContext.complianceComplete ? 'Yes' : 'No'}
 - Disclosure complete: ${callContext.disclosureComplete ? 'Yes' : 'No'}
 
-Generate a helpful, concise response. Remember to return ONLY valid JSON.`;
+Generate a helpful, concise response following the campaign script and working towards the campaign goal. Remember to return ONLY valid JSON.`;
 
       // Check if LLM service is available
       if (!this.llmService) {

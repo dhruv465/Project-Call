@@ -19,6 +19,7 @@ import {
   handleTwilioGatherWebhook,
   handleTwilioStreamWebhook
 } from '../services/webhookHandlers';
+import { handleRecordingWebhook } from '../controllers/telephonyController';
 
 const router = express.Router();
 
@@ -28,7 +29,7 @@ router.post('/voice-webhook', handleTwilioVoiceWebhook);
 router.post('/status-webhook', handleTwilioStatusWebhook);
 router.post('/gather', handleTwilioGatherWebhook);
 router.post('/stream', handleTwilioStreamWebhook);
-router.post('/recording-webhook', handleTwilioStatusWebhook); // Reuse status webhook for recording
+router.post('/recording-webhook', handleRecordingWebhook); // Use proper recording webhook handler
 
 // Call management routes (protected)
 router.post('/initiate', authenticate, initiateCall);
