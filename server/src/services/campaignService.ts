@@ -7,6 +7,8 @@ import { logger, getErrorMessage } from '../index';
 import leadService from './leadService';
 import ConversationEngineService from './conversationEngineService';
 import { EnhancedVoiceAIService } from './enhancedVoiceAIService';
+import SpeechAnalysisService from './speechAnalysisService';
+import { LLMService } from './llm/service';
 import Configuration from '../models/Configuration';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -87,12 +89,24 @@ export class CampaignService {
     googleSpeechKey?: string,
     deepgramApiKey?: string
   ) {
+    // Create EnhancedVoiceAIService
+    const voiceAI = new EnhancedVoiceAIService(elevenLabsApiKey);
+    
+    // Create SpeechAnalysisService
+    const speechAnalysis = new SpeechAnalysisService(openAIApiKey, googleSpeechKey, deepgramApiKey);
+    
+    // Create LLMService with default config
+    const llmService = new LLMService({
+      providers: [
+        { name: 'openai', apiKey: openAIApiKey, isEnabled: true },
+        { name: 'anthropic', apiKey: anthropicApiKey || '', isEnabled: !!anthropicApiKey }
+      ]
+    });
+    
     this.conversationEngine = new ConversationEngineService(
-      elevenLabsApiKey,
-      openAIApiKey,
-      anthropicApiKey,
-      googleSpeechKey,
-      deepgramApiKey
+      voiceAI,
+      speechAnalysis,
+      llmService
     );
     
     // Initialize with credentials from database
@@ -120,12 +134,22 @@ export class CampaignService {
         const googleProvider = config.llmConfig?.providers?.find((p: any) => p.name === 'google');
         const googleKey = googleProvider?.apiKey || '';
         
+        // Create services
+        const voiceAI = new EnhancedVoiceAIService(elevenLabsKey);
+        const speechAnalysis = new SpeechAnalysisService(openAIKey, googleKey, '');
+        const llmService = new LLMService({
+          providers: [
+            { name: 'openai', apiKey: openAIKey, isEnabled: true },
+            { name: 'anthropic', apiKey: anthropicKey, isEnabled: !!anthropicKey },
+            { name: 'google', apiKey: googleKey, isEnabled: !!googleKey }
+          ]
+        });
+        
         // Reinitialize the conversation engine with database credentials
         this.conversationEngine = new ConversationEngineService(
-          elevenLabsKey,
-          openAIKey,
-          anthropicKey,
-          googleKey
+          voiceAI,
+          speechAnalysis,
+          llmService
         );
         
         logger.info('CampaignService initialized with credentials from configuration');

@@ -9,9 +9,17 @@ import { handleError } from '../utils/errorHandling';
 import twilio from 'twilio';
 import { EnhancedVoiceAIService } from '../services/enhancedVoiceAIService';
 import { unifiedAnalyticsService } from '../services/unifiedAnalyticsService';
+import { getVoiceAIService } from '../services';
+
+// Define a function to get preferred voice ID since the import is missing
+function getPreferredVoiceId(): string {
+  return 'default'; // Default voice ID if none is configured
+}
+
+// ... (rest of the file)
 
 // Initialize Voice AI Service
-let voiceAIService = null as EnhancedVoiceAIService | null;
+const voiceAIService = getVoiceAIService();
 
 // @desc    Initiate a new AI call to a lead
 // @route   POST /api/calls/initiate
@@ -136,7 +144,7 @@ export const initiateCall = async (req: Request & { user?: any }, res: Response)
         status: twilioCall.status,
         to: lead.phoneNumber,
         campaignId: campaign._id,
-        voiceId: campaign.voiceConfiguration?.voiceId || 'default'
+        voiceId: campaign.voiceConfiguration?.voiceId || (await getPreferredVoiceId())
       });
     } catch (error) {
       logger.error('Error initiating Twilio call:', error);
@@ -228,6 +236,31 @@ export const getCallById = async (req: Request, res: Response): Promise<Response
   }
 };
 
+async function getTwilioRecordingUrl(call: any, client: twilio.Twilio): Promise<string | null> {
+  let twilioRecordingUrl = (call as any).metrics?.twilioRecordingUrl;
+
+  if (!twilioRecordingUrl && (call as any).recordingUrl?.includes('api.twilio.com')) {
+    twilioRecordingUrl = (call as any).recordingUrl;
+  }
+
+  if (!twilioRecordingUrl) {
+    const recordings = await client.recordings.list({ callSid: call.twilioSid });
+    if (recordings.length > 0) {
+      twilioRecordingUrl = recordings[0].uri.startsWith('http') 
+        ? recordings[0].uri 
+        : `https://api.twilio.com${recordings[0].uri.replace('.json', '')}`;
+      
+      await Call.findByIdAndUpdate(call._id, {
+        'metrics.twilioRecordingUrl': twilioRecordingUrl
+      });
+    } else {
+      return null;
+    }
+  }
+
+  return twilioRecordingUrl;
+}
+
 // @desc    Get call recording URL
 // @route   GET /api/calls/:id/recording
 // @access  Private
@@ -243,57 +276,32 @@ export const getCallRecording = async (req: Request, res: Response): Promise<Res
       return res.status(404).json({ message: 'No recording available for this call' });
     }
 
-    // Check if the client is requesting the direct URL or streaming
     const isStream = req.query.stream === 'true';
     
     if (isStream) {
-      // Get Twilio configuration
       const configuration = await Configuration.findOne();
       if (!configuration || !configuration.twilioConfig || !configuration.twilioConfig.accountSid || !configuration.twilioConfig.authToken) {
         return res.status(500).json({ message: 'Twilio configuration not found' });
       }
       
       try {
-        // Use axios to proxy the request to Twilio
-        const axios = require('axios');
-        
-        // Get the original Twilio URL from metrics or construct it
-        let twilioRecordingUrl = (call as any).metrics?.twilioRecordingUrl;
-        
-        // If we don't have the Twilio URL in metrics, try to get it from recordingUrl if it's a Twilio URL
-        if (!twilioRecordingUrl && (call as any).recordingUrl?.includes('api.twilio.com')) {
-          twilioRecordingUrl = (call as any).recordingUrl;
-        }
-        
-        // If we still don't have a Twilio URL, we need to fetch recordings from Twilio
+        const client = twilio(
+          configuration.twilioConfig.accountSid,
+          configuration.twilioConfig.authToken
+        );
+
+        const twilioRecordingUrl = await getTwilioRecordingUrl(call, client);
+
         if (!twilioRecordingUrl) {
-          const client = twilio(
-            configuration.twilioConfig.accountSid,
-            configuration.twilioConfig.authToken
-          );
-          
-          const recordings = await client.recordings.list({ callSid: call.twilioSid });
-          if (recordings.length > 0) {
-            twilioRecordingUrl = recordings[0].uri.startsWith('http') 
-              ? recordings[0].uri 
-              : `https://api.twilio.com${recordings[0].uri.replace('.json', '')}`;
-            
-            // Update the call with the Twilio URL for future use
-            await Call.findByIdAndUpdate(call._id, {
-              'metrics.twilioRecordingUrl': twilioRecordingUrl
-            });
-          } else {
-            return res.status(404).json({ message: 'Recording not found in Twilio' });
-          }
+          return res.status(404).json({ message: 'Recording not found in Twilio' });
         }
-        
-        // Create authentication header for Twilio
+
+        const axios = require('axios');
         const auth = {
           username: configuration.twilioConfig.accountSid,
           password: configuration.twilioConfig.authToken
         };
         
-        // Fetch the audio file from Twilio
         const response = await axios({
           method: 'get',
           url: twilioRecordingUrl,
@@ -301,12 +309,10 @@ export const getCallRecording = async (req: Request, res: Response): Promise<Res
           auth: auth
         });
         
-        // Set appropriate headers
         res.set('Content-Type', response.headers['content-type']);
         res.set('Content-Length', response.headers['content-length']);
         res.set('Accept-Ranges', 'bytes');
         
-        // Pipe the audio stream directly to the client
         return response.data.pipe(res);
       } catch (error) {
         logger.error('Error streaming recording:', error);
@@ -316,7 +322,6 @@ export const getCallRecording = async (req: Request, res: Response): Promise<Res
         });
       }
     } else {
-      // Return a URL to our streaming endpoint
       const streamUrl = `/api/calls/${call._id}/recording?stream=true`;
       return res.status(200).json({ 
         recordingUrl: streamUrl

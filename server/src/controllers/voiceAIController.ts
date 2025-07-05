@@ -1,10 +1,9 @@
 import { Request, Response } from 'express';
 import { logger } from '../index';
-import { handleError } from '../utils/errorHandling';
-import { 
-  voiceAIService, 
-  conversationEngine 
+import {
+  voiceAIService
 } from '../services';
+import { handleError } from '../utils/errorHandling';
 
 // @desc    Get voice personalities
 // @route   GET /api/lumina-outreach/personalities

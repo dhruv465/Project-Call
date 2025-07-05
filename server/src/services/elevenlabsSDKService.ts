@@ -1,9 +1,3 @@
-/**
- * ElevenLabs SDK Service
- * Implements the ElevenLabs Conversational AI functionality using the official SDK
- * Handles interactive conversations with the ability to stop audio when user interrupts
- * and adapt voice tone according to conversation context.
- */
 
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';

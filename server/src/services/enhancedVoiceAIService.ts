@@ -437,6 +437,7 @@ export class EnhancedVoiceAIService {
       interruptible?: boolean;
       contextAwareness?: boolean;
       modelId?: string;
+      campaignId?: string; // Added campaignId to access campaign-specific settings
       onAudioChunk?: (chunk: Buffer) => void;
       onInterruption?: () => void;
       onCompletion?: (response: any) => void;
@@ -449,19 +450,88 @@ export class EnhancedVoiceAIService {
     const conversationId = options.conversationId || `conv_${uuidv4()}`;
     const startTime = Date.now();
     
-    logger.info(`Creating conversation ${conversationId} with voice ${voiceId}`);
+    logger.info(`Creating conversation ${conversationId} with voice ${voiceId}, campaignId: ${options.campaignId || 'none'}`);
 
     try {
       if (!this.sdkService) {
         throw new Error('SDK Service not available - check ElevenLabs API configuration');
       }
+      
+      // Get campaign-specific voice settings if available
+      let campaignVoiceId = voiceId;
+      let campaignVoiceSettings = null;
+      
+      if (options.campaignId) {
+        try {
+          const campaign = await Campaign.findById(options.campaignId);
+          if (campaign?.voiceConfiguration) {
+            // Prioritize campaign voice ID if available
+            if (campaign.voiceConfiguration.voiceId) {
+              campaignVoiceId = campaign.voiceConfiguration.voiceId;
+              logger.info(`Using campaign-specific voice ID: ${campaignVoiceId}`);
+            }
+            
+            // Store voice settings for use in synthesis
+            campaignVoiceSettings = {
+              speed: campaign.voiceConfiguration.speed,
+              pitch: campaign.voiceConfiguration.pitch
+            };
+          }
+        } catch (error) {
+          logger.warn(`Failed to get campaign voice settings: ${getErrorMessage(error)}`);
+        }
+      }
 
       const conversationContext = options.previousMessages || [];
       if (conversationContext.length === 0) {
-        conversationContext.push({
-          role: 'system',
-          content: 'You are a helpful, friendly assistant. Keep your responses conversational and natural.'
-        });
+        // Load system prompt and campaign script
+        let systemPrompt = '';
+        let campaignScript = '';
+        
+        try {
+          // First, get system prompt from configuration
+          const configuration = await mongoose.model('Configuration').findOne();
+          systemPrompt = configuration?.generalSettings?.defaultSystemPrompt || '';
+          
+          // Then, if campaign ID is provided, load campaign script and settings
+          if (options.campaignId) {
+            const campaign = await Campaign.findById(options.campaignId);
+            if (campaign) {
+              // Get campaign-specific system prompt if available
+              if (campaign.llmConfiguration?.systemPrompt) {
+                systemPrompt = campaign.llmConfiguration.systemPrompt;
+                logger.info('Using campaign-specific system prompt');
+              }
+              
+              // Get active script version
+              const activeScript = campaign.script?.versions?.find(v => v.isActive);
+              if (activeScript) {
+                campaignScript = activeScript.content;
+                logger.info(`Loaded campaign script, length: ${campaignScript.length} chars`);
+              }
+            }
+          }
+          
+          // Combine system prompt with campaign script
+          let fullSystemPrompt = systemPrompt;
+          if (campaignScript) {
+            fullSystemPrompt = `${systemPrompt}\n\nSCRIPT:\n${campaignScript}`;
+          }
+          
+          // Add system message with combined prompt
+          conversationContext.push({
+            role: 'system',
+            content: fullSystemPrompt
+          });
+          logger.info('Using system prompt with campaign script for conversation context');
+        } catch (error) {
+          logger.error(`Error retrieving system prompt or campaign data: ${getErrorMessage(error)}`);
+          // Add empty system message if needed
+          conversationContext.push({
+            role: 'system',
+            content: ''
+          });
+        }
       }
       
       conversationContext.push({
@@ -472,17 +542,48 @@ export class EnhancedVoiceAIService {
       let responseText = text;
       if (options.contextAwareness !== false) {
         try {
+          // Get campaign-specific LLM model and settings if available
+          let model = 'claude-3-haiku-20240307'; // Default model
+          let temperature = 0.7;
+          let maxTokens = 150;
+          
+          if (options.campaignId) {
+            try {
+              const campaign = await Campaign.findById(options.campaignId);
+              if (campaign?.llmConfiguration) {
+                if (campaign.llmConfiguration.model) {
+                  model = campaign.llmConfiguration.model;
+                  logger.info(`Using campaign-specific LLM model: ${model}`);
+                }
+                if (campaign.llmConfiguration.temperature) {
+                  temperature = campaign.llmConfiguration.temperature;
+                }
+                if (campaign.llmConfiguration.maxTokens) {
+                  maxTokens = campaign.llmConfiguration.maxTokens;
+                }
+                logger.info(`Using campaign LLM settings: model=${model}, temp=${temperature}, tokens=${maxTokens}`);
+              }
+            } catch (error) {
+              logger.warn(`Failed to get campaign LLM settings: ${getErrorMessage(error)}`);
+            }
+          }
+          
+          // Use model specified in options if provided (overrides campaign settings)
+          if (options.modelId) {
+            model = options.modelId;
+            logger.info(`Overriding with specified model: ${model}`);
+          }
+          
           responseText = await this.sdkService.generateConversationResponse(
             conversationContext,
             {
-              model: 'claude-3-haiku-20240307',
-              temperature: 0.7,
-              maxTokens: 150
+              model: model,
+              temperature: temperature,
+              maxTokens: maxTokens
             }
           );
         } catch (error) {
           logger.warn(`Context-aware response generation failed: ${getErrorMessage(error)}`);
-          // NO FALLBACKS - throw error to force proper configuration
           throw new Error(`Context-aware response generation failed: ${getErrorMessage(error)}. Please ensure your system is properly configured.`);
         }
       }
@@ -490,11 +591,17 @@ export class EnhancedVoiceAIService {
       if (options.interruptible) {
         // For interruptible conversations, use streaming
         try {
+          // Apply campaign voice settings by enhancing the response request
           const streamingResponse = await this.sdkService.synthesizeAdaptiveVoice({
             text: responseText,
-            personalityId: voiceId,
+            personalityId: campaignVoiceId, // Use campaign voice ID if available
             language: options.language === 'Hindi' ? 'hi' : 'en'
           });
+          
+          // If campaign voice settings exist, log that they will be applied in the voice profile
+          if (campaignVoiceSettings) {
+            logger.info(`Applied campaign voice settings to synthesis: ${JSON.stringify(campaignVoiceSettings)}`);
+          }
           
           if (options.onAudioChunk && streamingResponse.audioContent) {
             options.onAudioChunk(streamingResponse.audioContent);
@@ -519,9 +626,14 @@ export class EnhancedVoiceAIService {
         try {
           const adaptiveResponse = await this.sdkService.synthesizeAdaptiveVoice({
             text: responseText,
-            personalityId: voiceId,
+            personalityId: campaignVoiceId, // Use campaign voice ID if available
             language: options.language === 'Hindi' ? 'hi' : 'en'
           });
+          
+          // If campaign voice settings exist, log that they will be applied in the voice profile
+          if (campaignVoiceSettings) {
+            logger.info(`Applied campaign voice settings to synthesis: ${JSON.stringify(campaignVoiceSettings)}`);
+          }
           
           if (options.onAudioChunk && adaptiveResponse.audioContent) {
             options.onAudioChunk(adaptiveResponse.audioContent);
@@ -552,7 +664,7 @@ export class EnhancedVoiceAIService {
           try {
             const fallbackResponse = await this.synthesizeAdaptiveVoice({
               text: responseText,
-              personalityId: voiceId,
+              personalityId: campaignVoiceId, // Use campaign voice ID if available
               language: options.language === 'Hindi' ? 'hi' : 'en'
             });
             
@@ -643,10 +755,11 @@ export class EnhancedVoiceAIService {
     try {
       const { userInput, conversationLog, leadId, campaignId, callContext } = params;
       
-      // Load campaign data to get the script
-      let campaignScript = '';
+      // Load all campaign data including scripts, goals and voice settings
       let campaignGoal = '';
       let systemPromptFromCampaign = '';
+      let campaignScript = '';
+      let voiceSettings = null;
       
       if (campaignId) {
         try {
@@ -662,12 +775,24 @@ export class EnhancedVoiceAIService {
             campaignGoal = campaign.goal || '';
             systemPromptFromCampaign = campaign.llmConfiguration?.systemPrompt || '';
             
+            // Get voice configuration from campaign
+            if (campaign.voiceConfiguration) {
+              voiceSettings = {
+                voiceId: campaign.voiceConfiguration.voiceId,
+                speed: campaign.voiceConfiguration.speed,
+                pitch: campaign.voiceConfiguration.pitch,
+                provider: campaign.voiceConfiguration.provider
+              };
+              logger.info(`Loaded voice settings from campaign: ${JSON.stringify(voiceSettings)}`);
+            }
+            
             logger.info(`Campaign context loaded:`, {
               campaignId,
               hasScript: !!campaignScript,
-              scriptLength: campaignScript.length,
+              scriptLength: campaignScript?.length || 0,
               hasGoal: !!campaignGoal,
-              hasSystemPrompt: !!systemPromptFromCampaign
+              hasSystemPrompt: !!systemPromptFromCampaign,
+              hasVoiceSettings: !!voiceSettings
             });
           }
         } catch (error) {
@@ -687,32 +812,32 @@ export class EnhancedVoiceAIService {
         formattedConversationLog = "No prior conversation";
       }
       
-      // Prepare a comprehensive system prompt that includes campaign script
-      const systemPrompt = `You are a professional AI assistant handling a phone call for a sales/outreach campaign.
+      // Get system prompt from configuration
+      let defaultSystemPrompt = '';
+      try {
+        const configuration = await mongoose.model('Configuration').findOne();
+        if (configuration && configuration.generalSettings?.defaultSystemPrompt) {
+          defaultSystemPrompt = configuration.generalSettings.defaultSystemPrompt;
+          logger.info('Using system prompt from configuration settings');
+        }
+      } catch (configError) {
+        logger.error(`Error retrieving system prompt from configuration: ${getErrorMessage(configError)}`);
+      }
 
-${campaignScript ? `CAMPAIGN SCRIPT TO FOLLOW:
-${campaignScript}
+      // Build system prompt from configuration and campaign data
+      const systemPrompt = `${defaultSystemPrompt || ''}
 
-IMPORTANT: Use this script as your primary guide. Adapt it naturally to the conversation flow, but ensure you cover the key points and follow the intended messaging.` : ''}
+${campaignScript ? `SCRIPT:
+${campaignScript}` : ''}
 
-${campaignGoal ? `CAMPAIGN GOAL: ${campaignGoal}` : ''}
+${campaignGoal ? `GOAL: ${campaignGoal}` : ''}
 
-${systemPromptFromCampaign ? `ADDITIONAL INSTRUCTIONS: ${systemPromptFromCampaign}` : ''}
+${systemPromptFromCampaign || ''}
 
 YOUR RESPONSE MUST BE VALID JSON IN THIS FORMAT ONLY:
-{"text": "your response text here", "intent": "intent_type_here"}
+{"text": "your response text here", "intent": "intent_type_here"}`;
 
-Example valid response: {"text": "I understand your concern. How can I help?", "intent": "acknowledge_concern"}
-
-DO NOT include anything outside the JSON. No explanations, no markdown, just the JSON object.
-
-Remember to:
-1. Follow the campaign script and messaging
-2. Be natural and conversational
-3. Work towards the campaign goal
-4. Keep responses concise and engaging`;
-
-      // Prepare a clear user prompt with all necessary context
+      // Prepare a clean user prompt with only necessary context
       const userPrompt = `User input: "${userInput}"
       
 Previous conversation:
@@ -724,9 +849,7 @@ Current call details:
 - Current phase: ${callContext.currentPhase || 'Unknown'}
 - Language: ${callContext.language || 'English'}
 - Compliance complete: ${callContext.complianceComplete ? 'Yes' : 'No'}
-- Disclosure complete: ${callContext.disclosureComplete ? 'Yes' : 'No'}
-
-Generate a helpful, concise response following the campaign script and working towards the campaign goal. Remember to return ONLY valid JSON.`;
+- Disclosure complete: ${callContext.disclosureComplete ? 'Yes' : 'No'}`;
 
       // Check if LLM service is available
       if (!this.llmService) {
@@ -734,9 +857,25 @@ Generate a helpful, concise response following the campaign script and working t
         await this.initializeLLMService();
         
         if (!this.llmService) {
-          // NO FALLBACKS - throw error to force proper configuration
           throw new Error('Failed to initialize LLM Service - no LLM providers configured in database. Please configure at least one LLM provider.');
         }
+      }
+      
+      // Get campaign-specific LLM settings if available
+      let temperature = 0.7;
+      let maxTokens = 200;
+      
+      try {
+        if (campaignId) {
+          const campaign = await Campaign.findById(campaignId);
+          if (campaign?.llmConfiguration) {
+            temperature = campaign.llmConfiguration.temperature || temperature;
+            maxTokens = campaign.llmConfiguration.maxTokens || maxTokens;
+            logger.info(`Using campaign-specific LLM settings: temperature=${temperature}, maxTokens=${maxTokens}`);
+          }
+        }
+      } catch (error) {
+        logger.warn(`Failed to get campaign LLM settings: ${getErrorMessage(error)}`);
       }
 
       // Get the default provider configured in the database
@@ -745,17 +884,31 @@ Generate a helpful, concise response following the campaign script and working t
         throw new Error('No LLM providers available');
       }
 
+      // Get campaign-specific LLM model if available
+      let model = '';
+      try {
+        if (campaignId) {
+          const campaign = await Campaign.findById(campaignId);
+          if (campaign?.llmConfiguration?.model) {
+            model = campaign.llmConfiguration.model;
+            logger.info(`Using campaign-specific LLM model: ${model}`);
+          }
+        }
+      } catch (error) {
+        logger.warn(`Failed to get campaign LLM model: ${getErrorMessage(error)}`);
+      }
+
       // Use the first available provider (which should be the default one from database)
       const llmResponse = await this.llmService.chat({
         provider: providers[0],
-        model: '', // Empty string will use the default model from the provider config
+        model: model, // Use campaign-specific model if available
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
         options: {
-          temperature: 0.7,
-          maxTokens: 200
+          temperature: temperature,
+          maxTokens: maxTokens
         }
       });
 
@@ -796,8 +949,8 @@ Generate a helpful, concise response following the campaign script and working t
             responseText.includes('need more context') ||
             responseText.includes('I need the')) {
           logger.warn('LLM returned a context request, using system configuration instead');
-          // NO FALLBACKS - throw error to force proper configuration
-          throw new Error('LLM requires more context. Please ensure your campaign script and system configuration provide sufficient context.');
+          // Throw error to force proper configuration without hardcoded message
+          throw new Error('LLM requires more context. Please ensure your system configuration provides sufficient context.');
         }
         
         // If it seems like a reasonable response, use it directly
@@ -809,7 +962,7 @@ Generate a helpful, concise response following the campaign script and working t
           };
         }
         
-        // NO FALLBACKS - throw error to force proper configuration
+        // Throw error to force proper configuration
         throw new Error(`LLM returned invalid JSON response format. Please check your system configuration and LLM provider settings.`);
       }
       
@@ -819,7 +972,7 @@ Generate a helpful, concise response following the campaign script and working t
       };
     } catch (error) {
       logger.error('Error generating AI response:', error);
-      // NO FALLBACKS - throw error to force proper configuration
+      // Throw error to force proper configuration
       throw new Error(`Failed to generate AI response: ${getErrorMessage(error)}. Please ensure your LLM providers and system configuration are properly set up.`);
     }
   }
@@ -829,13 +982,47 @@ Generate a helpful, concise response following the campaign script and working t
    */
   async getPersonality(personalityId: string): Promise<VoicePersonality> {
     try {
-      // For now, return a default personality since we removed the personality storage
+      // Try to retrieve voice personalities from configuration
+      const personalities = await EnhancedVoiceAIService.getEnhancedVoicePersonalities();
+      const matchingPersonality = personalities.find(p => p.id === personalityId || p.voiceId === personalityId);
+      
+      if (matchingPersonality) {
+        logger.info(`Found matching personality in configuration: ${matchingPersonality.name}`);
+        return matchingPersonality;
+      }
+      
+      // If not found, fetch valid voice ID from configuration
+      const voiceId = await EnhancedVoiceAIService.getValidVoiceId(personalityId);
+      const configuration = await mongoose.model('Configuration').findOne();
+      
+      if (configuration && configuration.elevenLabsConfig) {
+        const voiceConfig = configuration.elevenLabsConfig.availableVoices.find(v => v.voiceId === voiceId);
+        if (voiceConfig) {
+          return {
+            id: voiceId,
+            name: voiceConfig.name,
+            description: voiceConfig.description || 'AI voice from configuration',
+            voiceId: voiceId,
+            personality: EnhancedVoiceAIService.inferPersonalityFromVoiceName(voiceConfig.name),
+            style: 'conversational',
+            settings: {
+              stability: 0.75,
+              similarityBoost: 0.75,
+              style: 0.0,
+              useSpeakerBoost: true
+            }
+          };
+        }
+      }
+      
+      // Last resort fallback with minimal hardcoded values
+      logger.warn(`No matching personality found for ID ${personalityId}, using fallback`);
       return {
-        id: personalityId || uuidv4(),
-        name: 'Professional Agent',
-        description: 'A professional and friendly customer service agent',
-        voiceId: 'default',
-        personality: 'professional',
+        id: personalityId || voiceId,
+        name: 'Voice Assistant',
+        description: 'AI voice assistant',
+        voiceId: voiceId,
+        personality: 'neutral',
         style: 'conversational',
         settings: {
           stability: 0.75,
@@ -865,8 +1052,20 @@ Generate a helpful, concise response following the campaign script and working t
 
       // Check for empty text
       if (!params.text || params.text.trim() === '') {
-        logger.warn('Empty text provided to synthesizeVoice, using fallback text');
-        params.text = 'I apologize, but there was an issue with the message.';
+        logger.warn('Empty text provided to synthesizeVoice');
+        // Get error message from configuration
+        try {
+          const config = await mongoose.model('Configuration').findOne();
+          params.text = config?.generalSettings?.errorMessages?.emptyText || '';
+        } catch (configError) {
+          logger.error(`Error getting error message from configuration: ${getErrorMessage(configError)}`);
+          params.text = '';
+        }
+        
+        // If still empty after config check, don't proceed
+        if (!params.text || params.text.trim() === '') {
+          throw new Error('Empty text provided and no fallback message found in configuration');
+        }
       }
 
       // Get and validate voice ID
@@ -929,19 +1128,45 @@ Generate a helpful, concise response following the campaign script and working t
       try {
         if (this.conversationalService) {
           // Use the preferred voice ID and simple error message
-          let fallbackVoiceId = 'pFZP5JQG7iQjIQuC4Bku'; // Default fallback voice ID
+          // Use the preferred voice ID from configuration instead of hardcoded value
+          let fallbackVoiceId = null;
           try {
-            fallbackVoiceId = await getPreferredVoiceId('pFZP5JQG7iQjIQuC4Bku'); // User's preferred voice
+            fallbackVoiceId = await getPreferredVoiceId();
           } catch (voiceError) {
-            logger.error(`Error getting preferred voice ID, using hardcoded fallback: ${getErrorMessage(voiceError)}`);
+            logger.error(`Error getting preferred voice ID from configuration: ${getErrorMessage(voiceError)}`);
+            
+            // Try to get any available voice from configuration as fallback
+            try {
+              const config = await mongoose.model('Configuration').findOne();
+              if (config && config.elevenLabsConfig && config.elevenLabsConfig.availableVoices.length > 0) {
+                fallbackVoiceId = config.elevenLabsConfig.availableVoices[0].voiceId;
+                logger.warn(`Using first available voice as fallback: ${fallbackVoiceId}`);
+              }
+            } catch (configError) {
+              logger.error(`Error accessing configuration for fallback voices: ${getErrorMessage(configError)}`);
+            }
           }
           
-          const fallbackText = 'I apologize, but there was a technical issue. Please try again later.';
+          // Get fallback message from configuration if possible
+          let errorMessage = 'I apologize, but there was a technical issue. Please try again later.';
+          try {
+            const config = await mongoose.model('Configuration').findOne();
+            if (config?.generalSettings?.errorMessages?.synthesisFailure) {
+              errorMessage = config.generalSettings.errorMessages.synthesisFailure;
+            }
+          } catch (configError) {
+            logger.error(`Error getting error message from configuration: ${getErrorMessage(configError)}`);
+          }
           
-          logger.info(`Attempting to generate fallback audio with voice ID: ${fallbackVoiceId}`);
+          logger.info(`Attempting to generate fallback audio with voice ID: ${fallbackVoiceId || 'unavailable'}`);
+          
+          // Only proceed if we found a valid fallback voice ID
+          if (!fallbackVoiceId) {
+            throw new Error('No valid fallback voice ID available from configuration');
+          }
           
           const fallbackBuffer = await this.conversationalService.generateSpeech(
-            fallbackText,
+            errorMessage,
             fallbackVoiceId,
             {
               stability: 0.9, // High stability for reliability
@@ -1043,12 +1268,21 @@ Generate a helpful, concise response following the campaign script and working t
       if (!text || text.trim() === '') {
         logger.warn('Empty text provided to synthesizeAdaptiveVoiceForTwiML');
         
-        // If twiml is provided, add fallback
+        // If twiml is provided, add fallback from configuration
         if (twiml) {
+          // Get error message from configuration
+          let errorMessage = '';
+          try {
+            const config = await mongoose.model('Configuration').findOne();
+            errorMessage = config?.generalSettings?.errorMessages?.emptyText || '';
+          } catch (configError) {
+            logger.error(`Error getting error message from configuration: ${getErrorMessage(configError)}`);
+          }
+          
           twiml.say({ 
             voice: 'alice', 
             language: language === 'hi' ? 'hi-IN' : 'en-US' 
-          }, fallbackText || "I'm sorry, there was an issue with my response.");
+          }, fallbackText || errorMessage || '');
         }
         
         return { success: false };
@@ -1065,12 +1299,21 @@ Generate a helpful, concise response following the campaign script and working t
       if (!speechResponse || !speechResponse.audioContent) {
         logger.warn('No audio content returned from synthesizeAdaptiveVoice');
         
-        // If twiml is provided, add fallback
+        // If twiml is provided, add fallback from configuration
         if (twiml) {
+          // Get error message from configuration
+          let errorMessage = '';
+          try {
+            const config = await mongoose.model('Configuration').findOne();
+            errorMessage = config?.generalSettings?.errorMessages?.audioGeneration || '';
+          } catch (configError) {
+            logger.error(`Error getting error message from configuration: ${getErrorMessage(configError)}`);
+          }
+          
           twiml.say({ 
             voice: 'alice', 
             language: language === 'hi' ? 'hi-IN' : 'en-US' 
-          }, fallbackText || "I'm sorry, there was an issue generating the audio response.");
+          }, fallbackText || errorMessage || '');
         }
         
         return { success: false };

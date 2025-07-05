@@ -155,10 +155,26 @@ export const testLLMChat = async (req: Request, res: Response) => {
           );
           
           if (providerIndex !== -1) {
+            logger.info(`Updating ${provider} status to verified with lastVerified timestamp`);
+            
+            // Set status and lastVerified
             configuration.llmConfig.providers[providerIndex].status = 'verified';
             configuration.llmConfig.providers[providerIndex].lastVerified = new Date();
+            
+            // Explicitly mark these fields as modified to ensure MongoDB updates them
+            configuration.markModified('llmConfig');
+            configuration.markModified('llmConfig.providers');
+            configuration.markModified(`llmConfig.providers.${providerIndex}.status`);
+            configuration.markModified(`llmConfig.providers.${providerIndex}.lastVerified`);
+            
             await configuration.save();
-            logger.info(`${provider} status updated to verified`);
+            
+            // Verify that the status was actually saved
+            const updatedConfig = await Configuration.findOne();
+            const updatedStatus = updatedConfig?.llmConfig?.providers[providerIndex]?.status;
+            const updatedLastVerified = updatedConfig?.llmConfig?.providers[providerIndex]?.lastVerified;
+            
+            logger.info(`${provider} status after save: ${updatedStatus}, lastVerified: ${updatedLastVerified}`);
           }
         }
       }

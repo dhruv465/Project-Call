@@ -5,6 +5,7 @@ import { LLMService } from './llm/service';
 import { LLMConfig, LLMProvider, LLMMessage } from './llm/types';
 import { logger, getErrorMessage } from '../index';
 import { v4 as uuidv4 } from 'uuid';
+import Configuration from '../models/Configuration';
 
 export interface ConversationTurn {
   id: string;
@@ -38,31 +39,13 @@ export class ConversationEngineService {
   private llmService: LLMService;
   private activeSessions: Map<string, CallSession> = new Map();
 
-  constructor(elevenLabsApiKey: string, openAIApiKey: string, anthropicApiKey?: string, googleSpeechKey?: string, deepgramApiKey?: string) {
-    this.voiceAI = new EnhancedVoiceAIService(elevenLabsApiKey);
-    this.speechAnalysis = new SpeechAnalysisService(openAIApiKey, googleSpeechKey, deepgramApiKey);
+  constructor(voiceAI: EnhancedVoiceAIService, speechAnalysis: SpeechAnalysisService, llmService: LLMService) {
+    this.voiceAI = voiceAI;
+    this.speechAnalysis = speechAnalysis;
+    this.llmService = llmService;
     
-    // Configure LLM service
-    const llmConfig: LLMConfig = {
-      providers: [
-        {
-          name: 'openai',
-          apiKey: openAIApiKey,
-          isEnabled: true
-        }
-      ],
-      defaultProvider: 'openai'
-    };
-    
-    if (anthropicApiKey) {
-      llmConfig.providers.push({
-        name: 'anthropic',
-        apiKey: anthropicApiKey,
-        isEnabled: true
-      });
-    }
-    
-    this.llmService = new LLMService(llmConfig);
+    // LLM service is now initialized with values from configuration in index.ts
+    // when the service is instantiated, so we don't need to configure it here
   }
 
   // Create a new conversation session
@@ -81,18 +64,26 @@ export class ConversationEngineService {
       if (personalityId) {
         personality = await this.voiceAI.getPersonality(personalityId);
       } else {
-        // Create default personality
+        // Get configuration for voice settings
+        const configuration = await Configuration.findOne();
+        const voiceSettings = configuration?.voiceAIConfig?.conversationalAI?.voiceSettings || {
+          speed: 1.0,
+          stability: 0.75,
+          style: 0.0
+        };
+        
+        // Create default personality with configuration settings
         personality = {
           id: uuidv4(),
           name: 'Default Agent',
           description: 'Professional and friendly customer service agent',
-          voiceId: 'default',
+          voiceId: configuration?.voiceAIConfig?.conversationalAI?.defaultVoiceId || 'default',
           personality: 'professional',
           style: 'conversational',
           settings: {
-            stability: 0.75,
+            stability: voiceSettings.stability,
             similarityBoost: 0.75,
-            style: 0.0,
+            style: voiceSettings.style,
             useSpeakerBoost: true
           },
           isActive: true,
@@ -165,6 +156,12 @@ export class ConversationEngineService {
         throw new Error(`Session not found: ${sessionId}`);
       }
 
+      // Get configuration for system prompt and other settings
+      const configuration = await Configuration.findOne();
+      if (!configuration) {
+        throw new Error("System configuration not found. Please set up your system configuration first.");
+      }
+
       // Analyze speech if audio data provided
       let speechAnalysis: SpeechAnalysis | undefined;
       if (audioData) {
@@ -183,6 +180,23 @@ export class ConversationEngineService {
 
       session.conversationHistory.push(userTurn);
       session.metrics.totalTurns++;
+
+      // Get campaign with system prompt
+      const Campaign = require('../models/Campaign').default;
+      const campaign = await Campaign.findById(session.campaignId);
+      
+      // Add system prompt to the campaign's LLM configuration if not already present
+      if (campaign && configuration.generalSettings.defaultSystemPrompt) {
+        if (!campaign.llmConfiguration) {
+          campaign.llmConfiguration = {};
+        }
+        if (!campaign.llmConfiguration.systemPrompt) {
+          campaign.llmConfiguration.systemPrompt = configuration.generalSettings.defaultSystemPrompt;
+          // Save the campaign with the system prompt
+          await campaign.save();
+          logger.info(`Updated campaign ${session.campaignId} with system prompt from configuration`);
+        }
+      }
 
       // Generate response using voice AI
       const response = await this.voiceAI.generateResponse({
@@ -319,14 +333,24 @@ export class ConversationEngineService {
       const campaignScript = activeScript.content;
       
       // Generate opening message using the campaign script and LLM
+      // Get system configuration
+      const configuration = await Configuration.findOne();
+      if (!configuration) {
+        throw new Error("System configuration not found. Please set up your system configuration first.");
+      }
+      
+      // Get the default system prompt from configuration if available
+      const systemPrompt = configuration.generalSettings.defaultSystemPrompt || 
+        campaign.llmConfiguration?.systemPrompt || '';
+
+      // If no system prompt is found, check if campaign has one or create a default
+      const finalSystemPrompt = systemPrompt || 
+        `You are an AI sales agent speaking in ${language}. Use the provided campaign script to generate a personalized opening message.`;
+        
       const messages: LLMMessage[] = [
         {
           role: 'system',
-          content: `You are a ${currentPersonality.name.toLowerCase()} AI sales agent speaking in ${language}. 
-          Use the provided campaign script to generate a natural, personalized opening message.
-          Extract or adapt the introduction/opening part of the script for this specific lead.
-          Make it sound natural and conversational, not robotic.
-          You MUST use the campaign script as your source - do not create any generic messages.`
+          content: finalSystemPrompt
         },
         {
           role: 'user',
@@ -350,12 +374,12 @@ Instructions:
       ];
 
       const response = await this.llmService.chat({
-        provider: 'openai',
-        model: 'gpt-4',
+        provider: configuration.llmConfig.defaultProvider as any,
+        model: configuration.llmConfig.defaultModel || 'gpt-4o',
         messages: messages,
         options: {
-          temperature: 0.7,
-          maxTokens: 200
+          temperature: configuration.llmConfig.temperature || 0.7,
+          maxTokens: configuration.llmConfig.maxTokens || 200
         }
       });
 
@@ -391,7 +415,17 @@ Instructions:
   // Start a new conversation for a call
   async startConversation(callId: string, leadId: string, campaignId: string): Promise<string> {
     try {
-      const session = await this.createSession(leadId, campaignId, 'English');
+      // Get configuration for proper language settings
+      const configuration = await Configuration.findOne();
+      if (!configuration) {
+        logger.error('Configuration not found for starting conversation');
+        throw new Error('System configuration not found');
+      }
+      
+      // Use default language from configuration
+      const defaultLanguage = configuration.generalSettings.defaultLanguage as 'English' | 'Hindi';
+      
+      const session = await this.createSession(leadId, campaignId, defaultLanguage);
       
       logger.info(`Started new conversation ${session.id} for call ${callId}`);
       return session.id;
@@ -456,6 +490,16 @@ Instructions:
   // Test LLM connection
   private async testLLMConnection(): Promise<boolean> {
     try {
+      // Get configuration for proper LLM settings
+      const configuration = await Configuration.findOne();
+      if (!configuration) {
+        logger.error('Configuration not found for LLM connection test');
+        return false;
+      }
+      
+      const defaultProvider = configuration.llmConfig.defaultProvider;
+      const defaultModel = configuration.llmConfig.defaultModel;
+      
       const testMessages: LLMMessage[] = [
         {
           role: 'user',
@@ -464,11 +508,11 @@ Instructions:
       ];
 
       const response = await this.llmService.chat({
-        provider: 'openai',
-        model: 'gpt-4',
+        provider: defaultProvider as any, // Type assertion to bypass typing issues
+        model: defaultModel,
         messages: testMessages,
         options: {
-          temperature: 0.1,
+          temperature: configuration.llmConfig.temperature || 0.1,
           maxTokens: 10
         }
       });

@@ -1,11 +1,3 @@
-/**
- * Enhanced Streaming Controller
- * 
- * Optimized for low-latency conversational AI with parallel processing and streaming response
- * Implements techniques to reduce perceived latency through chunked responses, pre-generation,
- * and response caching.
- */
-
 import { Request, Response } from 'express';
 import WebSocket from 'ws';
 import { logger } from '../index';

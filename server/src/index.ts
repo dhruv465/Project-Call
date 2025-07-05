@@ -33,6 +33,9 @@ import CampaignService from './services/campaignService';
 import ConversationEngineService from './services/conversationEngineService';
 import leadService from './services/leadService';
 import { initializeSpeechService } from './services/realSpeechService';
+import SpeechAnalysisService from './services/speechAnalysisService';
+import { EnhancedVoiceAIService } from './services/enhancedVoiceAIService';
+import { LLMService } from './services/llm/service';
 
 // Configuration and health services
 import { validateStartupConfig } from './config/database-validation';
@@ -105,7 +108,7 @@ const logger = winston.createLogger({
 });
 
 // Create logs directory if it doesn't exist
-const fs = require('fs');
+import fs from 'fs';
 if (!fs.existsSync('logs')) {
   fs.mkdirSync('logs', { recursive: true });
 }
@@ -466,13 +469,28 @@ const initializeServices = async () => {
       path.join(__dirname, '../uploads/audio')
     );
 
+    // Initialize Enhanced Voice AI Service
+    const enhancedVoiceAI = new EnhancedVoiceAIService(elevenLabsApiKey);
+
     // Conversation engine
     const conversationEngine = new ConversationEngineService(
-      elevenLabsApiKey,
-      openAIApiKey,
-      anthropicApiKey,
-      googleSpeechApiKey,
-      deepgramApiKey
+      enhancedVoiceAI,
+      new SpeechAnalysisService(openAIApiKey, googleSpeechApiKey, deepgramApiKey),
+      new LLMService({
+        providers: [
+          {
+            name: 'openai',
+            apiKey: openAIApiKey,
+            isEnabled: true
+          },
+          {
+            name: 'anthropic',
+            apiKey: anthropicApiKey,
+            isEnabled: true
+          }
+        ],
+        defaultProvider: 'openai'
+      })
     );
 
     // Campaign service

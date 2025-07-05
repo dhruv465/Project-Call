@@ -28,6 +28,7 @@ let elevenLabsApiKey = '';
 let openAIApiKey = '';
 let anthropicApiKey = '';
 let googleSpeechKey = '';
+let deepgramApiKey = '';
 
 // Initialize API keys from database configuration
 const initializeFromDatabase = async () => {
@@ -52,6 +53,10 @@ const initializeFromDatabase = async () => {
       
       const googleProvider = config.llmConfig?.providers?.find((p: any) => p.name === 'google');
       googleSpeechKey = googleProvider?.apiKey || '';
+      
+      // Get deepgram API key
+      const deepgramProvider = config.llmConfig?.providers?.find((p: any) => p.name === 'deepgram');
+      deepgramApiKey = deepgramProvider?.apiKey || '';
 
       // Log API key status (showing length for security, not actual keys)
       console.log('API keys loaded from database:', {
@@ -92,7 +97,15 @@ let servicesInitialized = false;
 export const getConversationEngine = (): ConversationEngineService => {
   if (!_conversationEngine) {
     console.warn('ConversationEngine accessed before initialization, creating with empty keys');
-    _conversationEngine = new ConversationEngineService('', '', '', '');
+    // Create with empty services
+    const voiceAI = new EnhancedVoiceAIService('');
+    const speechAnalysis = new SpeechAnalysisService('', '', '');
+    const llmService = new LLMService({
+      providers: [
+        { name: 'openai', apiKey: '', isEnabled: true }
+      ]
+    });
+    _conversationEngine = new ConversationEngineService(voiceAI, speechAnalysis, llmService);
   }
   return _conversationEngine;
 };
@@ -217,19 +230,35 @@ export const initializeServicesAfterDB = async () => {
     if (elevenLabsApiKey || openAIApiKey || anthropicApiKey || googleSpeechKey) {
       console.log('Initializing services with API keys from database...');
       
-      // Initialize ConversationEngine with all API keys
-      _conversationEngine = new ConversationEngineService(
-        elevenLabsApiKey, 
-        openAIApiKey, 
-        anthropicApiKey, 
-        googleSpeechKey
-      );
-      
       // Initialize VoiceAI service with ElevenLabs API key
       if (elevenLabsApiKey) {
         _voiceAIService = new EnhancedVoiceAIService(elevenLabsApiKey);
         console.log('VoiceAI service initialized with API key');
+      } else {
+        _voiceAIService = new EnhancedVoiceAIService('');
       }
+      
+      // Initialize speech analysis service
+      const speechAnalysis = new SpeechAnalysisService(
+        openAIApiKey || '', 
+        googleSpeechKey || '', 
+        deepgramApiKey || ''
+      );
+      
+      // Initialize LLM service
+      const llmService = new LLMService({
+        providers: [
+          { name: 'openai', apiKey: openAIApiKey || '', isEnabled: !!openAIApiKey },
+          { name: 'anthropic', apiKey: anthropicApiKey || '', isEnabled: !!anthropicApiKey }
+        ]
+      });
+      
+      // Initialize ConversationEngine with all services
+      _conversationEngine = new ConversationEngineService(
+        _voiceAIService,
+        speechAnalysis,
+        llmService
+      );
       
       // Initialize LLM service with proper configuration
       await reinitializeGlobalLLMService();

@@ -65,6 +65,7 @@ const CallLeadSheet = ({
   const [callStatus, setCallStatus] = useState<'idle' | 'connecting' | 'connected' | 'completed' | 'failed'>('idle');
   const [notes, setNotes] = useState('');
   const [configStatus, setConfigStatus] = useState<ConfigurationStatus | null>(null);
+  const [systemConfig, setSystemConfig] = useState<any>(null);
 
   // Load campaigns when component mounts
   useEffect(() => {
@@ -121,6 +122,14 @@ const CallLeadSheet = ({
     const checkConfig = async () => {
       const status = await checkTelephonyConfiguration();
       setConfigStatus(status);
+      
+      // Fetch system configuration for defaultSystemPrompt
+      try {
+        const configResponse = await api.get('/configuration');
+        setSystemConfig(configResponse.data);
+      } catch (error) {
+        console.error('Error loading system configuration:', error);
+      }
     };
     
     if (open) {

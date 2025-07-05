@@ -489,6 +489,13 @@ Keep the conversation natural and engaging. If they're not interested, politely 
     setSaving(true);
     try {
       // Debug log before save
+      console.log("Saving configuration with LLM provider status:", {
+        provider: config.llmProvider,
+        model: config.llmModel,
+        status: config.llmStatus,
+      });
+
+      // Debug log before save
       console.log("Saving configuration with voice settings:", {
         voiceProvider: config.voiceProvider,
         voiceId: config.voiceId,
@@ -617,6 +624,28 @@ Keep the conversation natural and engaging. If they're not interested, politely 
           },
         },
       };
+
+      // Log what we're sending to server
+      console.log("LLM Provider config being sent to server:", {
+        defaultProvider: config.llmProvider,
+        providers: [
+          {
+            name: "openai",
+            status: config.llmProvider === "openai" ? config.llmStatus : "unverified",
+            isEnabled: config.llmProvider === "openai",
+          },
+          {
+            name: "anthropic",
+            status: config.llmProvider === "anthropic" ? config.llmStatus : "unverified",
+            isEnabled: config.llmProvider === "anthropic",
+          },
+          {
+            name: "google",
+            status: config.llmProvider === "google" ? config.llmStatus : "unverified",
+            isEnabled: config.llmProvider === "google",
+          },
+        ],
+      });
 
       await configApi.updateConfiguration(apiConfig);
 

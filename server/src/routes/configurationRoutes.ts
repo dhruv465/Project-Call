@@ -8,6 +8,7 @@ import {
   testTwilioConnection,
   testElevenLabsConnection,
   testVoiceSynthesis,
+  makeTestCall,
   deleteApiKey,
   verifyElevenLabsApiKey
 } from '../controllers/configurationController';
@@ -45,7 +46,7 @@ router.post('/test-llm-chat', testLLMChat);
 router.post('/test-twilio', testTwilioConnection);
 router.post('/test-elevenlabs', testElevenLabsConnection);
 router.post('/test-voice', testVoiceSynthesis);
-// router.post('/test-call', makeTestCall); // Removed due to missing controller
+router.post('/test-call', makeTestCall);
 router.post('/verify/elevenlabs', verifyElevenLabsApiKey);
 
 export default router;

@@ -2,6 +2,7 @@
   "name": "lumina-outreach-server",
   "version": "1.0.0",
   "description": "Backend server for Lumina Outreach intelligent communication system",
+  "type": "commonjs",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

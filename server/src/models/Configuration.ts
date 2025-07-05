@@ -581,10 +581,6 @@ const ConfigurationSchema = new mongoose.Schema(
         type: Boolean,
         default: true,
       },
-      callIntroduction: {
-        type: String,
-        default: 'Hello, this is an automated call from Lumina Outreach. This call may be recorded for quality and training purposes.',
-      },
       maxCallsPerLeadPerDay: {
         type: Number,
         default: 1,

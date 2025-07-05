@@ -1,38 +1,26 @@
-import { Request, Response } from 'express';
-import Configuration from '../models/Configuration';
-import { logger, getErrorMessage } from '../index';
 import axios from 'axios';
+import { Request, Response } from 'express';
 import twilio from 'twilio';
-import { 
-  validateElevenLabsKey, 
+import { getErrorMessage, logger } from '../index';
+import Configuration from '../models/Configuration';
+import {
+  BaseLLMProvider, UpdatedConfig,
+  UpdateLLMProvider
+} from '../types/configuration';
+import {
+  handleApiKeyUpdate,
+  handleObjectUpdate, maskSensitiveValues
+} from '../utils/configHelpers';
+import {
   validateDeepgramKey,
-  validateVoiceParameters, 
-  validateLLMParameters,
+  validateElevenLabsKey,
   validateGeneralSettings,
-  logValidationError
+  validateLLMParameters,
+  validateVoiceParameters
 } from '../utils/configValidation';
 import {
   verifyAndUpdateElevenLabsApiStatus
 } from '../utils/elevenLabsVerification';
-import {
-  handleApiKeyUpdate,
-  isMaskedApiKey,
-  createMaskedApiKey,
-  handleObjectUpdate,
-  maskSensitiveValues
-} from '../utils/configHelpers';
-import {
-  IConfiguration,
-  UpdatedConfig,
-  BaseLLMProvider,
-  UpdateLLMProvider,
-  LLMConfig,
-  ElevenLabsConfig,
-  TwilioConfig,
-  WebhookConfig,
-  GeneralSettings,
-  ComplianceSettings
-} from '../types/configuration';
 
 // All interfaces moved to /types/configuration.ts
 
@@ -132,7 +120,7 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
             }
           ],
           defaultProvider: 'openai',
-          defaultModel: 'gpt-4',
+          defaultModel: 'gpt-4o',
           temperature: 0.7,
           maxTokens: 150
         },
@@ -142,15 +130,9 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
           maxConcurrentCalls: 10,
           callRetryAttempts: 3,
           callRetryDelay: 30,
-          maxCallDuration: 300,
-          defaultSystemPrompt: 'You are a professional sales representative making cold calls. Be polite, respectful, and helpful.',
-          defaultTimeZone: 'America/New_York',
-          workingHours: {
-            start: '09:00',
-            end: '17:00',
-            timeZone: 'America/New_York',
-            daysOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-          }
+          maxCallDuration: 300, // 5 minutes
+          retryAttempts: 3,
+          retryDelay: 60, // in minutes
         },
         voiceAIConfig: {
           personalities: [],
@@ -182,7 +164,6 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
         },
         complianceSettings: {
           recordCalls: true,
-          callIntroduction: 'Hello, this is an automated call from [Company Name]. This call may be recorded for quality and training purposes.',
           maxCallsPerLeadPerDay: 1,
           callBlackoutPeriod: {
             start: '21:00',
@@ -191,6 +172,26 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
         },
         webhookConfig: {
           secret: ''
+        },
+        errorMessages: {
+          generalError: "I'm sorry, but I'm having a technical issue. Please try again later.",
+          aiResponseError: "I apologize, I'm having trouble generating a response right now.",
+          speechRecognitionError: "I'm sorry, I'm having trouble understanding. Could you please repeat that?",
+          noCallFound: "I'm sorry, but I cannot find your call record.",
+          configurationError: "We apologize, but there was a configuration error.",
+          serverError: "We apologize, but there was a server configuration error.",
+          technicalIssue: "We apologize, but there was a technical issue. Please try again later.",
+          noSpeechDetected: "I'm sorry, I didn't hear anything. Please speak again.",
+          callDisconnected: "I'm sorry, we seem to be having difficulty. Thank you for your time. Goodbye."
+        },
+        closingScripts: {
+          default: "Thank you for your time. Have a great day!",
+          consentReceived: "Thank you for your interest. I'll send you the information shortly.",
+          withObjections: "I understand. Thank you for your feedback. Have a good day."
+        },
+        intentDetection: {
+          closingPhrases: ["goodbye", "bye", "end call", "hang up", "that's all"],
+          objectionPhrases: ["not interested", "don't need", "too expensive", "not right now"]
         }
       });
     }
@@ -245,13 +246,6 @@ export const getSystemConfiguration = async (_req: Request, res: Response) => {
   }
 };
 
-// interfaces
-interface LLMProvider {
-  name: string;
-  apiKey?: string;
-  availableModels?: string[];
-  isEnabled?: boolean;
-}
 
 // Helper functions
 // Enhanced version of isMaskedApiKey with more logging
@@ -300,10 +294,6 @@ const handleFieldUpdate = <T>(newValue: T | undefined, existingValue: T): T => {
   return typeof newValue === 'undefined' ? existingValue : newValue;
 };
 
-const maskApiKey = (apiKey: string): string => {
-  if (!apiKey) return '';
-  return '••••••••' + apiKey.slice(-4);
-};
 
 const validateProviderUpdate = (
   updated: UpdateLLMProvider | undefined, 
@@ -320,86 +310,68 @@ const validateProviderUpdate = (
 
   const apiKeyEffectivelyChanged = (finalApiKey !== existing.apiKey);
 
-  // Preserve verified status if key hasn't changed
-  if (!apiKeyEffectivelyChanged) {
-    // If the API key hasn't changed and the provider was verified, maintain the verified status
-    if (existing.status === 'verified') {
-      logger.info(`API key for ${existing.name} not changed and provider was verified, preserving verified status`);
-      // Only maintain if the client didn't explicitly change the status
-      if (typeof updated.status === 'undefined') {
+  // Add detailed logging of the state at the beginning
+  logger.info(`Provider ${existing.name}: Starting update - API key changed: ${apiKeyEffectivelyChanged}, Current status: ${existing.status}, Has verification date: ${existing.lastVerified ? 'Yes' : 'No'}`);
+
+  // If API key has changed, always reset verification status
+  if (apiKeyEffectivelyChanged) {
+    logger.info(`Provider ${existing.name}: API key changed - resetting status to unverified and clearing lastVerified date`);
+    finalStatus = 'unverified';
+    finalLastVerified = null; 
+  } else {
+    // API key not changed
+    if (typeof updated.status !== 'undefined') {
+      // Client sent a status update
+      logger.info(`Provider ${existing.name}: Client sent status update: ${updated.status} (current: ${existing.status})`);
+      
+      // Special handling for 'verified' status
+      if (updated.status === 'verified' && existing.status !== 'verified') {
+        // Only allow verified status if there's a verification date
+        if (existing.lastVerified) {
+          finalStatus = 'verified';
+          logger.info(`Provider ${existing.name}: Accepting client's 'verified' status because verification date exists: ${existing.lastVerified}`);
+        } else {
+          finalStatus = existing.status || 'unverified';
+          logger.info(`Provider ${existing.name}: Rejecting client's 'verified' status - no verification date exists`);
+        }
+      } else {
+        // For other status changes (failed/unverified), accept client value
+        finalStatus = updated.status;
+      }
+      
+      // Handle lastVerified date
+      if (typeof updated.lastVerified !== 'undefined') {
+        finalLastVerified = updated.lastVerified;
+        logger.info(`Provider ${existing.name}: Client sent lastVerified date: ${finalLastVerified}`);
+      } else if (finalStatus === 'verified' && existing.lastVerified) {
+        // Keep existing verification date if status is verified
+        finalLastVerified = existing.lastVerified;
+        logger.info(`Provider ${existing.name}: Keeping existing lastVerified date: ${finalLastVerified}`);
+      }
+    } else {
+      // Client did not send status - preserve existing status and date if verified
+      if (existing.status === 'verified' && existing.lastVerified) {
+        logger.info(`Provider ${existing.name}: Preserving verified status and existing verification date`);
         finalStatus = 'verified';
         finalLastVerified = existing.lastVerified;
       }
     }
   }
-
-  if (apiKeyEffectivelyChanged) {
-    logger.info(`API key for provider ${existing.name} effectively changed. Resetting status to unverified.`);
-    if (finalApiKey === '') {
-      logger.debug(`API key for provider ${existing.name} was explicitly set to empty string.`);
-    }
-    finalStatus = 'unverified';
-    finalLastVerified = null; 
-  } else {
-    // API key not effectively changed.
-    if (typeof updated.status !== 'undefined') { // Client sent a status
-      if (updated.status !== existing.status) {
-        // Client sent a status, and it's different from the existing one.
-        logger.info(`API key for ${existing.name} not changed, but client sent status "${updated.status}" (DB was "${existing.status}"). Using client's status.`);
-        finalStatus = updated.status;
-
-        if (typeof updated.lastVerified !== 'undefined') {
-          finalLastVerified = updated.lastVerified;
-        } else {
-          // Client changed status but didn't send lastVerified.
-          if (finalStatus === 'verified') {
-            // Client set status to 'verified' without a date. Keep existing date if key unchanged.
-            finalLastVerified = existing.lastVerified; 
-          } else {
-            finalLastVerified = null;
-          }
-        }
-      } else { // updated.status === existing.status
-        // Client sent status, and it's the same as existing.
-        // Respect client's lastVerified if sent, otherwise keep existing.
-        if (typeof updated.lastVerified !== 'undefined') {
-            finalLastVerified = updated.lastVerified;
-        } else {
-            // If client sends same status (e.g. 'verified') but no date, keep existing date.
-            finalLastVerified = existing.lastVerified; 
-        }
-      }
-    } else {
-      // Client did not send 'updated.status' at all.
-      // 'finalStatus' remains 'existing.status' (e.g., "verified")
-      // 'finalLastVerified' remains 'existing.lastVerified' (the date of verification)
-      // This is the crucial path for preserving verification.
-      logger.info(`API key for ${existing.name} not changed, client did not send status. Preserving DB status: "${existing.status}", lastVerified: ${existing.lastVerified}`);
+  
+  // Final status consistency check
+  if (finalStatus === 'verified' && !finalLastVerified) {
+    logger.warn(`Provider ${existing.name}: Status is 'verified' but has no lastVerified date - this is inconsistent`);
+    if (existing.lastVerified) {
+      finalLastVerified = existing.lastVerified;
+      logger.info(`Provider ${existing.name}: Restored lastVerified date from existing provider`);
     }
   }
   
-  // Final consistency check for lastVerified based on finalStatus
-  if (finalStatus !== 'verified' && finalStatus !== 'failed') {
-    // If status is not one that implies a verification attempt (verified/failed),
-    // and client didn't explicitly set a lastVerified for this new state,
-    // then lastVerified should be null.
-    // This handles cases where status might become 'unverified', 'pending', etc.
-    if (apiKeyEffectivelyChanged || (typeof updated.status !== 'undefined' && updated.status !== existing.status && typeof updated.lastVerified === 'undefined')) {
-        finalLastVerified = null;
-    }
-  } else if (finalStatus === 'verified' && finalLastVerified === null && !apiKeyEffectivelyChanged) {
-    // If status is 'verified' but somehow lastVerified became null (e.g. client sent 'verified' with no date),
-    // and API key didn't change, restore existing.lastVerified if it was valid.
-    if (existing.status === 'verified' && existing.lastVerified) {
-        finalLastVerified = existing.lastVerified;
-    }
-  }
-
+  logger.info(`Provider ${existing.name}: Final status: ${finalStatus}, Has final verification date: ${finalLastVerified ? 'Yes' : 'No'}`);
   
   return {
-    // Spread existing first to ensure all other properties are carried over by default
     ...existing, 
-    name: updated.name || existing.name, // Name is usually the identifier, ensure it's consistent
+    name: updated.name || existing.name,
     apiKey: finalApiKey,
     availableModels: updated.availableModels ?? existing.availableModels,
     isEnabled: updated.isEnabled ?? existing.isEnabled,
@@ -633,6 +605,20 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
               }
             }
             
+            // Add the provider to the configuration
+            logger.info(`Adding provider ${provider.name} to configuration with status ${provider.status}`);
+
+            // Add additional debug info about the provider status
+            if (provider.status === 'verified') {
+              logger.info(`Provider ${provider.name} is verified with lastVerified date: ${provider.lastVerified}`);
+              
+              // Make absolutely sure a verified provider has a lastVerified date
+              if (!provider.lastVerified) {
+                logger.warn(`Provider ${provider.name} has verified status but no lastVerified date - adding current date`);
+                provider.lastVerified = new Date();
+              }
+            }
+
             // Now add the provider to the configuration
             config.llmConfig.providers.push(provider);
           } else {
@@ -925,6 +911,21 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
               }
             }
             
+            // Verify that the status for all verified providers was correctly saved
+            if (verifiedConfig.llmConfig?.providers) {
+              const verifiedProviders = verifiedConfig.llmConfig.providers.filter(p => p.status === 'verified');
+              const expectedVerifiedCount = updatedConfig.llmConfig?.providers.filter(p => 
+                p.status === 'verified' && p.apiKey && p.apiKey.length > 0
+              ).length || 0;
+              
+              logger.info(`✅ Verified provider count matches expected count: ${verifiedProviders.length}`);
+              
+              // Log the status of each provider
+              for (const provider of verifiedConfig.llmConfig.providers) {
+                logger.debug(`Provider ${provider.name} status: ${provider.status || 'unset'}, lastVerified: ${provider.lastVerified || 'none'}`);
+              }
+            }
+            
             // Also verify that the provider count matches expected count
             const expectedProviderCount = config.llmConfig.providers.length;
             if (verifiedConfig.llmConfig.providers.length !== expectedProviderCount) {
@@ -1005,6 +1006,21 @@ export const updateSystemConfiguration = async (req: Request, res: Response) => 
           hasSecret: !!response.webhookConfig.secret
         }
       });
+      
+      // After saving, check for final saved state
+      const savedConfig = await Configuration.findOne();
+      if (savedConfig) {
+        // Check providers
+        for (const provider of savedConfig.llmConfig.providers) {
+          logger.info(`After save - Provider ${provider.name}: Status: ${provider.status}, Last Verified: ${provider.lastVerified || 'None'}`);
+        }
+
+        // Log the default provider
+        const defaultProvider = savedConfig.llmConfig.providers.find(p => p.name === savedConfig.llmConfig.defaultProvider);
+        if (defaultProvider) {
+          logger.info(`Default provider ${defaultProvider.name} final status: ${defaultProvider.status}, Last Verified: ${defaultProvider.lastVerified || 'None'}`);
+        }
+      }
       
       res.status(200).json({
         message: 'Configuration updated successfully',
@@ -1267,6 +1283,13 @@ export const testLLMConnection = async (req: Request, res: Response) => {
         if (providerIndex >= 0) {
           configuration.llmConfig.providers[providerIndex].lastVerified = new Date();
           configuration.llmConfig.providers[providerIndex].status = 'verified';
+          
+          // Make sure MongoDB detects these changes
+          configuration.markModified('llmConfig');
+          configuration.markModified('llmConfig.providers');
+          configuration.markModified(`llmConfig.providers.${providerIndex}.status`);
+          configuration.markModified(`llmConfig.providers.${providerIndex}.lastVerified`);
+          
           await configuration.save();
           logger.info(`${provider} LLM provider status updated to verified`);
         }
@@ -1282,6 +1305,12 @@ export const testLLMConnection = async (req: Request, res: Response) => {
         
         if (providerIndex >= 0) {
           configuration.llmConfig.providers[providerIndex].status = 'failed';
+          
+          // Make sure MongoDB detects these changes
+          configuration.markModified('llmConfig');
+          configuration.markModified('llmConfig.providers');
+          configuration.markModified(`llmConfig.providers.${providerIndex}.status`);
+          
           await configuration.save();
           logger.info(`${provider} LLM provider status updated to failed`);
         }
@@ -1814,6 +1843,134 @@ export const verifyElevenLabsApiKey = async (req: Request, res: Response) => {
     return res.status(500).json({
       message: 'Error verifying ElevenLabs API key',
       error: getErrorMessage(error)
+    });
+  }
+};
+
+// @desc    Make a test call using Twilio
+// @route   POST /api/configuration/test-call
+// @access  Private
+export const makeTestCall = async (req: Request, res: Response) => {
+  try {
+    const { accountSid, authToken, fromNumber, toNumber, message } = req.body;
+    
+    logger.info('Testing Twilio call with:', { 
+      fromNumber, 
+      toNumber, 
+      hasMessage: !!message,
+      accountSidPrefix: accountSid ? accountSid.substring(0, 5) + '...' : 'NOT PROVIDED',
+      hasAuthToken: !!authToken
+    });
+
+    // Validate required fields
+    if (!accountSid || !authToken || !fromNumber || !toNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameters. Please provide accountSid, authToken, fromNumber, and toNumber.'
+      });
+    }
+
+    // Validate phone numbers
+    if (!fromNumber.match(/^\+\d{10,15}$/) || !toNumber.match(/^\+\d{10,15}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone numbers must be in E.164 format (e.g., +12125551234)'
+      });
+    }
+
+    // Initialize Twilio client with the provided credentials
+    const twilioClient = require('twilio')(accountSid, authToken);
+
+    // Default message if not provided
+    const callMessage = message || 'This is a test call from Project Call. Your system is working correctly.';
+    
+    // Create TwiML for the call
+    const twiml = `
+      <Response>
+        <Say voice="alice" language="en-US">${callMessage}</Say>
+        <Pause length="1"/>
+        <Say voice="alice" language="en-US">Test call complete. Goodbye.</Say>
+      </Response>
+    `;
+    
+    // Make the test call
+    const call = await twilioClient.calls.create({
+      twiml: twiml,
+      to: toNumber,
+      from: fromNumber
+    });
+    
+    logger.info('Test call initiated successfully:', { callSid: call.sid });
+    
+    // Update status in configuration if this is using saved credentials
+    try {
+      const config = await Configuration.findOne();
+      if (config && 
+          config.twilioConfig && 
+          config.twilioConfig.accountSid === accountSid) {
+        
+        config.twilioConfig.status = 'verified';
+        config.twilioConfig.lastVerified = new Date();
+        config.twilioConfig.isEnabled = true;
+        
+        await config.save();
+        logger.info('Updated Twilio configuration status to verified');
+      }
+    } catch (configError) {
+      logger.error('Error updating configuration after successful test call:', configError);
+      // Don't fail the request if just the config update fails
+    }
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Test call initiated successfully',
+      callSid: call.sid,
+      status: call.status
+    });
+    
+  } catch (error) {
+    logger.error('Error making test call with Twilio:', error);
+    
+    let errorMessage = 'Failed to make test call';
+    let errorDetails = null;
+    
+    if (error.code) {
+      switch (error.code) {
+        case 20404:
+          errorMessage = 'Invalid phone number';
+          break;
+        case 20003:
+          errorMessage = 'Authentication failed - check your Account SID and Auth Token';
+          break;
+        case 21210:
+        case 21211:
+        case 21212:
+        case 21213:
+        case 21214:
+          errorMessage = 'Invalid phone number format';
+          break;
+        case 21215:
+        case 21216:
+          errorMessage = 'Phone number not verified or not in your Twilio account';
+          break;
+        case 13224:
+          errorMessage = 'Call cannot be created. Twilio account may be trial account with restrictions';
+          break;
+        default:
+          errorMessage = `Twilio error: ${error.message || 'Unknown error'}`;
+      }
+      
+      errorDetails = {
+        code: error.code,
+        moreInfo: error.moreInfo,
+        status: error.status
+      };
+    }
+    
+    return res.status(400).json({
+      success: false,
+      message: errorMessage,
+      details: errorDetails
     });
   }
 };

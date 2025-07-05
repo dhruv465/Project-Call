@@ -88,7 +88,6 @@ export interface GeneralSettings {
 // Compliance Settings
 export interface ComplianceSettings {
   recordCalls: boolean;
-  callIntroduction: string;
   maxCallsPerLeadPerDay: number;
   callBlackoutPeriod: {
     start: string;

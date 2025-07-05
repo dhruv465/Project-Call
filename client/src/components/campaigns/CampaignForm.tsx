@@ -343,7 +343,7 @@ const CampaignForm = ({
           startDate: new Date(),
           llmConfiguration: {
             ...prev.llmConfiguration,
-            systemPrompt: 'You are an AI assistant making a call on behalf of a company. Be professional, friendly, and helpful.',
+              systemPrompt: systemConfig?.generalSettings?.defaultSystemPrompt || 'You are an AI assistant making a call on behalf of a company.',
           },
           voiceConfiguration: {
             ...prev.voiceConfiguration,
@@ -619,7 +619,7 @@ const CampaignForm = ({
       
       if (!submissionData.llmConfiguration.systemPrompt) {
         console.error("systemPrompt is still missing after all validations");
-        submissionData.llmConfiguration.systemPrompt = "You are an AI assistant making a call on behalf of a company. Be professional, friendly, and helpful.";
+        submissionData.llmConfiguration.systemPrompt = systemConfig?.generalSettings?.defaultSystemPrompt || "You are an AI assistant making a call on behalf of a company.";
       }
       
       if (!submissionData.voiceConfiguration.voiceId) {
@@ -641,7 +641,7 @@ const CampaignForm = ({
       // 2. Ensure systemPrompt is a non-empty string
       if (!submissionData.llmConfiguration.systemPrompt) {
         submissionData.llmConfiguration.systemPrompt = 
-          "You are an AI assistant making a call on behalf of a company. Be professional, friendly, and helpful.";
+          systemConfig?.generalSettings?.defaultSystemPrompt || "You are an AI assistant making a call on behalf of a company.";
       }
       
       // 3. Ensure voiceId is a non-empty string and is valid
