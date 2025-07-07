@@ -154,6 +154,16 @@ export class LLMService {
     
     return provider;
   }
+
+  /**
+   * Get the name of the default provider.
+   */
+  getDefaultProviderName(): LLMProvider {
+    if (!this.config.defaultProvider) {
+      throw new Error('Default LLM provider not configured');
+    }
+    return this.config.defaultProvider;
+  }
   
   /**
    * Get a specific provider client by name

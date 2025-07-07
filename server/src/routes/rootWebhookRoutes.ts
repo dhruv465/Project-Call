@@ -58,8 +58,7 @@ router.post('/', async (req, res) => {
       return handleTwilioStatusWebhook(req, res);
     case 'gather':
       return handleTwilioGatherWebhook(req, res);
-    case 'stream':
-      return handleTwilioStreamWebhook(req, res);
+    
     case 'recording':
       return handleTwilioStatusWebhook(req, res);
     case 'telephony-voice':

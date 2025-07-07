@@ -488,6 +488,15 @@ const ConfigurationSchema = new mongoose.Schema(
             type: Boolean,
             default: true,
           },
+          lastVerified: {
+            type: Date,
+            default: null,
+          },
+          status: {
+            type: String,
+            enum: ['unverified', 'verified', 'failed'],
+            default: 'unverified',
+          },
         },
       ],
       defaultProvider: {

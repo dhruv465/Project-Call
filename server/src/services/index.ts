@@ -288,7 +288,7 @@ export const initializeServicesAfterDB = async () => {
         
         // Re-initialize the ElevenLabs SDK Service with the database API keys
         const { initializeSDKService } = await import('./elevenlabsSDKService');
-        const sdkService = initializeSDKService(elevenLabsApiKey, openAIApiKey);
+        const sdkService = initializeSDKService(elevenLabsApiKey);
         console.log('ElevenLabs SDK Service initialized:', !!sdkService);
         
         // Load the SDK extension with streaming methods

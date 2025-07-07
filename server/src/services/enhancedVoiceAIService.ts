@@ -15,7 +15,7 @@ import {
   initializeSDKService
 } from './elevenlabsSDKService';
 import { LLMService } from './llm/service';
-import { LLMConfig, LLMProvider, LLMMessage } from './llm/types';
+import { LLMConfig, LLMProvider, LLMMessage, MessageRole } from './llm/types';
 import { getPreferredVoiceId } from '../utils/voiceUtils';
 import Campaign from '../models/Campaign';
 
@@ -105,8 +105,7 @@ export class EnhancedVoiceAIService {
       // Initialize without OpenAI dependency - LLM service will handle AI responses
       console.log('Calling initializeSDKService from enhancedVoiceAIService...');
       this.sdkService = initializeSDKService(
-        this.elevenLabsApiKey,
-        '' // Empty OpenAI key since we'll use LLM service
+        this.elevenLabsApiKey
       );
       
       if (this.sdkService) {
@@ -574,14 +573,15 @@ export class EnhancedVoiceAIService {
             logger.info(`Overriding with specified model: ${model}`);
           }
           
-          responseText = await this.sdkService.generateConversationResponse(
-            conversationContext,
-            {
-              model: model,
+          responseText = await this.llmService.chat({
+            provider: this.llmService.getDefaultProviderName(),
+            model: model,
+            messages: conversationContext.map(msg => ({ role: msg.role as MessageRole, content: msg.content })),
+            options: {
               temperature: temperature,
               maxTokens: maxTokens
             }
-          );
+          }).then(res => res.content);
         } catch (error) {
           logger.warn(`Context-aware response generation failed: ${getErrorMessage(error)}`);
           throw new Error(`Context-aware response generation failed: ${getErrorMessage(error)}. Please ensure your system is properly configured.`);

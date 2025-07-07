@@ -77,7 +77,7 @@ export const preloadVoice = async (voiceId: string): Promise<void> => {
     });
     
     // Preload greetings with low latency settings
-    const greetingPromises = commonPhrases.greetings.map(async (phrase) => {
+    const greetingPromises = commonPhrases.GREETINGS.map(async (phrase) => {
       try {
         const cacheKey = `${voiceId}_${phrase}`;
         
@@ -165,7 +165,7 @@ export const preloadAllVoices = async (): Promise<{ voiceCount: number, phrasesL
     const totalPhrases = 
       commonPhrases.acknowledgments.length + 
       commonPhrases.thinking.length + 
-      commonPhrases.greetings.length + 
+      commonPhrases.GREETINGS.length + 
       commonPhrases.transitions.length;
 
     // Use a queue to process voices with limited concurrency

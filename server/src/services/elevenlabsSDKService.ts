@@ -70,21 +70,18 @@ export class ElevenLabsSDKService extends EventEmitter {
   private wsUrl: string = 'wss://api.elevenlabs.io/v1/conversation';
   private conversations: Map<string, ConversationState> = new Map();
   private activeConnections: Map<string, WebSocket> = new Map();
-  private openAIApiKey: string;
   private elevenlabs: ElevenLabs;
   private responseCache: any; // For caching common responses
 
   /**
    * Create a new ElevenLabs SDK Service
    */
-  constructor(apiKey: string, openAIApiKey: string) {
+  constructor(apiKey: string) {
     super();
     
     console.log('ElevenLabsSDKService constructor called with:', {
       hasApiKey: !!apiKey,
-      apiKeyLength: apiKey?.length || 0,
-      hasOpenAIKey: !!openAIApiKey,
-      openAIKeyLength: openAIApiKey?.length || 0
+      apiKeyLength: apiKey?.length || 0
     });
     
     if (!apiKey || apiKey.trim() === '') {
@@ -92,7 +89,6 @@ export class ElevenLabsSDKService extends EventEmitter {
     }
     
     this.apiKey = apiKey;
-    this.openAIApiKey = openAIApiKey;
     
     try {
       // Initialize the ElevenLabs SDK
@@ -128,11 +124,9 @@ export class ElevenLabsSDKService extends EventEmitter {
   /**
    * Update API keys for the service
    * @param apiKey ElevenLabs API key
-   * @param openAIApiKey OpenAI API key
    */
-  public updateApiKeys(apiKey: string, openAIApiKey: string): void {
+  public updateApiKeys(apiKey: string): void {
     this.apiKey = apiKey;
-    this.openAIApiKey = openAIApiKey;
     
     // Re-initialize the SDK with the new API key
     this.elevenlabs = new ElevenLabs({
@@ -689,35 +683,7 @@ export class ElevenLabsSDKService extends EventEmitter {
     }
   }
 
-  /**
-   * Use ElevenLabs' Conversational AI API to generate a response
-   * @param messages Previous conversation messages
-   * @param options Conversation options
-   * @returns Generated response text
-   */
-  public async generateConversationResponse(
-    messages: { role: string; content: string }[],
-    options?: {
-      model?: string;
-      temperature?: number;
-      maxTokens?: number;
-    }
-  ): Promise<string> {
-    try {
-      // Using the SDK's conversational capability
-      const response = await this.elevenlabs.generateConversationResponse({
-        messages,
-        model: options?.model || 'claude-3-haiku-20240307',
-        temperature: options?.temperature || 0.7,
-        max_tokens: options?.maxTokens || 150
-      });
-      
-      return response;
-    } catch (error) {
-      logger.error(`Error generating conversation response: ${getErrorMessage(error)}`);
-      throw new Error(`Conversation response generation failed: ${getErrorMessage(error)}`);
-    }
-  }
+  
 
   /**
    * Synthesize adaptive voice with personality adaptation using ElevenLabs SDK
@@ -1151,16 +1117,13 @@ let sdkService: ElevenLabsSDKService | null = null;
  * @returns Service instance
  */
 export function initializeSDKService(
-  apiKey: string,
-  openAIApiKey: string
+  apiKey: string
 ): ElevenLabsSDKService | null {
   try {
     console.log('initializeSDKService called with:', {
-      hasApiKey: !!apiKey,
-      apiKeyLength: apiKey?.length || 0,
-      hasOpenAIKey: !!openAIApiKey,
-      existingService: !!sdkService
-    });
+        hasApiKey: !!apiKey,
+        apiKeyLength: apiKey?.length || 0,
+      });
     
     if (!apiKey || apiKey.trim() === '') {
       console.error('Cannot initialize SDK Service: ElevenLabs API key is missing or empty');
@@ -1170,13 +1133,13 @@ export function initializeSDKService(
     
     if (!sdkService) {
       console.log('Creating new ElevenLabsSDKService instance...');
-      sdkService = new ElevenLabsSDKService(apiKey, openAIApiKey);
+      sdkService = new ElevenLabsSDKService(apiKey);
       console.log('ElevenLabs SDK Service initialized successfully with new instance');
       logger.info('ElevenLabs SDK Service initialized successfully with new instance');
     } else {
       // Update API keys if service already exists
       console.log('Updating existing ElevenLabsSDKService with new API keys...');
-      sdkService.updateApiKeys(apiKey, openAIApiKey);
+      sdkService.updateApiKeys(apiKey);
       console.log('ElevenLabs SDK Service updated with new API keys');
       logger.info('ElevenLabs SDK Service updated with new API keys');
     }
