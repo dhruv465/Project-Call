@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Menu, Moon, Sun, User } from 'lucide-react';
+import { Menu, Moon, Sun, User, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -13,7 +13,12 @@ import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from 
 import Sidebar from './Sidebar';
 import Logo from '@/components/Logo';
 
-const Header = () => {
+interface HeaderProps {
+  toggleSidebar?: () => void;
+  sidebarCollapsed?: boolean;
+}
+
+const Header = ({ toggleSidebar, sidebarCollapsed }: HeaderProps) => {
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
@@ -40,9 +45,24 @@ const Header = () => {
               <SheetDescription className="sr-only">
                 Application navigation links and options
               </SheetDescription>
-              <Sidebar onNavigate={() => setIsOpen(false)} />
+              <Sidebar onNavigate={() => setIsOpen(false)} collapsed={false} />
             </SheetContent>
           </Sheet>
+
+          {/* Desktop sidebar toggle */}
+          {toggleSidebar && (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className={`hidden lg:flex transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'cursor-e-resize' : 'cursor-w-resize'} hover:bg-muted`}
+              onClick={toggleSidebar}
+            >
+              {sidebarCollapsed ? <PanelLeft size={20} /> : <PanelLeftClose size={20} />}
+              <span className="sr-only">
+                {sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              </span>
+            </Button>
+          )}
 
           {/* Page title - can be dynamically set based on current route */}
           <div className="flex items-center gap-2 lg:hidden">

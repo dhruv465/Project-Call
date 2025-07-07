@@ -4,10 +4,10 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard,
   Users,
-  Phone,
+  PhoneCall,
   Settings,
   Megaphone,
-  BarChart4,
+  BarChart3,
   LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -20,9 +20,10 @@ interface SidebarItemProps {
   icon: React.ReactNode;
   title: string;
   onNavigate?: () => void;
+  collapsed?: boolean;
 }
 
-const SidebarItem: React.FC<SidebarItemProps> = ({ href, icon, title, onNavigate }) => {
+const SidebarItem: React.FC<SidebarItemProps> = ({ href, icon, title, onNavigate, collapsed }) => {
   const { pathname } = useLocation();
   const isActive = pathname === href;
 
@@ -36,12 +37,26 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ href, icon, title, onNavigate
         variant="ghost"
         size="sm"
         className={cn(
-          'w-full justify-start gap-2',
-          isActive ? 'bg-muted font-medium' : 'font-normal'
+          'w-full justify-start gap-3 transition-all duration-300 ease-in-out h-10 my-1 rounded-md',
+          isActive ? 'bg-muted font-medium text-primary' : 'font-normal hover:bg-muted/50',
+          collapsed ? 'justify-center px-2' : ''
         )}
+        title={collapsed ? title : undefined}
       >
-        {icon}
-        {title}
+        <span className={cn(
+          'transition-transform duration-300 ease-in-out',
+          collapsed ? 'transform scale-125' : '',
+          isActive ? 'text-primary' : 'text-muted-foreground'
+        )}>
+          {icon}
+        </span>
+        <span className={cn(
+          'transition-all duration-300 ease-in-out whitespace-nowrap text-sm font-medium',
+          collapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100 w-auto',
+          isActive ? 'text-primary' : 'text-muted-foreground'
+        )}>
+          {title}
+        </span>
       </Button>
     </Link>
   );
@@ -49,73 +64,99 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ href, icon, title, onNavigate
 
 interface SidebarProps {
   onNavigate?: () => void;
+  collapsed?: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ onNavigate }) => {
+const Sidebar: React.FC<SidebarProps> = ({ onNavigate, collapsed = false }) => {
   const { logout } = useAuth();
 
   return (
-    <div className="flex flex-col w-64 border-r bg-card lg:w-64">
-      {/* Logo */}
-      <div className="h-16 flex items-center px-6 border-b">
-        <div className="flex items-center gap-2">
-          <Logo width={32} height={32} />
-          <h1 className="text-xl font-bold">Lumina Outreach</h1>
+    <div className={cn(
+      "flex flex-col border-r bg-card h-full transition-all duration-300 ease-in-out shadow-sm",
+      collapsed ? "w-[70px]" : "w-64"
+    )}>
+      {/* Logo and title */}
+      <div className="h-16 flex items-center px-4 border-b bg-muted/30">
+        <div className="flex items-center gap-3 overflow-hidden">
+          <Logo width={collapsed ? 36 : 32} height={collapsed ? 36 : 32} className="transition-all duration-300" />
+          <h1 className={`font-semibold tracking-tight whitespace-nowrap transition-all duration-300 origin-left ${collapsed ? 'opacity-0 scale-90 w-0' : 'opacity-100 w-auto text-lg'}`}>
+            Lumina <span className="font-bold text-primary">Outreach</span>
+          </h1>
         </div>
       </div>
 
       {/* Navigation */}
-      <ScrollArea className="flex-1 px-4 py-6">
-        <nav className="space-y-2">
+      <ScrollArea className="flex-1 px-3 py-6">
+        <nav className="space-y-0.5">
           <SidebarItem
             href="/dashboard"
-            icon={<LayoutDashboard size={18} />}
+            icon={<LayoutDashboard size={20} />}
             title="Dashboard"
             onNavigate={onNavigate}
+            collapsed={collapsed}
           />
           <SidebarItem
             href="/leads"
-            icon={<Users size={18} />}
+            icon={<Users size={20} />}
             title="Lead Management"
             onNavigate={onNavigate}
+            collapsed={collapsed}
           />
           <SidebarItem
             href="/campaigns"
-            icon={<Megaphone size={18} />}
+            icon={<Megaphone size={20} />}
             title="Campaigns"
             onNavigate={onNavigate}
+            collapsed={collapsed}
           />
           <SidebarItem
             href="/calls"
-            icon={<Phone size={18} />}
+            icon={<PhoneCall size={20} />}
             title="Call History"
             onNavigate={onNavigate}
+            collapsed={collapsed}
           />
           <SidebarItem
             href="/analytics"
-            icon={<BarChart4 size={18} />}
+            icon={<BarChart3 size={20} />}
             title="Analytics"
             onNavigate={onNavigate}
+            collapsed={collapsed}
           />
           <SidebarItem
             href="/configuration"
-            icon={<Settings size={18} />}
+            icon={<Settings size={20} />}
             title="Configuration"
             onNavigate={onNavigate}
+            collapsed={collapsed}
           />
         </nav>
       </ScrollArea>
 
       {/* Logout */}
-      <div className="p-4 border-t">
+      <div className="p-3 border-t bg-muted/20">
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start gap-2 text-muted-foreground"
+          className={cn(
+            "w-full gap-3 text-muted-foreground transition-all duration-300 ease-in-out h-10 rounded-md hover:bg-muted/70 hover:text-destructive",
+            collapsed ? "justify-center px-2" : "justify-start"
+          )}
           onClick={logout}
+          title={collapsed ? "Sign Out" : undefined}
         >
-          <LogOut size={18} />
-          Sign Out
+          <span className={cn(
+            'transition-transform duration-300 ease-in-out',
+            collapsed ? 'transform scale-125' : ''
+          )}>
+            <LogOut size={20} />
+          </span>
+          <span className={cn(
+            'transition-all duration-300 ease-in-out whitespace-nowrap text-sm font-medium',
+            collapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100 w-auto'
+          )}>
+            Sign Out
+          </span>
         </Button>
       </div>
     </div>
