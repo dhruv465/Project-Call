@@ -28,14 +28,17 @@ import transcriptionRoutes from './routes/transcriptionRoutes';
 import userRoutes from './routes/userRoutes';
 import voiceAIRoutes from './routes/voiceAIRoutes';
 
+// Twilio Media Streams WebSocket handler
+import { handleTwilioStreamWebhook } from './services/webhookHandlers';
+
 // Services initialization
 import CampaignService from './services/campaignService';
 import ConversationEngineService from './services/conversationEngineService';
+import { EnhancedVoiceAIService } from './services/enhancedVoiceAIService';
 import leadService from './services/leadService';
+import { LLMService } from './services/llm/service';
 import { initializeSpeechService } from './services/realSpeechService';
 import SpeechAnalysisService from './services/speechAnalysisService';
-import { EnhancedVoiceAIService } from './services/enhancedVoiceAIService';
-import { LLMService } from './services/llm/service';
 
 // Configuration and health services
 import { validateStartupConfig } from './config/database-validation';
@@ -117,8 +120,11 @@ if (!fs.existsSync('logs')) {
 const app = express();
 const server = http.createServer(app);
 
-// Initialize WebSocket support
-const wsInstance = expressWs(app, server);
+// Initialize WebSocket support and get the augmented app instance
+const { app: wsApp } = expressWs(app, server);
+
+// Register Twilio Media Streams WebSocket endpoint on the augmented app
+wsApp.ws('/voice/low-latency', handleTwilioStreamWebhook);
 
 const io = new SocketIOServer(server, {
   cors: {

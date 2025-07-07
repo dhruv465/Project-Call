@@ -120,10 +120,72 @@ export const handleLowLatencyVoiceStream = async (ws: WebSocket, req: Request): 
     return;
   }
 
-  // Extract query parameters
+  // Extract query parameters - handle multiple formats
   const url = new URL(req.url, `http://${req.headers.host}`);
-  const callId = url.searchParams.get('callId');
-  const conversationId = url.searchParams.get('conversationId');
+  
+  // Try to get parameters from query string
+  let callId = url.searchParams.get('callId');
+  let conversationId = url.searchParams.get('conversationId');
+  
+  // If not found, try to get from URL path parameters
+  if (!callId || !conversationId) {
+    // Parse the path to extract parameters
+    const pathMatch = req.url.match(/\/voice\/low-latency\/([\w-]+)\/([\w-]+)/);
+    if (pathMatch && pathMatch.length >= 3) {
+      if (!callId) callId = pathMatch[1];
+      if (!conversationId) conversationId = pathMatch[2];
+      logger.info(`Extracted parameters from URL path: callId=${callId}, conversationId=${conversationId}`);
+    }
+    
+    // Also try to get from Express request params (should be populated by route with :callId and :conversationId)
+    if ((!callId || !conversationId) && req.params) {
+      if (!callId && req.params.callId) {
+        callId = req.params.callId;
+        logger.info(`Found callId in Express params: ${callId}`);
+      }
+      if (!conversationId && req.params.conversationId) {
+        conversationId = req.params.conversationId;
+        logger.info(`Found conversationId in Express params: ${conversationId}`);
+      }
+    }
+  }
+  
+  // If not found, try to get from the Twilio WebSocket parameters
+  if (!callId || !conversationId) {
+    try {
+      // Check for parameters in request object
+      if ((req as any).twilio?.parameters) {
+        // Look for both regular and custom parameter names
+        const parameters = (req as any).twilio.parameters;
+        
+        // Try standard parameters
+        if (!callId && parameters.callId) {
+          callId = parameters.callId;
+        }
+        if (!conversationId && parameters.conversationId) {
+          conversationId = parameters.conversationId;
+        }
+        
+        // Try custom parameters (added as fallback)
+        if (!callId && parameters.customCallId) {
+          callId = parameters.customCallId;
+        }
+        if (!conversationId && parameters.customConversationId) {
+          conversationId = parameters.customConversationId;
+        }
+      }
+      
+      // Also check if Twilio added them as properties directly on the req object
+      if (!callId && (req as any).callId) {
+        callId = (req as any).callId;
+      }
+      if (!conversationId && (req as any).conversationId) {
+        conversationId = (req as any).conversationId;
+      }
+    } catch (error) {
+      logger.warn('Error extracting Twilio parameters:', error);
+    }
+  }
   
   // Enhanced logging for debugging
   logger.info(`WebSocket connection attempt for low-latency stream`, {
@@ -136,7 +198,12 @@ export const handleLowLatencyVoiceStream = async (ws: WebSocket, req: Request): 
       host: req.headers.host,
       origin: req.headers.origin,
       userAgent: req.headers['user-agent']
-    }
+    },
+    hasParams: !!(callId && conversationId),
+    pathParameters: req.params,
+    extractionMethod: callId ? (url.searchParams.has('callId') ? 'query' : 
+                              (req.params && req.params.callId ? 'express-params' : 
+                              (req.url.includes(`/voice/low-latency/${callId}`) ? 'url-path' : 'twilio-params'))) : 'none'
   });
   
   if (!callId || !conversationId) {
@@ -146,7 +213,28 @@ export const handleLowLatencyVoiceStream = async (ws: WebSocket, req: Request): 
       conversationId,
       searchParams: Array.from(url.searchParams.entries())
     });
-    ws.close(1008, 'Missing required parameters');
+    
+    // Instead of immediately closing, send an error message
+    try {
+      ws.send(JSON.stringify({
+        event: 'error',
+        message: 'Missing required parameters: callId and conversationId are required for voice streaming',
+        errorCode: 'MISSING_PARAMS',
+        timestamp: new Date().toISOString()
+      }));
+      
+      // Don't close immediately - delay to allow error message to be sent
+      setTimeout(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close(1008, 'Missing required parameters');
+        }
+      }, 500);
+      
+    } catch (error) {
+      logger.error('Failed to send error message over WebSocket:', error);
+      ws.close(1008, 'Missing required parameters');
+    }
+    
     return;
   }
   
@@ -204,18 +292,46 @@ export const handleLowLatencyVoiceStream = async (ws: WebSocket, req: Request): 
     sdkService = getSDKService();
     if (!sdkService) {
       // Initialize the SDK service if not already
-      const openAIProvider = config.llmConfig.providers.find(p => p.name === 'openai');
-      if (!openAIProvider || !openAIProvider.isEnabled) {
-        logger.error('OpenAI LLM not configured for streaming');
-        ws.close(1008, 'LLM not configured');
-        return;
-      }
+      const defaultProviderName = config.llmConfig.defaultProvider;
+      const defaultProvider = config.llmConfig.providers.find(p => p.name === defaultProviderName);
       
-      // Initialize the SDK service
-      sdkService = require('../services/elevenlabsSDKService').initializeSDKService(
-        config.elevenLabsConfig.apiKey,
-        openAIProvider.apiKey
-      );
+      // Check if we have a configured LLM provider
+      if (!defaultProvider || !defaultProvider.isEnabled) {
+        logger.error(`Default LLM provider '${defaultProviderName}' not configured or not enabled for streaming`);
+        
+        // Try to find any enabled provider as a fallback
+        const fallbackProvider = config.llmConfig.providers.find(p => p.isEnabled && p.apiKey);
+        
+        if (!fallbackProvider) {
+          ws.send(JSON.stringify({
+            event: 'error',
+            message: 'No LLM provider configured for streaming',
+            errorCode: 'LLM_NOT_CONFIGURED',
+            timestamp: new Date().toISOString()
+          }));
+          
+          setTimeout(() => {
+            ws.close(1008, 'LLM not configured');
+          }, 500);
+          return;
+        }
+        
+        logger.info(`Using fallback LLM provider '${fallbackProvider.name}' for streaming`);
+        
+        // Initialize the SDK service with the fallback provider
+        sdkService = require('../services/elevenlabsSDKService').initializeSDKService(
+          config.elevenLabsConfig.apiKey,
+          fallbackProvider.apiKey
+        );
+      } else {
+        // Initialize the SDK service with the default provider
+        logger.info(`Initializing SDK service with default provider '${defaultProvider.name}'`);
+        
+        sdkService = require('../services/elevenlabsSDKService').initializeSDKService(
+          config.elevenLabsConfig.apiKey,
+          defaultProvider.apiKey
+        );
+      }
       
       if (!sdkService) {
         logger.error('Failed to initialize ElevenLabs SDK service');
@@ -291,12 +407,13 @@ export const handleLowLatencyVoiceStream = async (ws: WebSocket, req: Request): 
             optimizationProfile: 'low' // Use low latency profile for greetings
           }
         );
-      } catch (error) {
+        } catch (error) {
         logger.error(`Error generating opening message for call ${callId}:`, error);
         
         // Fallback to simple greeting from cache
         try {
-          const fallbackGreeting = "";
+          // Use first common greeting phrase as fallback
+          const fallbackGreeting = COMMON_PHRASES.GREETINGS[0];
           const fallbackVoice = config.elevenLabsConfig.availableVoices[0].voiceId;
           
           // Try cache first

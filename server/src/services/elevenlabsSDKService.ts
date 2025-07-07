@@ -277,10 +277,17 @@ export class ElevenLabsSDKService extends EventEmitter {
 
       // Validate voice ID exists before making the API call
       try {
-        const voices = await this.getVoices();
-        const voiceExists = voices.some(voice => voice.voiceId === voiceId);
+        // Normalize voices response to an array
+        const voicesResponse = await this.getVoices();
+        let voicesList: any[] = [];
+        if (Array.isArray(voicesResponse)) {
+          voicesList = voicesResponse;
+        } else if (voicesResponse && Array.isArray((voicesResponse as any).voices)) {
+          voicesList = (voicesResponse as any).voices;
+        }
+        const voiceExists = voicesList.some(v => v.voiceId === voiceId);
         if (!voiceExists) {
-          logger.warn(`Voice ID ${voiceId} not found in available voices. Available voices: ${voices.map(v => v.voiceId).slice(0, 5).join(', ')}...`);
+          logger.warn(`Voice ID ${voiceId} not found in available voices. Available voices: ${voicesList.map(v => v.voiceId).slice(0, 5).join(', ')}...`);
         }
       } catch (voiceError) {
         logger.warn(`Could not validate voice ID (continuing anyway): ${getErrorMessage(voiceError)}`);
@@ -460,9 +467,16 @@ export class ElevenLabsSDKService extends EventEmitter {
       // Generate a temporary conversation ID for this one-time streaming
       const tempConversationId = `temp_${Date.now()}`;
       
-      // Create the conversation if it doesn't exist
+      // Ensure the temporary conversation exists for streaming
       if (!this.conversations.has(tempConversationId)) {
-        this.createConversation();
+        this.conversations.set(tempConversationId, {
+          id: tempConversationId,
+          createdAt: new Date(),
+          lastActivity: new Date(),
+          active: true,
+          messages: [],
+          isGenerating: false
+        });
       }
       
       // Use the streamSpeech method to stream the speech
@@ -610,10 +624,14 @@ export class ElevenLabsSDKService extends EventEmitter {
       }
     });
 
-    return new Promise((resolve, reject) => {
-      // Handle WebSocket events to resolve/reject the promise
+    return new Promise((resolve) => {
       ws.on('close', () => resolve());
-      ws.on('error', (error) => reject(error));
+      ws.on('error', (error) => {
+        logger.error(`WebSocket error for conversation ${conversationId}: ${getErrorMessage(error)}`);
+        this.emit(ConversationEvent.ERROR, { conversationId, error: getErrorMessage(error) });
+        // swallow error to prevent unhandled exception
+        resolve();
+      });
     });
   }
 

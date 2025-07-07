@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import WebSocket from 'ws';
 import logger from '../utils/logger';
 import { getErrorMessage } from '../utils/logger';
 import Call, { ICall } from '../models/Call';
@@ -382,23 +383,15 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
     
     if (useAdvancedStreaming) {
       logger.info(`Using advanced WebSocket streaming for call ${callId} with features: Deepgram=${!!configuration?.deepgramConfig?.isEnabled}, Flash=${!!configuration?.elevenLabsConfig?.useFlashModel}, Realtime=${!!configuration?.llmConfig?.providers?.some(p => p.useRealtimeAPI)}`);
-      
+
       // Use WebSocket streaming with the new AI stack
       const connect = twiml.connect();
       const stream = connect.stream({
         url: `wss://${req.headers.host}/voice/low-latency?callId=${callId}&conversationId=${conversationId}`,
         name: 'project-call-stream'
       });
-      
+
       // Add stream parameters for enhanced functionality
-      stream.parameter({
-        name: 'callId',
-        value: callId
-      });
-      stream.parameter({
-        name: 'conversationId', 
-        value: conversationId
-      });
       stream.parameter({
         name: 'campaignId',
         value: call.campaignId.toString()
@@ -407,7 +400,7 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
         name: 'leadId',
         value: call.leadId.toString()
       });
-      
+
       // Add advanced features parameters
       if (configuration?.deepgramConfig?.isEnabled) {
         stream.parameter({
@@ -427,7 +420,7 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
           value: 'true'
         });
       }
-      
+
     } else {
       // Use traditional gather method with Twilio's built-in speech recognition
       logger.info(`Using traditional gather method for call ${callId}`);
@@ -864,65 +857,46 @@ export async function handleTwilioGatherWebhook(req: Request, res: Response): Pr
 }
 
 /**
- * Handles Twilio stream webhook
- * This processes real-time audio streams from the call
+ * Handles Twilio stream webhook via WebSocket
+ * Processes real-time audio streams from the call
  */
-export async function handleTwilioStreamWebhook(req: Request, res: Response): Promise<void> {
-  const callId = req.query.callId as string;
-  const conversationId = req.query.conversationId as string;
-  
-  try {
-    logger.info(`Stream webhook called for call ${callId} with conversation ${conversationId}`, {
-      query: req.query,
-      headers: req.headers
-    });
-    
-    if (!callId || !conversationId) {
-      logger.error('Missing callId or conversationId in stream webhook');
-      res.status(400).send('Missing callId or conversationId');
-      return;
-    }
-    
-    // Get the call from database to verify it exists
-    const call = await Call.findById(callId);
-    if (!call) {
-      logger.error(`No call found with ID ${callId} in stream webhook`);
-      res.status(404).send('Call not found');
-      return;
-    }
-    
-    // Connect to the ElevenLabs voice synthesis service
-    const configuration = await Configuration.findOne();
-    if (!configuration || !configuration.elevenLabsConfig.isEnabled) {
-      logger.error('ElevenLabs not configured for streaming');
-      res.status(500).send('Voice synthesis not configured');
-      return;
-    }
-    
-    // Get appropriate LLM configuration
-    const defaultProviderNameStream = configuration.llmConfig.defaultProvider; // Renamed to avoid conflict
-    const configuredProviderStream = configuration.llmConfig.providers.find(p => p.name === defaultProviderNameStream); // Renamed
+export function handleTwilioStreamWebhook(ws: WebSocket, req: Request) {
+  let callId: string | undefined;
+  let conversationId: string | undefined;
 
-    if (!configuredProviderStream || !configuredProviderStream.isEnabled || !configuredProviderStream.apiKey) {
-      logger.error(`Configured LLM provider '${defaultProviderNameStream || 'Unknown'}' not enabled or missing API key. Streaming cannot proceed.`);
-      res.status(500).send('Required LLM configuration for streaming is not properly set up.');
+  ws.on('message', async (data) => {
+    let msg;
+    try {
+      msg = JSON.parse(data.toString());
+    } catch {
+      logger.error('Failed to parse WebSocket message');
       return;
     }
-    
-    // Process the conversation through the conversation engine
-    // This triggers real-time processing of speech and generates responses
-    await conversationEngine.processUserInput(
-      conversationId, 
-      "Real-time stream processing initiated" // Placeholder text
-    );
-    
-    // Just return success as we're handling the response elsewhere
-    res.status(200).send('Stream processing initiated');
-    
-  } catch (error) {
-    logger.error(`Error in stream webhook for call ${callId}:`, error);
-    res.status(500).send('Error processing stream');
-  }
+
+    if (msg.event === 'start' && msg.start?.customParameters) {
+      callId = msg.start.customParameters.callId;
+      conversationId = msg.start.customParameters.conversationId;
+      logger.info(`Media stream started for call ${callId}, conv ${conversationId}`);
+      return;
+    }
+
+    if (!callId || !conversationId) {
+      // still waiting for start event
+      return;
+    }
+
+    if (msg.event === 'media') {
+      // Process inbound audio chunk
+      const payload = msg.media.payload; // base64-encoded audio
+      // TODO: feed payload to Deepgram or conversation engine
+    }
+
+    // Handle other events if needed...
+  });
+
+  ws.on('close', () => {
+    logger.info(`Media stream closed for call ${callId}`);
+  });
 }
 
 /**

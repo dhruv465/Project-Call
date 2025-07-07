@@ -68,7 +68,15 @@ export class ParallelProcessingService extends EventEmitter {
   private async initializeThinkingSounds(): Promise<void> {
     try {
       // Get available voices from the SDK service
-      const voices = await this.sdkService.getVoices();
+      const voicesResponse = await this.sdkService.getVoices();
+      // Normalize response to an array, handling nested structures
+      const voices: any[] = Array.isArray(voicesResponse)
+        ? voicesResponse
+        : (Array.isArray(voicesResponse.voices)
+            ? voicesResponse.voices
+            : (Array.isArray(voicesResponse.data?.voices)
+                ? voicesResponse.data.voices
+                : []));
       
       // Generate thinking sounds for each voice
       for (const voice of voices) {
@@ -367,20 +375,25 @@ Language: ${context.language || 'English'}`
       let response;
       
       if (openAIProvider?.useRealtimeAPI) {
-        // Use realtime API for ultra-low latency response
-        logger.info(`Using OpenAI Realtime API for conversation ${conversationId}`);
+        // Get the default LLM provider and model from config
+        const config = await require('../models/Configuration').default.findOne();
+        const realtimeProvider = config?.llmConfig?.providers?.find(p => p.useRealtimeAPI && p.isEnabled);
+        const providerName = realtimeProvider?.name || config?.llmConfig?.defaultProvider || 'google';
+        const modelName = realtimeProvider?.defaultModel || config?.llmConfig?.defaultModel || 'gemini-1.5-flash';
+        
+        logger.info(`Using ${providerName} Realtime API for conversation ${conversationId} with model ${modelName}`);
         
         // We'll collect the response here
         let responseText = '';
         
         // Use the realtime chat method
         await this.llmService.realtimeChat({
-          provider: 'openai',
-          model: openAIProvider.defaultModel || 'gpt-4',
+          provider: providerName,
+          model: modelName,
           messages: messagesWithContext,
           options: {
-            temperature: 0.7,
-            maxTokens: 150
+            temperature: config?.llmConfig?.temperature || 0.7,
+            maxTokens: config?.llmConfig?.maxTokens || 150
           }
         }, (chunk) => {
           responseText += chunk.content;
@@ -388,16 +401,53 @@ Language: ${context.language || 'English'}`
         
         response = { content: responseText };
       } else {
-        // Use standard API
-        response = await this.llmService.chat({
-          provider: 'openai',
-          model: 'gpt-4',
-          messages: messagesWithContext,
-          options: {
-            temperature: 0.7,
-            maxTokens: 150
+        // Get the default LLM provider from config
+        const config = await require('../models/Configuration').default.findOne();
+        const defaultProvider = config?.llmConfig?.defaultProvider || 'google';
+        const defaultModel = config?.llmConfig?.defaultModel || 'gemini-1.5-flash';
+        
+        logger.info(`Using configured LLM provider: ${defaultProvider} with model: ${defaultModel}`);
+        
+        try {
+          // Use standard API with the configured provider
+          response = await this.llmService.chat({
+            provider: defaultProvider,
+            model: defaultModel,
+            messages: messagesWithContext,
+            options: {
+              temperature: config?.llmConfig?.temperature || 0.7,
+              maxTokens: config?.llmConfig?.maxTokens || 150
+            }
+          });
+        } catch (error) {
+          // If the configured provider fails, try to fall back to any available provider
+          logger.warn(`Provider ${defaultProvider} failed, trying fallbacks: ${getErrorMessage(error)}`);
+          
+          // Get all available providers
+          const providers = config?.llmConfig?.providers || [];
+          const enabledProviders = providers.filter(p => p.isEnabled && p.apiKey);
+          
+          if (enabledProviders.length > 0 && enabledProviders[0].name !== defaultProvider) {
+            // Try the first available provider that's not the one that just failed
+            const fallbackProvider = enabledProviders[0].name;
+            const fallbackModel = enabledProviders[0].defaultModel || 'gemini-1.5-flash';
+            
+            logger.info(`Falling back to provider: ${fallbackProvider} with model: ${fallbackModel}`);
+            
+            response = await this.llmService.chat({
+              provider: fallbackProvider,
+              model: fallbackModel,
+              messages: messagesWithContext,
+              options: {
+                temperature: config?.llmConfig?.temperature || 0.7,
+                maxTokens: config?.llmConfig?.maxTokens || 150
+              }
+            });
+          } else {
+            // If there are no other providers, rethrow the error
+            throw error;
           }
-        });
+        }
       }
       
       return {
