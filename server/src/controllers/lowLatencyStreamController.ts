@@ -296,7 +296,7 @@ export const handleLowLatencyVoiceStream = async (ws: WebSocket, req: Request): 
         
         // Fallback to simple greeting from cache
         try {
-          const fallbackGreeting = "Hello, how can I help you today?";
+          const fallbackGreeting = "";
           const fallbackVoice = config.elevenLabsConfig.availableVoices[0].voiceId;
           
           // Try cache first

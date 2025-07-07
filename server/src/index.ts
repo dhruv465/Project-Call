@@ -248,9 +248,12 @@ const globalLimiter = rateLimit({
 app.use(globalLimiter);
 
 // Strict rate limiter for authentication endpoints
+const authLimitWindowMs = parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS || '900000'); // 15 minutes
+const authLimitMax = parseInt(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS || '15'); // Increased default to 15
+
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 login attempts per windowMs
+  windowMs: authLimitWindowMs,
+  max: authLimitMax, // Use environment variable for auth attempts
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,

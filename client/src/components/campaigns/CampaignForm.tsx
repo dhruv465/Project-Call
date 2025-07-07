@@ -51,6 +51,7 @@ interface CampaignFormData {
     name: string;
     content: string;
   };
+  openingMessage: string;
   callTiming: {
     daysOfWeek: string[];
     startTime: string;
@@ -86,6 +87,7 @@ const initialFormState: CampaignFormData = {
     name: "Primary Script",
     content: "",
   },
+  openingMessage: "",
   callTiming: {
     daysOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
     startTime: "09:00",
@@ -199,6 +201,7 @@ const CampaignForm = ({
           name: campaignData.script?.versions?.[0]?.name || "Primary Script",
           content: campaignData.script?.versions?.[0]?.content || "",
         },
+        openingMessage: campaignData.openingMessage || "",
         callTiming: {
           daysOfWeek: campaignData.callTiming?.daysOfWeek || [
             "Monday",
@@ -572,6 +575,7 @@ const CampaignForm = ({
         supportedLanguages: formData.supportedLanguages,
         status: "Draft", // Default status for new campaigns
         script: scriptData,
+        openingMessage: formData.openingMessage,
         // Explicitly format date fields as strings
         // Explicitly format date fields as strings
         startDate: formData.startDate instanceof Date 
@@ -1018,6 +1022,22 @@ const CampaignForm = ({
                           value={formData.script.name}
                           onChange={handleChange}
                           placeholder="e.g., Primary Script, Version A"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Opening Message
+                        </label>
+                        <div className="text-xs text-muted-foreground mb-2">
+                          This message will be spoken as soon as the call is answered.
+                        </div>
+                        <textarea
+                          name="openingMessage"
+                          value={formData.openingMessage}
+                          onChange={handleChange}
+                          className={textareaStyles}
+                          placeholder="Enter the opening message here..."
                         />
                       </div>
 

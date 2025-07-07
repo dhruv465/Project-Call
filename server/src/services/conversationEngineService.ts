@@ -310,9 +310,9 @@ export class ConversationEngineService {
         throw new Error(`Session not found: ${sessionId}`);
       }
 
-      const { currentPersonality, language, campaignId } = session;
+      const { campaignId } = session;
       
-      // Load campaign data to get the actual script
+      // Load campaign data to get the opening message
       const Campaign = require('../models/Campaign').default;
       const campaign = await Campaign.findById(campaignId);
       
@@ -320,6 +320,11 @@ export class ConversationEngineService {
         throw new Error(`Campaign not found: ${campaignId}`);
       }
 
+      if (campaign.openingMessage) {
+        return campaign.openingMessage;
+      }
+
+      // Fallback to generating from script if openingMessage is not set
       if (!campaign.script || !campaign.script.versions || campaign.script.versions.length === 0) {
         throw new Error(`Campaign ${campaignId} has no script configured. Please configure a script in the campaign settings.`);
       }
@@ -339,13 +344,13 @@ export class ConversationEngineService {
         throw new Error("System configuration not found. Please set up your system configuration first.");
       }
       
-      // Get the default system prompt from configuration if available
-      const systemPrompt = configuration.generalSettings.defaultSystemPrompt || 
-        campaign.llmConfiguration?.systemPrompt || '';
+      // Get the system prompt from the campaign or the global configuration
+      const finalSystemPrompt = campaign.llmConfiguration?.systemPrompt || configuration.generalSettings.defaultSystemPrompt;
 
-      // If no system prompt is found, check if campaign has one or create a default
-      const finalSystemPrompt = systemPrompt || 
-        `You are an AI sales agent speaking in ${language}. Use the provided campaign script to generate a personalized opening message.`;
+      // If no system prompt is found, throw an error to enforce configuration
+      if (!finalSystemPrompt) {
+        throw new Error(`No system prompt configured for campaign ${campaignId} or in global settings. Please configure a system prompt.`);
+      }
         
       const messages: LLMMessage[] = [
         {
@@ -357,8 +362,8 @@ export class ConversationEngineService {
           content: `Generate an opening message for:
 - Lead name: ${leadName}
 - Campaign: ${campaignName}
-- Language: ${language}
-- Personality: ${currentPersonality.name}
+- Language: ${session.language}
+- Personality: ${session.currentPersonality.name}
 
 Campaign Script:
 ${campaignScript}
@@ -395,7 +400,7 @@ Instructions:
         timestamp: new Date(),
         speaker: 'agent',
         content: openingMessage,
-        voicePersonality: currentPersonality
+        voicePersonality: session.currentPersonality
       };
 
       session.conversationHistory.push(turn);

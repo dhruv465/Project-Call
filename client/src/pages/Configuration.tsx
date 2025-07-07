@@ -175,12 +175,12 @@ Keep the conversation natural and engaging. If they're not interested, politely 
   const [openTestCallDialog, setOpenTestCallDialog] = useState(false);
   const [testCallNumber, setTestCallNumber] = useState("");
   const [testCallMessage, setTestCallMessage] = useState(
-    "This is a test call from your AI calling system."
+    ""
   );
   const [testingLLMChat, setTestingLLMChat] = useState(false);
   const [openTestLLMChatDialog, setOpenTestLLMChatDialog] = useState(false);
   const [testLLMPrompt, setTestLLMPrompt] = useState(
-    "Hello, can you introduce yourself and tell me what you can do?"
+    ""
   );
   const [testLLMResponse, setTestLLMResponse] = useState("");
   const [availableVoices, setAvailableVoices] = useState<

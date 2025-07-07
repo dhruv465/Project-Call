@@ -47,7 +47,7 @@ export class AnthropicClient implements ILLMProviderClient {
       // Use a simple message request to test connectivity
       await this.client.messages.create({
         model: this.defaultModel,
-        messages: [{ role: 'user', content: 'Hello' }],
+        messages: [{ role: 'user', content: '' }],
         max_tokens: 10,
       });
       return true;

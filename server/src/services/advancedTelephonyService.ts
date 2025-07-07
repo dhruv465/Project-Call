@@ -8,6 +8,7 @@ import CircuitBreaker from 'opossum';
 import { RateLimiterRedis } from 'rate-limiter-flexible';
 import retry from 'async-retry';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { v4 as uuidv4 } from 'uuid';
 
 // Redis client for distributed rate limiting and circuit breaking
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
@@ -478,14 +479,20 @@ export class AdvancedTelephonyService {
       // Return TwiML response to handle the call
       const twiml = new twilio.twiml.VoiceResponse();
       
+      // Get the campaign's opening message
+      const call = await Call.findById(callId).populate('campaignId');
+      const campaign = call?.campaignId as any;
+      const openingMessage = campaign?.openingMessage;
+
       // Add a greeting or redirect to your voice AI handler
       twiml.say({
         voice: 'alice',
         language: 'en-US'
-      }, 'Hello, please hold while I connect you to our AI assistant.');
+      }, openingMessage || '');
       
       // You would typically redirect to your voice AI service here
-      twiml.redirect(`${req.query.callbackUrl}/voice-ai?callId=${callId}`);
+      const conversationId = uuidv4();
+      twiml.redirect(`${req.query.callbackUrl}/voice-ai?callId=${callId}&conversationId=${conversationId}`);
       
       res.type('text/xml');
       res.send(twiml.toString());

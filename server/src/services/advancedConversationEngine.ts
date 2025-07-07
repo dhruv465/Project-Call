@@ -465,7 +465,7 @@ export class AdvancedConversationEngine {
     }
 
     return {
-      text: "Hello! I'm calling to discuss how we can help improve your business outcomes. Do you have a few minutes to explore this opportunity?",
+      text: "",
       action: 'gather',
       nextState: 'opening'
     };

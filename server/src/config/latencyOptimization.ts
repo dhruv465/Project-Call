@@ -60,13 +60,7 @@ export const commonPhrases = {
     "That's an interesting point."
   ],
   
-  greetings: [
-    "Hello, how are you today?",
-    "Hi there! How can I help you?",
-    "Good morning! How may I assist you?",
-    "Thanks for calling. How can I help you today?",
-    "Welcome! What can I do for you?"
-  ],
+  GREETINGS: [],
   
   transitions: [
     "Moving on to the next point,",

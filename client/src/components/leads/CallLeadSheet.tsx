@@ -167,7 +167,7 @@ const CallLeadSheet = ({
         script: {
           versions: [{
             name: 'Default Script',
-            content: "Hello, this is [Agent Name] calling from [Company Name]. I'm reaching out because we noticed you've shown interest in our services. Do you have a few minutes to discuss how we might be able to help with your needs?",
+            content: "",
             isActive: true
           }]
         },

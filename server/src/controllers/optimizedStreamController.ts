@@ -240,9 +240,9 @@ export const handleOptimizedVoiceStream = async (ws: WebSocket, req: Request): P
       } catch (error) {
         logger.error(`Error generating opening message for call ${callId}:`, error);
         
-        // Fallback to simple greeting
+        // Fallback to simple greeting from cache
         try {
-          const fallbackGreeting = "Hello, how can I help you today?";
+          const fallbackGreeting = "";
           const fallbackVoice = config.elevenLabsConfig.availableVoices[0].voiceId;
           
           // Try cache first

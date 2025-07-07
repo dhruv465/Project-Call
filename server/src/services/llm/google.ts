@@ -93,7 +93,7 @@ export class GoogleClient implements ILLMProviderClient {
       }
       
       const model = this.client.getGenerativeModel({ model: this.defaultModel });
-      await model.generateContent("Hello");
+      await model.generateContent("");
       return true;
     } catch (error) {
       logger.error(`Google/Gemini connection test failed: ${error instanceof Error ? error.message : String(error)}`);

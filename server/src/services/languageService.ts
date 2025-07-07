@@ -62,11 +62,7 @@ export const LANGUAGE_CONFIGS: Record<SupportedLanguage, LanguageConfig> = {
     timeZone: 'Asia/Kolkata',
     regionalAccents: ['North Indian', 'South Indian', 'East Indian', 'West Indian'],
     commonPhrases: {
-      greeting: [
-        'Hello, how are you today?',
-        'Good morning! How may I help you?',
-        'Namaste, thank you for your time today.'
-      ],
+      greeting: [],
       confirmation: [
         'I understand, thank you for sharing that.',
         'That makes sense, let me note that down.',

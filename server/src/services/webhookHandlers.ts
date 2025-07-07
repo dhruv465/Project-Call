@@ -264,7 +264,8 @@ export async function handleTwilioVoiceWebhook(req: Request, res: Response): Pro
           logger.info(`🎯 Final greeting voice ID selected for call ${callId}: "${voiceId}"`);
           
           // Properly formatted greeting text
-          const formattedGreeting = campaign.initialPrompt?.trim() || 'Hello, thank you for answering. This is an automated call.';
+          logger.info(`Campaign data debug: initialPrompt="${campaign.initialPrompt || ''}", openingMessage="${campaign.openingMessage || ''}", campaignId=${campaign._id}`);
+          const formattedGreeting = campaign.initialPrompt?.trim() || campaign.openingMessage?.trim() || process.env.DEFAULT_FALLBACK_GREETING || 'Hello, this is an automated call. How are you today?';
           logger.info(`🗣️ Synthesizing greeting: "${formattedGreeting.substring(0, 50)}${formattedGreeting.length > 50 ? '...' : ''}"`);
           
           // Try direct voice synthesis first (more reliable)

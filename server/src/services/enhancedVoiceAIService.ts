@@ -1056,10 +1056,10 @@ Current call details:
         // Get error message from configuration
         try {
           const config = await mongoose.model('Configuration').findOne();
-          params.text = config?.generalSettings?.errorMessages?.emptyText || '';
+          params.text = config?.generalSettings?.errorMessages?.emptyText || process.env.DEFAULT_FALLBACK_GREETING || 'Hello, this is an automated call. How are you today?';
         } catch (configError) {
           logger.error(`Error getting error message from configuration: ${getErrorMessage(configError)}`);
-          params.text = '';
+          params.text = process.env.DEFAULT_FALLBACK_GREETING || 'Hello, this is an automated call. How are you today?';
         }
         
         // If still empty after config check, don't proceed
