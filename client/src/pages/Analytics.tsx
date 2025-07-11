@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   TrendingUp,
   Phone,
@@ -73,9 +73,9 @@ const Analytics = () => {
   const [dateRange, setDateRange] = useState('30');
 
   // Production implementation - fetch from API
-  const { data: analyticsData, isLoading, error } = useQuery<AnalyticsData>(
-    ['analytics', dateRange],
-    async () => {
+  const { data: analyticsData, isLoading, error } = useQuery<AnalyticsData>({
+    queryKey: ['analytics', dateRange],
+    queryFn: async () => {
       try {
         const params = new URLSearchParams();
         if (dateRange !== 'all') {
@@ -115,12 +115,10 @@ const Analytics = () => {
         };
       }
     },
-    {
-      refetchOnWindowFocus: true,
-      retry: 3,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
+    refetchOnWindowFocus: true,
+    retry: 3,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
   const formatDuration = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery, useQueryClient } from 'react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
   Search, 
   Plus, 
@@ -82,9 +82,9 @@ const Leads = () => {
   const [leadToCall, setLeadToCall] = useState<Lead | null>(null);
 
   // Fetch leads data
-  const { data: leadsData, isLoading, error, refetch } = useQuery(
-    ['leads', statusFilter, sourceFilter, currentPage, itemsPerPage, searchTerm],
-    async () => {
+  const { data: leadsData, isLoading, error, refetch } = useQuery({
+    queryKey: ['leads', statusFilter, sourceFilter, currentPage, itemsPerPage, searchTerm],
+    queryFn: async () => {
       try {
         // Use the leads API service
         return await leadsApi.getLeads({
@@ -100,10 +100,7 @@ const Leads = () => {
         return { leads: [], pagination: { page: 1, pages: 0, total: 0, limit: itemsPerPage } };
       }
     },
-    {
-      keepPreviousData: true,
-    }
-  );
+  });
 
   // Handle export leads
   const handleExportLeads = async (format: 'csv' | 'json' | 'xlsx') => {
@@ -683,7 +680,7 @@ const Leads = () => {
         title={selectedLeadId ? 'Edit Lead' : 'Add New Lead'}
         onSuccess={() => {
           // Invalidate and refetch leads
-          queryClient.invalidateQueries(['leads']);
+          queryClient.invalidateQueries({ queryKey: ['leads'] });
         }}
       />
 
@@ -696,7 +693,7 @@ const Leads = () => {
           leadName={leadToDelete.name}
           onSuccess={() => {
             // Invalidate and refetch leads
-            queryClient.invalidateQueries(['leads']);
+            queryClient.invalidateQueries({ queryKey: ['leads'] });
           }}
         />
       )}
@@ -710,7 +707,7 @@ const Leads = () => {
             lead={leadToCall}
             onSuccess={() => {
               // Invalidate and refetch leads
-              queryClient.invalidateQueries(['leads']);
+              queryClient.invalidateQueries({ queryKey: ['leads'] });
             }}
           />
         </ErrorBoundary>

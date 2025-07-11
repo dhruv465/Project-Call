@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LineChart, PieChart, Phone, Users, Calendar, Clock, CheckCircle, Info } from 'lucide-react';
@@ -83,9 +83,9 @@ const Dashboard = () => {
   const [dashboardState, setDashboardState] = useState<DashboardData | null>(null);
 
   // Fetch dashboard data
-  const { data: dashboardData, isLoading, error } = useQuery(
-    ['dashboardOverview', timeframe],
-    async () => {
+  const { data: dashboardData, isLoading, error } = useQuery({
+    queryKey: ['dashboardOverview', timeframe],
+    queryFn: async () => {
       try {
         // Use the consolidated analytics endpoint for consistent data
         const params = new URLSearchParams();
@@ -139,11 +139,9 @@ const Dashboard = () => {
         };
       }
     },
-    {
-      refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
-      refetchOnWindowFocus: true,
-    }
-  );
+    refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
+    refetchOnWindowFocus: true,
+  });
 
   // Update the local dashboard state when the query returns data
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import api from '@/services/api';
 import {
   Search,
@@ -174,9 +174,9 @@ const Campaigns = () => {
   };
   
   // Fetch campaigns from API
-  const { data: campaignsData, isLoading, error, refetch } = useQuery<CampaignsData>(
-    ['campaigns', currentPage, itemsPerPage, searchTerm, statusFilter],
-    async () => {
+  const { data: campaignsData, isLoading, error, refetch } = useQuery<CampaignsData>({
+    queryKey: ['campaigns', currentPage, itemsPerPage, searchTerm, statusFilter],
+    queryFn: async () => {
       try {
         const params = new URLSearchParams({
           page: currentPage.toString(),
@@ -200,13 +200,11 @@ const Campaigns = () => {
         return { campaigns: [], pagination: { page: 1, pages: 0, total: 0, limit: itemsPerPage } };
       }
     },
-    {
-      refetchOnWindowFocus: false,
-      staleTime: 30000, // 30 seconds
-      retry: 3, // Retry up to 3 times on failure
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff
-    }
-  );
+    refetchOnWindowFocus: false,
+    staleTime: 30000, // 30 seconds
+    retry: 3, // Retry up to 3 times on failure
+    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff
+  });
 
   // Get filtered campaigns based on data
   const filteredCampaigns = campaignsData?.campaigns || 

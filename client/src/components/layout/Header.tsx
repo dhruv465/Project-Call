@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Menu, Moon, Sun, User, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Menu, Moon, Sun, User, PanelLeftClose, PanelLeft, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -28,8 +28,8 @@ const Header = ({ toggleSidebar, sidebarCollapsed }: HeaderProps) => {
   };
 
   return (
-    <header className="sticky top-0 z-10 border-b bg-background">
-      <div className="flex h-16 items-center justify-between px-4 md:px-6">
+    <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur-sm supports-[backdrop-filter]:bg-background/60">
+      <div className="flex h-14 items-center justify-between px-4 md:px-6">
         {/* Left side - Mobile menu and title */}
         <div className="flex items-center gap-2">
           {/* Mobile menu button */}
@@ -54,10 +54,10 @@ const Header = ({ toggleSidebar, sidebarCollapsed }: HeaderProps) => {
             <Button 
               variant="ghost" 
               size="icon" 
-              className={`hidden lg:flex transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'cursor-e-resize' : 'cursor-w-resize'} hover:bg-muted`}
+              className={`hidden lg:flex transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'cursor-e-resize' : 'cursor-w-resize'} hover:bg-muted/60 rounded-md`}
               onClick={toggleSidebar}
             >
-              {sidebarCollapsed ? <PanelLeft size={20} /> : <PanelLeftClose size={20} />}
+              {sidebarCollapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
               <span className="sr-only">
                 {sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
               </span>
@@ -72,31 +72,38 @@ const Header = ({ toggleSidebar, sidebarCollapsed }: HeaderProps) => {
         </div>
 
         {/* Right side actions - moved to absolute right */}
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex items-center gap-1 ml-auto">
           {/* Theme toggle */}
-          <Button variant="ghost" size="icon" onClick={toggleTheme}>
-            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          <Button variant="ghost" size="icon" className="rounded-md" onClick={toggleTheme}>
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             <span className="sr-only">Toggle theme</span>
           </Button>
 
           {/* User menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <User size={20} />
-                <span className="sr-only">User menu</span>
+              <Button variant="ghost" size="sm" className="rounded-md gap-2 pl-2 pr-3 ml-1">
+                <User size={16} />
+                <span className="hidden md:inline text-sm font-normal truncate max-w-[100px]">
+                  {user?.name?.split(' ')[0]}
+                </span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <div className="px-4 py-2 border-b">
-                <p className="text-sm font-medium">{user?.name}</p>
-                <p className="text-xs text-muted-foreground">{user?.email}</p>
+            <DropdownMenuContent align="end" className="w-60">
+              <div className="px-4 py-3 border-b">
+                <p className="text-sm font-medium mb-0.5">{user?.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               </div>
-              <DropdownMenuItem asChild>
-                <button className="w-full cursor-pointer" onClick={logout}>
-                  Sign out
-                </button>
-              </DropdownMenuItem>
+              <div className="py-1.5">
+                <DropdownMenuItem className="cursor-pointer">
+                  <User className="mr-2 h-4 w-4" />
+                  <span>Profile Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer" onClick={logout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Sign out</span>
+                </DropdownMenuItem>
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
