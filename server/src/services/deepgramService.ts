@@ -5,7 +5,6 @@ import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import Configuration from '../models/Configuration';
 import { getCircuitBreakerService, CircuitBreakerOptions } from './circuitBreakerService';
-import { RedisClientType } from 'redis';
 
 export enum DeepgramEvent {
   TRANSCRIPT_RECEIVED = 'transcript-received',
@@ -74,7 +73,8 @@ export class DeepgramService extends EventEmitter {
   };
   private readonly CIRCUIT_NAME = 'deepgram-api';
   private fallbackProviders: string[] = [];
-  private redisClient: RedisClientType | null = null;
+  // Local cache for transcription results
+  private transcriptionCache: Map<string, any> = new Map();
 
   /**
    * Create a new Deepgram Service instance
@@ -95,14 +95,26 @@ export class DeepgramService extends EventEmitter {
     // Get the circuit breaker service
     getCircuitBreakerService().getCircuit(this.CIRCUIT_NAME, circuitOptions);
     
-    // Try to get Redis client for caching and performance
-    try {
-      // this.redisClient = RedisClient.getInstance(); // TODO: Update to use standard Redis client
-    } catch (error) {
-      logger.warn('Redis client not available for DeepgramService, continuing without caching');
+    logger.info('Deepgram Service initialized with in-memory caching and circuit breaker protection');
+    
+    // Set up periodic cache cleanup (every 30 minutes)
+    setInterval(() => this.cleanupCache(), 30 * 60 * 1000);
+  }
+  
+  /**
+   * Cleanup the local transcription cache to prevent memory leaks
+   */
+  private cleanupCache(): void {
+    const now = Date.now();
+    const MAX_AGE = 60 * 60 * 1000; // 1 hour in milliseconds
+    
+    for (const [key, value] of this.transcriptionCache.entries()) {
+      if (value.timestamp && (now - value.timestamp) > MAX_AGE) {
+        this.transcriptionCache.delete(key);
+      }
     }
     
-    logger.info('Deepgram Service initialized with circuit breaker protection');
+    logger.debug(`DeepgramService cache cleanup completed. Current cache size: ${this.transcriptionCache.size}`);
   }
 
   /**
@@ -149,14 +161,12 @@ export class DeepgramService extends EventEmitter {
           smart_format: true
         };
 
-        // Try to get cached result first if Redis is available
+        // Try to get cached result first if available
         const cacheKey = `transcribe:${Buffer.from(audioBuffer).toString('base64').slice(0, 50)}:${JSON.stringify(transcriptionOptions)}`;
-        if (this.redisClient) {
-          const cachedResult = await this.redisClient.get(cacheKey);
-          if (cachedResult) {
-            logger.info('Using cached transcription result');
-            return JSON.parse(cachedResult);
-          }
+        const cachedResult = this.transcriptionCache.get(cacheKey);
+        if (cachedResult) {
+          logger.info('Using cached transcription result');
+          return cachedResult.data;
         }
 
         // Perform the transcription
@@ -184,10 +194,11 @@ export class DeepgramService extends EventEmitter {
           latency
         };
         
-        // Cache result if Redis is available
-        if (this.redisClient) {
-          await this.redisClient.set(cacheKey, JSON.stringify(transcriptionResult), { EX: 3600 }); // Cache for 1 hour
-        }
+        // Cache result in memory
+        this.transcriptionCache.set(cacheKey, {
+          data: transcriptionResult,
+          timestamp: Date.now()
+        });
         
         return transcriptionResult;
       } catch (error) {

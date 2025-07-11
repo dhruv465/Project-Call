@@ -6,7 +6,6 @@ import { Socket } from 'socket.io';
 import { EventEmitter } from 'events';
 import Call from '../models/Call';
 import { getCircuitBreakerService } from '../services/circuitBreakerService';
-import { RedisClient } from '../utils/redis';
 
 // Event emitter for real-time transcription updates
 const transcriptionEvents = new EventEmitter();

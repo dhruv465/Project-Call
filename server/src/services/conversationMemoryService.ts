@@ -1,4 +1,3 @@
-import Redis from 'ioredis';
 import { logger } from '../index';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -27,21 +26,17 @@ export interface ConversationContext {
 }
 
 /**
- * Service for managing conversation memory with Redis
+ * Service for managing conversation memory with in-memory storage
  * Implements a sliding window approach to maintain relevant context
  */
 export class ConversationMemoryService {
-  private redis: Redis;
+  private memoryStore: Map<string, ConversationContext> = new Map();
   private readonly keyPrefix: string = 'conversation:';
   private readonly defaultTTL: number = 60 * 60 * 24; // 24 hours in seconds
   private readonly maxContextSize: number = 10; // Maximum number of messages to keep in context
 
-  constructor(redisUrl: string) {
-    this.redis = new Redis(redisUrl);
-    this.redis.on('error', (err) => {
-      logger.error(`Redis connection error: ${err}`);
-    });
-    logger.info('ConversationMemoryService initialized with Redis');
+  constructor() {
+    logger.info('ConversationMemoryService initialized with in-memory storage');
   }
 
   /**
@@ -110,19 +105,11 @@ export class ConversationMemoryService {
   public async getConversation(conversationId: string): Promise<ConversationContext | null> {
     try {
       const key = `${this.keyPrefix}${conversationId}`;
-      const data = await this.redis.get(key);
+      const context = this.memoryStore.get(key);
       
-      if (!data) {
+      if (!context) {
         return null;
       }
-      
-      const context: ConversationContext = JSON.parse(data);
-      // Convert string timestamps back to Date objects
-      context.lastUpdated = new Date(context.lastUpdated);
-      context.messages = context.messages.map(msg => ({
-        ...msg,
-        timestamp: new Date(msg.timestamp)
-      }));
       
       return context;
     } catch (error) {
@@ -132,12 +119,17 @@ export class ConversationMemoryService {
   }
 
   /**
-   * Save the conversation context to Redis
+   * Save the conversation context to memory
    */
   private async saveConversation(context: ConversationContext): Promise<void> {
     try {
       const key = `${this.keyPrefix}${context.conversationId}`;
-      await this.redis.set(key, JSON.stringify(context), 'EX', this.defaultTTL);
+      this.memoryStore.set(key, context);
+      
+      // Set timeout to auto-delete after TTL
+      setTimeout(() => {
+        this.memoryStore.delete(key);
+      }, this.defaultTTL * 1000);
     } catch (error) {
       logger.error(`Error saving conversation ${context.conversationId}: ${error}`);
     }
@@ -182,13 +174,12 @@ export class ConversationMemoryService {
   }
 
   /**
-   * Delete a conversation from Redis
+   * Delete a conversation from memory
    */
   public async deleteConversation(conversationId: string): Promise<boolean> {
     try {
       const key = `${this.keyPrefix}${conversationId}`;
-      const result = await this.redis.del(key);
-      return result === 1;
+      return this.memoryStore.delete(key);
     } catch (error) {
       logger.error(`Error deleting conversation ${conversationId}: ${error}`);
       return false;
@@ -232,16 +223,14 @@ export class ConversationMemoryService {
 // Export singleton instance
 let memoryService: ConversationMemoryService | null = null;
 
-export const getConversationMemoryService = (redisUrl?: string): ConversationMemoryService => {
-  if (!memoryService && redisUrl) {
-    memoryService = new ConversationMemoryService(redisUrl);
-  } else if (!memoryService) {
-    throw new Error('ConversationMemoryService not initialized');
+export const getConversationMemoryService = (): ConversationMemoryService => {
+  if (!memoryService) {
+    memoryService = new ConversationMemoryService();
   }
   return memoryService;
 };
 
-export const initializeConversationMemoryService = (redisUrl: string): ConversationMemoryService => {
-  memoryService = new ConversationMemoryService(redisUrl);
+export const initializeConversationMemoryService = (): ConversationMemoryService => {
+  memoryService = new ConversationMemoryService();
   return memoryService;
 };

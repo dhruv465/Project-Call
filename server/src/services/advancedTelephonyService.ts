@@ -3,27 +3,73 @@ import mongoose from 'mongoose';
 import logger from '../utils/logger';
 import Call, { ICall } from '../models/Call';
 import Configuration from '../models/Configuration';
-import { Redis } from 'ioredis';
 import CircuitBreaker from 'opossum';
-import { RateLimiterRedis } from 'rate-limiter-flexible';
 import retry from 'async-retry';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { v4 as uuidv4 } from 'uuid';
 
-// Redis client for distributed rate limiting and circuit breaking
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+// In-memory rate limiter implementation
+class InMemoryRateLimiter {
+  private store: Map<string, { count: number, resetTime: number }> = new Map();
+  private points: number;
+  private duration: number;
+  private keyPrefix: string;
+
+  constructor({ keyPrefix, points, duration }: { keyPrefix: string, points: number, duration: number }) {
+    this.keyPrefix = keyPrefix;
+    this.points = points;
+    this.duration = duration * 1000; // Convert to milliseconds
+    
+    // Cleanup expired entries periodically
+    setInterval(() => this.cleanup(), 60000); // Cleanup every minute
+  }
+  
+  private cleanup() {
+    const now = Date.now();
+    for (const [key, value] of this.store.entries()) {
+      if (value.resetTime <= now) {
+        this.store.delete(key);
+      }
+    }
+  }
+
+  async consume(key: string, points = 1): Promise<{ remainingPoints: number }> {
+    const fullKey = `${this.keyPrefix}:${key}`;
+    const now = Date.now();
+    
+    const record = this.store.get(fullKey);
+    
+    if (!record || record.resetTime <= now) {
+      // Create new record if not exists or expired
+      this.store.set(fullKey, {
+        count: points,
+        resetTime: now + this.duration
+      });
+      return { remainingPoints: this.points - points };
+    }
+    
+    // Check if over limit
+    if (record.count >= this.points) {
+      throw new Error('Rate limit exceeded');
+    }
+    
+    // Increment count
+    record.count += points;
+    this.store.set(fullKey, record);
+    
+    return { remainingPoints: this.points - record.count };
+  }
+}
 
 // Configure rate limiters for different operations
-const outboundCallLimiter = new RateLimiterRedis({
-  storeClient: redis,
+const outboundCallLimiter = new InMemoryRateLimiter({
   keyPrefix: 'limiter:outbound-calls',
   points: 30, // 30 calls per minute
   duration: 60,
 });
 
 // Per phone number rate limiter (compliance)
-const phoneNumberLimiter = new RateLimiterRedis({
-  storeClient: redis,
+const phoneNumberLimiter = new InMemoryRateLimiter({
   keyPrefix: 'limiter:phone-number',
   points: 2, // 2 calls per number per day
   duration: 86400,

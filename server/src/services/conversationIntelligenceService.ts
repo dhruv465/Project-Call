@@ -1,635 +1,41 @@
-import Redis from 'ioredis';
 import logger from '../utils/logger';
 import { ConfigurationService } from './configurationService';
 
-/**
- * Conversation Intelligence Service
- * 
- * Provides advanced conversation management features:
- * - Conversation memory with Redis-backed context (last 10 turns)
- * - Dynamic prompt optimization based on customer emotion
- * - Real-time script deviation detection
- * - Predictive next-best-action suggestions
- * - Conversation quality scoring
- */
-export class ConversationIntelligenceService {
-  private redis: Redis;
-  private configService: ConfigurationService;
-  private readonly contextWindowSize: number = 10; // Number of turns to keep in context
-  private readonly keyPrefix: string = 'conv:';
-  private readonly keyExpiry: number = 60 * 60 * 24; // 24 hours
-  
-  constructor() {
-    this.configService = new ConfigurationService();
-    this.initialize();
-  }
-  
-  /**
-   * Initialize Redis connection
-   */
-  private async initialize(): Promise<void> {
-    try {
-      const config = await this.configService.getConfiguration();
-      const redisConfig = config?.redisConfig || {};
-      
-      this.redis = new Redis({
-        host: redisConfig.host || 'localhost',
-        port: redisConfig.port || 6379,
-        password: redisConfig.password,
-        db: redisConfig.db || 0,
-        keyPrefix: this.keyPrefix,
-        retryStrategy: (times) => {
-          const delay = Math.min(times * 50, 2000);
-          return delay;
-        }
-      });
-      
-      this.redis.on('error', (err) => {
-        logger.error(`Redis connection error: ${err.message}`);
-      });
-      
-      logger.info('Conversation Intelligence Service initialized');
-    } catch (error) {
-      logger.error(`Failed to initialize Conversation Intelligence: ${error.message}`);
-    }
-  }
-  
-  /**
-   * Add a conversation turn to the sliding window context
-   * @param conversationId Conversation ID
-   * @param turn Conversation turn data
-   */
-  public async addConversationTurn(
-    conversationId: string,
-    turn: ConversationTurn
-  ): Promise<void> {
-    try {
-      const key = `context:${conversationId}`;
-      
-      // Add timestamp if not provided
-      if (!turn.timestamp) {
-        turn.timestamp = Date.now();
-      }
-      
-      // Serialize turn to JSON
-      const serializedTurn = JSON.stringify(turn);
-      
-      // Add to the end of the list
-      await this.redis.rpush(key, serializedTurn);
-      
-      // Trim list to maintain sliding window
-      await this.redis.ltrim(key, -this.contextWindowSize, -1);
-      
-      // Set expiry
-      await this.redis.expire(key, this.keyExpiry);
-      
-      // Store metadata for this conversation if it's new
-      if (!await this.redis.exists(`meta:${conversationId}`)) {
-        await this.redis.hset(`meta:${conversationId}`, {
-          startTime: Date.now(),
-          turnCount: 1,
-          campaignId: turn.campaignId || '',
-          userId: turn.userId || ''
-        });
-        await this.redis.expire(`meta:${conversationId}`, this.keyExpiry);
-      } else {
-        // Increment turn count
-        await this.redis.hincrby(`meta:${conversationId}`, 'turnCount', 1);
-      }
-    } catch (error) {
-      logger.error(`Error adding conversation turn: ${error.message}`);
-    }
-  }
-  
-  /**
-   * Get the conversation context (sliding window of recent turns)
-   * @param conversationId Conversation ID
-   * @returns Array of conversation turns
-   */
-  public async getConversationContext(
-    conversationId: string
-  ): Promise<ConversationTurn[]> {
-    try {
-      const key = `context:${conversationId}`;
-      
-      // Get all turns in the list
-      const turns = await this.redis.lrange(key, 0, -1);
-      
-      // Parse JSON
-      return turns.map(turn => JSON.parse(turn));
-    } catch (error) {
-      logger.error(`Error getting conversation context: ${error.message}`);
-      return [];
-    }
-  }
-  
-  /**
-   * Optimize prompt based on customer emotion
-   * @param conversationId Conversation ID
-   * @param basePrompt Base prompt template
-   * @param emotion Detected emotion
-   * @returns Optimized prompt
-   */
-  public async optimizePromptForEmotion(
-    conversationId: string,
-    basePrompt: string,
-    emotion: EmotionData
-  ): Promise<string> {
-    try {
-      // Get emotion-specific prompt modifiers
-      const emotionModifiers = await this.getEmotionPromptModifiers(emotion);
-      
-      // Replace placeholders in base prompt
-      let optimizedPrompt = basePrompt;
-      
-      // Apply emotion-specific tone
-      if (emotionModifiers.tone) {
-        optimizedPrompt = optimizedPrompt.replace(
-          '{tone}',
-          emotionModifiers.tone
-        );
-      }
-      
-      // Apply emotion-specific pacing
-      if (emotionModifiers.pacing) {
-        optimizedPrompt = optimizedPrompt.replace(
-          '{pacing}',
-          emotionModifiers.pacing
-        );
-      }
-      
-      // Apply emotion-specific empathy level
-      if (emotionModifiers.empathy) {
-        optimizedPrompt = optimizedPrompt.replace(
-          '{empathy_level}',
-          emotionModifiers.empathy
-        );
-      }
-      
-      return optimizedPrompt;
-    } catch (error) {
-      logger.error(`Error optimizing prompt: ${error.message}`);
-      return basePrompt;
-    }
-  }
-  
-  /**
-   * Get prompt modifiers based on detected emotion
-   * @param emotion Detected emotion
-   * @returns Emotion-specific prompt modifiers
-   */
-  private async getEmotionPromptModifiers(
-    emotion: EmotionData
-  ): Promise<EmotionPromptModifiers> {
-    // Default modifiers
-    const defaultModifiers: EmotionPromptModifiers = {
-      tone: 'neutral and professional',
-      pacing: 'moderate',
-      empathy: 'moderate'
-    };
-    
-    // Return default modifiers if no emotion data
-    if (!emotion) return defaultModifiers;
-    
-    // Determine modifiers based on emotion
-    switch (emotion.primary.toLowerCase()) {
-      case 'angry':
-      case 'frustrated':
-        return {
-          tone: 'calm and understanding',
-          pacing: 'slow and deliberate',
-          empathy: 'high'
-        };
-        
-      case 'happy':
-      case 'excited':
-        return {
-          tone: 'upbeat and enthusiastic',
-          pacing: 'moderate to quick',
-          empathy: 'moderate'
-        };
-        
-      case 'sad':
-      case 'disappointed':
-        return {
-          tone: 'warm and supportive',
-          pacing: 'gentle and patient',
-          empathy: 'very high'
-        };
-        
-      case 'confused':
-      case 'uncertain':
-        return {
-          tone: 'clear and helpful',
-          pacing: 'slow and methodical',
-          empathy: 'moderate'
-        };
-        
-      case 'neutral':
-      default:
-        return defaultModifiers;
-    }
-  }
-  
-  /**
-   * Detect script deviation based on conversation context
-   * @param conversationId Conversation ID
-   * @param currentResponse Current AI response
-   * @param scriptTemplate Expected script template
-   * @returns Deviation analysis
-   */
-  public async detectScriptDeviation(
-    conversationId: string,
-    currentResponse: string,
-    scriptTemplate: string
-  ): Promise<ScriptDeviationResult> {
-    try {
-      // Simple implementation with basic similarity check
-      // In production, this would use more sophisticated NLP techniques
-      
-      // Convert to lowercase and remove punctuation for comparison
-      const normalizedResponse = currentResponse
-        .toLowerCase()
-        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '');
-        
-      const normalizedTemplate = scriptTemplate
-        .toLowerCase()
-        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '');
-      
-      // Calculate word overlap
-      const responseWords = new Set(normalizedResponse.split(' '));
-      const templateWords = new Set(normalizedTemplate.split(' '));
-      
-      const commonWords = new Set(
-        [...responseWords].filter(word => templateWords.has(word))
-      );
-      
-      const similarity = commonWords.size / templateWords.size;
-      
-      // Determine deviation level
-      let deviationLevel: 'none' | 'minor' | 'significant' | 'complete';
-      
-      if (similarity > 0.8) {
-        deviationLevel = 'none';
-      } else if (similarity > 0.5) {
-        deviationLevel = 'minor';
-      } else if (similarity > 0.2) {
-        deviationLevel = 'significant';
-      } else {
-        deviationLevel = 'complete';
-      }
-      
-      return {
-        deviationLevel,
-        similarity,
-        isCompliant: similarity > 0.5,
-        details: {
-          commonWords: commonWords.size,
-          templateWords: templateWords.size,
-          responseWords: responseWords.size
-        }
-      };
-    } catch (error) {
-      logger.error(`Error detecting script deviation: ${error.message}`);
-      return {
-        deviationLevel: 'unknown',
-        similarity: 0,
-        isCompliant: false,
-        details: {},
-        error: error.message
-      };
-    }
-  }
-  
-  /**
-   * Get next-best-action suggestion based on conversation context
-   * @param conversationId Conversation ID
-   * @returns Next-best-action suggestion
-   */
-  public async getNextBestAction(
-    conversationId: string
-  ): Promise<NextBestActionSuggestion> {
-    try {
-      // Get conversation context
-      const context = await this.getConversationContext(conversationId);
-      
-      // Get conversation metadata
-      const metadata = await this.redis.hgetall(`meta:${conversationId}`);
-      
-      // In a real implementation, this would use a trained model
-      // For now, use simple rule-based logic
-      
-      // Default suggestion
-      const defaultSuggestion: NextBestActionSuggestion = {
-        action: 'continue',
-        confidence: 0.5,
-        reasoning: 'Continuing with standard conversation flow'
-      };
-      
-      // If no context, return default
-      if (!context.length) return defaultSuggestion;
-      
-      // Get last turn
-      const lastTurn = context[context.length - 1];
-      
-      // Check for escalation keywords in user message
-      if (lastTurn.role === 'user' && lastTurn.content) {
-        const escalationKeywords = [
-          'manager', 'supervisor', 'escalate', 'unhappy', 'complaint', 
-          'frustrated', 'angry', 'cancel', 'refund', 'speak to a human'
-        ];
-        
-        const hasEscalationKeywords = escalationKeywords.some(
-          keyword => lastTurn.content.toLowerCase().includes(keyword)
-        );
-        
-        if (hasEscalationKeywords) {
-          return {
-            action: 'escalate',
-            confidence: 0.8,
-            reasoning: 'User mentioned escalation keywords',
-            details: {
-              urgency: 'high'
-            }
-          };
-        }
-      }
-      
-      // Check for potential sale opportunity
-      if (context.some(turn => {
-        return turn.role === 'user' && turn.content && 
-          (turn.content.toLowerCase().includes('interested') || 
-           turn.content.toLowerCase().includes('how much') ||
-           turn.content.toLowerCase().includes('pricing'));
-      })) {
-        return {
-          action: 'offer_promotion',
-          confidence: 0.7,
-          reasoning: 'User showed interest in pricing or offers',
-          details: {
-            promotionType: 'discount'
-          }
-        };
-      }
-      
-      // Check for confusion
-      const confusionKeywords = [
-        'don\'t understand', 'confused', 'what do you mean', 
-        'unclear', 'explain', 'what is', 'how does'
-      ];
-      
-      if (lastTurn.role === 'user' && lastTurn.content &&
-          confusionKeywords.some(keyword => 
-            lastTurn.content.toLowerCase().includes(keyword)
-          )) {
-        return {
-          action: 'clarify',
-          confidence: 0.6,
-          reasoning: 'User appears confused or seeking clarification',
-          details: {
-            suggestedApproach: 'simplified explanation'
-          }
-        };
-      }
-      
-      return defaultSuggestion;
-    } catch (error) {
-      logger.error(`Error getting next best action: ${error.message}`);
-      return {
-        action: 'continue',
-        confidence: 0.5,
-        reasoning: 'Error occurred, continuing with default flow',
-        error: error.message
-      };
-    }
-  }
-  
-  /**
-   * Score conversation quality
-   * @param conversationId Conversation ID
-   * @returns Conversation quality score
-   */
-  public async scoreConversationQuality(
-    conversationId: string
-  ): Promise<ConversationQualityScore> {
-    try {
-      // Get conversation context
-      const context = await this.getConversationContext(conversationId);
-      
-      // Default score
-      const defaultScore: ConversationQualityScore = {
-        overall: 50,
-        relevance: 50,
-        empathy: 50,
-        clarity: 50,
-        timestamp: Date.now()
-      };
-      
-      // If no context, return default
-      if (!context.length) return defaultScore;
-      
-      // In a real implementation, this would use a trained model
-      // For now, use simple heuristics
-      
-      // Calculate relevance score
-      const relevanceScore = this.calculateRelevanceScore(context);
-      
-      // Calculate empathy score
-      const empathyScore = this.calculateEmpathyScore(context);
-      
-      // Calculate clarity score
-      const clarityScore = this.calculateClarityScore(context);
-      
-      // Calculate overall score (weighted average)
-      const overall = Math.round(
-        (relevanceScore * 0.4) + (empathyScore * 0.3) + (clarityScore * 0.3)
-      );
-      
-      const score: ConversationQualityScore = {
-        overall,
-        relevance: relevanceScore,
-        empathy: empathyScore,
-        clarity: clarityScore,
-        timestamp: Date.now()
-      };
-      
-      // Store score in Redis
-      await this.redis.hset(
-        `quality:${conversationId}`,
-        score
-      );
-      
-      return score;
-    } catch (error) {
-      logger.error(`Error scoring conversation quality: ${error.message}`);
-      return {
-        overall: 50,
-        relevance: 50,
-        empathy: 50,
-        clarity: 50,
-        timestamp: Date.now(),
-        error: error.message
-      };
-    }
-  }
-  
-  /**
-   * Calculate relevance score based on conversation context
-   * @param context Conversation context
-   * @returns Relevance score (0-100)
-   */
-  private calculateRelevanceScore(context: ConversationTurn[]): number {
-    // Simple implementation
-    // Count turns where AI addresses user's previous message
-    
-    let relevantResponses = 0;
-    let totalAssistantResponses = 0;
-    
-    for (let i = 1; i < context.length; i++) {
-      const turn = context[i];
-      const prevTurn = context[i - 1];
-      
-      if (turn.role === 'assistant' && prevTurn.role === 'user') {
-        totalAssistantResponses++;
-        
-        // Check if assistant response contains words from user's message
-        // This is a very simple heuristic - in production, use NLP techniques
-        if (prevTurn.content && turn.content) {
-          const userWords = new Set(
-            prevTurn.content.toLowerCase().split(' ')
-              .filter(word => word.length > 3) // Filter out short words
-          );
-          
-          const assistantContent = turn.content.toLowerCase();
-          const hasRelevantWords = Array.from(userWords)
-            .some(word => assistantContent.includes(word));
-          
-          if (hasRelevantWords) {
-            relevantResponses++;
-          }
-        }
-      }
-    }
-    
-    // Calculate percentage
-    return totalAssistantResponses > 0
-      ? Math.round((relevantResponses / totalAssistantResponses) * 100)
-      : 50; // Default if no assistant responses
-  }
-  
-  /**
-   * Calculate empathy score based on conversation context
-   * @param context Conversation context
-   * @returns Empathy score (0-100)
-   */
-  private calculateEmpathyScore(context: ConversationTurn[]): number {
-    // Simple implementation
-    // Check for empathetic language in assistant responses
-    
-    const empathyKeywords = [
-      'understand', 'sorry', 'appreciate', 'thank you', 'feel', 
-      'concern', 'help', 'support', 'assist', 'important'
-    ];
-    
-    let empathyPoints = 0;
-    let totalAssistantResponses = 0;
-    
-    for (const turn of context) {
-      if (turn.role === 'assistant' && turn.content) {
-        totalAssistantResponses++;
-        
-        const content = turn.content.toLowerCase();
-        
-        // Count empathy keywords
-        let keywordsFound = 0;
-        for (const keyword of empathyKeywords) {
-          if (content.includes(keyword)) {
-            keywordsFound++;
-          }
-        }
-        
-        // Award points based on keywords found
-        // More keywords = higher empathy
-        empathyPoints += Math.min(keywordsFound * 10, 100);
-      }
-    }
-    
-    // Calculate average
-    return totalAssistantResponses > 0
-      ? Math.round(empathyPoints / totalAssistantResponses)
-      : 50; // Default if no assistant responses
-  }
-  
-  /**
-   * Calculate clarity score based on conversation context
-   * @param context Conversation context
-   * @returns Clarity score (0-100)
-   */
-  private calculateClarityScore(context: ConversationTurn[]): number {
-    // Simple implementation
-    // Check for clarity indicators in assistant responses
-    
-    let clarityPoints = 0;
-    let totalAssistantResponses = 0;
-    
-    for (const turn of context) {
-      if (turn.role === 'assistant' && turn.content) {
-        totalAssistantResponses++;
-        
-        const content = turn.content;
-        
-        // Longer responses may be less clear (up to a point)
-        const lengthScore = Math.min(100, Math.max(0, 
-          100 - Math.abs(content.length - 200) / 10
-        ));
-        
-        // Sentences that are too long may be less clear
-        const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 0);
-        const avgSentenceLength = sentences.reduce(
-          (sum, s) => sum + s.length, 0
-        ) / (sentences.length || 1);
-        
-        const sentenceLengthScore = Math.min(100, Math.max(0,
-          100 - Math.abs(avgSentenceLength - 15) * 2
-        ));
-        
-        // Presence of bullet points or numbered lists improves clarity
-        const hasBulletPoints = content.includes('•') || 
-          /\n[\s]*[*\-]\s/.test(content);
-        const hasNumberedList = /\n[\s]*\d+\.?\s/.test(content);
-        
-        const structureScore = (hasBulletPoints || hasNumberedList) ? 100 : 70;
-        
-        // Average the scores
-        clarityPoints += (lengthScore + sentenceLengthScore + structureScore) / 3;
-      }
-    }
-    
-    // Calculate average
-    return totalAssistantResponses > 0
-      ? Math.round(clarityPoints / totalAssistantResponses)
-      : 50; // Default if no assistant responses
-  }
-}
-
-/**
- * Conversation turn interface
- */
+// Interface for conversation turn
 export interface ConversationTurn {
-  role: 'user' | 'assistant' | 'system';
+  role: 'system' | 'user' | 'assistant';
   content: string;
-  timestamp?: number;
+  timestamp: Date;
+  emotion?: string;
+  scriptId?: string;
+  intentDetected?: string;
+  qualityScore?: number;
   campaignId?: string;
   userId?: string;
-  metadata?: Record<string, any>;
+}
+
+// Interface for conversation data
+interface ConversationData {
+  turns: ConversationTurn[];
+  metadata: {
+    campaignId?: string;
+    agentId?: string;
+    leadId?: string;
+    callId?: string;
+    startTime: Date;
+    lastUpdateTime: Date;
+    turnCount: number;
+    qualityScore?: number;
+    scriptAdherence?: number;
+    [key: string]: any;
+  };
 }
 
 /**
  * Emotion data interface
  */
 export interface EmotionData {
-  primary: string;
-  secondary?: string;
+  emotion: string;
   confidence: number;
   valence: number; // -1 to 1 (negative to positive)
   arousal: number; // 0 to 1 (calm to excited)
@@ -677,6 +83,550 @@ export interface ConversationQualityScore {
   details?: Record<string, any>;
   timestamp: number;
   error?: string;
+}
+
+/**
+ * Conversation Intelligence Service
+ * 
+ * Provides advanced conversation management features:
+ * - Conversation memory with in-memory context (last 10 turns)
+ * - Dynamic prompt optimization based on customer emotion
+ * - Real-time script deviation detection
+ * - Predictive next-best-action suggestions
+ * - Conversation quality scoring
+ */
+export class ConversationIntelligenceService {
+  private memoryStore: Map<string, ConversationData> = new Map();
+  private emotionCache: Map<string, EmotionData> = new Map();
+  private qualityScoreCache: Map<string, ConversationQualityScore> = new Map();
+  private configService: ConfigurationService;
+  private readonly contextWindowSize: number = 10; // Number of turns to keep in context
+  private readonly keyPrefix: string = 'conv:';
+  private readonly keyExpiry: number = 60 * 60 * 24; // 24 hours in seconds
+  
+  constructor() {
+    this.configService = new ConfigurationService();
+    logger.info('ConversationIntelligenceService initialized with in-memory storage');
+    // Set up periodic cleanup for expired conversations
+    setInterval(this.cleanupExpiredConversations.bind(this), 60 * 60 * 1000); // Run hourly
+  }
+  
+  /**
+   * Clean up expired conversations
+   */
+  private cleanupExpiredConversations(): void {
+    const now = Date.now();
+    for (const [key, data] of this.memoryStore.entries()) {
+      const expiryTime = data.metadata.lastUpdateTime.getTime() + this.keyExpiry * 1000;
+      if (now > expiryTime) {
+        this.memoryStore.delete(key);
+        logger.debug(`Cleaned up expired conversation: ${key}`);
+      }
+    }
+  }
+  
+  /**
+   * Add a conversation turn to the sliding window context
+   * @param conversationId Conversation ID
+   * @param turn Conversation turn data
+   */
+  public async addConversationTurn(
+    conversationId: string,
+    turn: ConversationTurn
+  ): Promise<void> {
+    try {
+      const key = `${this.keyPrefix}${conversationId}`;
+      
+      // Add timestamp if not provided
+      if (!turn.timestamp) {
+        turn.timestamp = new Date();
+      }
+      
+      // Get existing data or create new
+      let conversationData = this.memoryStore.get(key);
+      
+      if (!conversationData) {
+        // Initialize new conversation data
+        conversationData = {
+          turns: [],
+          metadata: {
+            startTime: new Date(),
+            lastUpdateTime: new Date(),
+            turnCount: 0,
+            campaignId: turn.campaignId || '',
+            agentId: '',
+            leadId: '',
+            callId: ''
+          }
+        };
+      }
+      
+      // Add turn to the array
+      conversationData.turns.push(turn);
+      
+      // Apply sliding window if needed
+      if (conversationData.turns.length > this.contextWindowSize) {
+        // Keep system messages and the last N-1 non-system messages
+        const systemMessages = conversationData.turns.filter(t => t.role === 'system');
+        const nonSystemMessages = conversationData.turns
+          .filter(t => t.role !== 'system')
+          .slice(-(this.contextWindowSize - systemMessages.length));
+        
+        conversationData.turns = [...systemMessages, ...nonSystemMessages];
+      }
+      
+      // Update metadata
+      conversationData.metadata.lastUpdateTime = new Date();
+      conversationData.metadata.turnCount++;
+      
+      // Store in memory
+      this.memoryStore.set(key, conversationData);
+      
+    } catch (error) {
+      logger.error(`Error adding conversation turn: ${error.message}`);
+    }
+  }
+  
+  /**
+   * Get the conversation context (sliding window of recent turns)
+   * @param conversationId Conversation ID
+   * @returns Array of conversation turns
+   */
+  public async getConversationContext(
+    conversationId: string
+  ): Promise<ConversationTurn[]> {
+    try {
+      const key = `${this.keyPrefix}${conversationId}`;
+      const conversationData = this.memoryStore.get(key);
+      
+      if (!conversationData) {
+        return [];
+      }
+      
+      return conversationData.turns;
+    } catch (error) {
+      logger.error(`Error getting conversation context: ${error.message}`);
+      return [];
+    }
+  }
+  
+  /**
+   * Get emotion-specific prompt modifiers
+   * @param emotion Emotion data
+   * @returns Emotion prompt modifiers
+   */
+  private getEmotionPromptModifiers(
+    emotion: EmotionData
+  ): EmotionPromptModifiers {
+    // Default modifiers
+    const defaultModifiers: EmotionPromptModifiers = {
+      tone: 'professional and helpful',
+      pacing: 'moderate',
+      empathy: 'appropriate'
+    };
+    
+    // Return default if no emotion data
+    if (!emotion) return defaultModifiers;
+    
+    switch (emotion.emotion.toLowerCase()) {
+      case 'angry':
+        return {
+          tone: 'calm and understanding',
+          pacing: 'slow and deliberate',
+          empathy: 'high'
+        };
+      case 'frustrated':
+        return {
+          tone: 'patient and supportive',
+          pacing: 'moderate',
+          empathy: 'high'
+        };
+      case 'anxious':
+        return {
+          tone: 'reassuring and clear',
+          pacing: 'moderate to slow',
+          empathy: 'high'
+        };
+      case 'confused':
+        return {
+          tone: 'clear and simple',
+          pacing: 'slow',
+          empathy: 'moderate'
+        };
+      case 'happy':
+        return {
+          tone: 'positive and enthusiastic',
+          pacing: 'moderate to fast',
+          empathy: 'moderate'
+        };
+      case 'neutral':
+      default:
+        return defaultModifiers;
+    }
+  }
+  
+  /**
+   * Optimize prompt based on customer emotion
+   * @param conversationId Conversation ID
+   * @param basePrompt Base prompt template
+   * @param emotion Detected emotion
+   * @returns Optimized prompt
+   */
+  public async optimizePromptForEmotion(
+    conversationId: string,
+    basePrompt: string,
+    emotion: EmotionData
+  ): Promise<string> {
+    try {
+      // Get emotion-specific prompt modifiers
+      const emotionModifiers = this.getEmotionPromptModifiers(emotion);
+      
+      // Replace placeholders in base prompt
+      let optimizedPrompt = basePrompt;
+      
+      // Apply emotion-specific tone
+      if (emotionModifiers.tone) {
+        optimizedPrompt = optimizedPrompt.replace(
+          '{tone}',
+          emotionModifiers.tone
+        );
+      }
+      
+      // Apply emotion-specific pacing
+      if (emotionModifiers.pacing) {
+        optimizedPrompt = optimizedPrompt.replace(
+          '{pacing}',
+          emotionModifiers.pacing
+        );
+      }
+      
+      // Apply emotion-specific empathy level
+      if (emotionModifiers.empathy) {
+        optimizedPrompt = optimizedPrompt.replace(
+          '{empathy_level}',
+          emotionModifiers.empathy
+        );
+      }
+      
+      // Store the emotion data for this conversation
+      this.emotionCache.set(`${this.keyPrefix}emotion:${conversationId}`, emotion);
+      
+      return optimizedPrompt;
+    } catch (error) {
+      logger.error(`Error optimizing prompt for emotion: ${error.message}`);
+      return basePrompt; // Return the original prompt if there's an error
+    }
+  }
+  
+  /**
+   * Detect script deviation
+   * @param conversationId Conversation ID
+   * @param currentResponse Current agent response
+   * @param scriptTemplate Expected script template
+   * @returns Script deviation result
+   */
+  public async detectScriptDeviation(
+    conversationId: string,
+    currentResponse: string,
+    scriptTemplate: string
+  ): Promise<ScriptDeviationResult> {
+    try {
+      // Simple implementation with basic similarity check
+      // In production, this would use more sophisticated NLP techniques
+      
+      // Convert to lowercase and remove punctuation for comparison
+      const normalizedResponse = currentResponse
+        .toLowerCase()
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '');
+        
+      const normalizedTemplate = scriptTemplate
+        .toLowerCase()
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '');
+      
+      // Calculate word overlap
+      const responseWords = new Set(normalizedResponse.split(' '));
+      const templateWords = new Set(normalizedTemplate.split(' '));
+      
+      const commonWords = new Set(
+        [...responseWords].filter(word => templateWords.has(word))
+      );
+      
+      const similarity = commonWords.size / templateWords.size;
+      
+      // Determine deviation level
+      let deviationLevel: 'none' | 'minor' | 'significant' | 'complete' | 'unknown';
+      
+      if (similarity > 0.8) {
+        deviationLevel = 'none';
+      } else if (similarity > 0.6) {
+        deviationLevel = 'minor';
+      } else if (similarity > 0.3) {
+        deviationLevel = 'significant';
+      } else {
+        deviationLevel = 'complete';
+      }
+      
+      // Store the result in memory cache
+      const key = `${this.keyPrefix}${conversationId}`;
+      const conversationData = this.memoryStore.get(key);
+      
+      if (conversationData) {
+        conversationData.metadata.scriptAdherence = similarity;
+        this.memoryStore.set(key, conversationData);
+      }
+      
+      return {
+        deviationLevel,
+        similarity,
+        isCompliant: similarity >= 0.6, // Threshold for compliance
+        details: {
+          commonWords: commonWords.size,
+          totalTemplateWords: templateWords.size,
+          totalResponseWords: responseWords.size
+        }
+      };
+    } catch (error) {
+      logger.error(`Error detecting script deviation: ${error.message}`);
+      return {
+        deviationLevel: 'unknown',
+        similarity: 0,
+        isCompliant: false,
+        details: {},
+        error: error.message
+      };
+    }
+  }
+  
+  /**
+   * Suggest next best action based on conversation context
+   * @param conversationId Conversation ID
+   * @returns Next best action suggestion
+   */
+  public async suggestNextBestAction(
+    conversationId: string
+  ): Promise<NextBestActionSuggestion> {
+    try {
+      const context = await this.getConversationContext(conversationId);
+      
+      if (context.length === 0) {
+        return {
+          action: 'Introduce yourself and the purpose of the call',
+          confidence: 0.9,
+          reasoning: 'Starting a new conversation'
+        };
+      }
+      
+      // Get the last customer message
+      const lastCustomerMessage = [...context]
+        .reverse()
+        .find(turn => turn.role === 'user');
+      
+      if (!lastCustomerMessage) {
+        return {
+          action: 'Ask an open-ended question to engage the customer',
+          confidence: 0.8,
+          reasoning: 'No customer messages found yet'
+        };
+      }
+      
+      // Simple rule-based suggestions
+      // In production, this would use more sophisticated ML techniques
+      const content = lastCustomerMessage.content.toLowerCase();
+      
+      if (content.includes('price') || content.includes('cost') || content.includes('expensive')) {
+        return {
+          action: 'Explain the value proposition and ROI of the product/service',
+          confidence: 0.85,
+          reasoning: 'Customer is price-sensitive'
+        };
+      } else if (content.includes('competitor') || content.includes('alternative')) {
+        return {
+          action: 'Highlight unique differentiators from competitors',
+          confidence: 0.9,
+          reasoning: 'Customer is comparing options'
+        };
+      } else if (content.includes('think') || content.includes('consider')) {
+        return {
+          action: 'Address concerns and provide social proof',
+          confidence: 0.75,
+          reasoning: 'Customer is in consideration phase'
+        };
+      } else if (content.includes('not interested') || content.includes('no thanks')) {
+        return {
+          action: 'Acknowledge their position respectfully and ask for feedback',
+          confidence: 0.85,
+          reasoning: 'Customer is showing resistance'
+        };
+      }
+      
+      // Default action
+      return {
+        action: 'Ask about their specific needs and requirements',
+        confidence: 0.7,
+        reasoning: 'General engagement to understand customer needs'
+      };
+    } catch (error) {
+      logger.error(`Error suggesting next best action: ${error.message}`);
+      return {
+        action: 'Continue the conversation naturally',
+        confidence: 0.5,
+        reasoning: 'Error in analysis',
+        error: error.message
+      };
+    }
+  }
+  
+  /**
+   * Score conversation quality
+   * @param conversationId Conversation ID
+   * @returns Conversation quality score
+   */
+  public async scoreConversationQuality(
+    conversationId: string
+  ): Promise<ConversationQualityScore> {
+    try {
+      const context = await this.getConversationContext(conversationId);
+      
+      if (context.length < 2) {
+        return {
+          overall: 50, // Neutral score for insufficient data
+          relevance: 50,
+          empathy: 50,
+          clarity: 50,
+          timestamp: Date.now()
+        };
+      }
+      
+      // Extract agent responses
+      const agentResponses = context.filter(turn => turn.role === 'assistant');
+      
+      if (agentResponses.length === 0) {
+        return {
+          overall: 50,
+          relevance: 50,
+          empathy: 50,
+          clarity: 50,
+          timestamp: Date.now()
+        };
+      }
+      
+      // Simple scoring algorithm
+      // In production, this would use more sophisticated NLP/ML
+      
+      // Analyze for empathy words
+      const empathyWords = ['understand', 'appreciate', 'hear', 'feel', 'concern'];
+      let empathyScore = 0;
+      
+      // Analyze for clarity indicators
+      const clarityIndicators = ['specifically', 'example', 'mean', 'detail'];
+      let clarityScore = 0;
+      
+      // Analyze relevance by checking for topic consistency
+      let relevanceScore = 0;
+      
+      for (const response of agentResponses) {
+        const content = response.content.toLowerCase();
+        
+        // Empathy score calculation
+        empathyScore += empathyWords.reduce((count, word) => 
+          count + (content.includes(word) ? 1 : 0), 0);
+          
+        // Clarity score calculation
+        clarityScore += clarityIndicators.reduce((count, word) =>
+          count + (content.includes(word) ? 1 : 0), 0);
+        
+        // Simple relevance heuristic based on response length
+        if (content.length > 100) relevanceScore += 1;
+      }
+      
+      // Normalize scores to 0-100 scale
+      const normalizedEmpathy = Math.min(100, Math.max(0, (empathyScore / agentResponses.length) * 25));
+      const normalizedClarity = Math.min(100, Math.max(0, (clarityScore / agentResponses.length) * 25));
+      const normalizedRelevance = Math.min(100, Math.max(0, (relevanceScore / agentResponses.length) * 100));
+      
+      const overallScore = (normalizedEmpathy + normalizedClarity + normalizedRelevance) / 3;
+      
+      const result = {
+        overall: Math.round(overallScore),
+        relevance: Math.round(normalizedRelevance),
+        empathy: Math.round(normalizedEmpathy),
+        clarity: Math.round(normalizedClarity),
+        timestamp: Date.now()
+      };
+      
+      // Store the result in cache
+      this.qualityScoreCache.set(`${this.keyPrefix}quality:${conversationId}`, result);
+      
+      // Update metadata
+      const key = `${this.keyPrefix}${conversationId}`;
+      const conversationData = this.memoryStore.get(key);
+      
+      if (conversationData) {
+        conversationData.metadata.qualityScore = result.overall;
+        this.memoryStore.set(key, conversationData);
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error(`Error scoring conversation quality: ${error.message}`);
+      return {
+        overall: 50,
+        relevance: 50,
+        empathy: 50,
+        clarity: 50,
+        timestamp: Date.now(),
+        error: error.message
+      };
+    }
+  }
+  
+  /**
+   * Get conversation metadata
+   * @param conversationId Conversation ID
+   * @returns Conversation metadata or null if not found
+   */
+  public async getConversationMetadata(
+    conversationId: string
+  ): Promise<Record<string, any> | null> {
+    try {
+      const key = `${this.keyPrefix}${conversationId}`;
+      const conversationData = this.memoryStore.get(key);
+      
+      if (!conversationData) {
+        return null;
+      }
+      
+      return conversationData.metadata;
+    } catch (error) {
+      logger.error(`Error getting conversation metadata: ${error.message}`);
+      return null;
+    }
+  }
+  
+  /**
+   * Delete a conversation and all associated data
+   * @param conversationId Conversation ID
+   * @returns Success indicator
+   */
+  public async deleteConversation(
+    conversationId: string
+  ): Promise<boolean> {
+    try {
+      const prefix = this.keyPrefix;
+      
+      // Delete main conversation data
+      this.memoryStore.delete(`${prefix}${conversationId}`);
+      
+      // Delete any associated caches
+      this.emotionCache.delete(`${prefix}emotion:${conversationId}`);
+      this.qualityScoreCache.delete(`${prefix}quality:${conversationId}`);
+      
+      return true;
+    } catch (error) {
+      logger.error(`Error deleting conversation: ${error.message}`);
+      return false;
+    }
+  }
 }
 
 // Export singleton instance

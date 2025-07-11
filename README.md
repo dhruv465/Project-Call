@@ -106,7 +106,7 @@ Important security note: **Never commit your `.env` file to the repository.** It
 - Express.js
 - TypeScript
 - MongoDB
-- Redis for caching
+- In-memory caching
 
 ### APIs
 - Twilio for telephony
@@ -117,7 +117,7 @@ Important security note: **Never commit your `.env` file to the repository.** It
 ### Infrastructure
 - Native Node.js development
 - Local development environment
-- MongoDB and Redis databases
+- MongoDB database
 - Monitoring and logging
 
 ## Getting Started
@@ -125,7 +125,6 @@ Important security note: **Never commit your `.env` file to the repository.** It
 ### Prerequisites
 - Node.js (v18+)
 - MongoDB
-- Redis
 - API keys for Twilio, ElevenLabs, and LLM services
 
 ### Installation
